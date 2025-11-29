@@ -16,10 +16,16 @@ import {
     Box,
     Typography,
     Alert,
+    Slider,
+    Divider,
 } from '@mui/material';
 import { LEAD_STAGES_LIST } from '../utils/constants';
+import { getWeekInfo } from '../utils/weekUtils';
+import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
 
 const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsultants, user }) => {
+    const currentWeekInfo = getWeekInfo();
+
     const [formData, setFormData] = useState({
         consultantName: '',
         studentName: '',
@@ -30,6 +36,13 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         admissionClosed: false,
         prospectForWeek: 0,
         commitmentVsAchieved: '',
+        // New fields
+        weekNumber: currentWeekInfo.weekNumber,
+        year: currentWeekInfo.year,
+        selectedDate: format(new Date(), 'yyyy-MM-dd'),
+        dayOfWeek: format(new Date(), 'EEEE'),
+        conversionProbability: 50, // Default to 50%
+        followUpDate: '',
     });
     const [saving, setSaving] = useState(false);
     const [validationError, setValidationError] = useState('');
@@ -103,9 +116,14 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
             <DialogTitle>
-                {commitment ? 'Edit Commitment' : 'Add New Commitment'}
+                <Typography variant="h5" component="span">
+                    {commitment ? 'Edit Commitment' : 'Add New Commitment'}
+                </Typography>
+                <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Fill in all details carefully for accurate tracking
+                </Typography>
             </DialogTitle>
             <DialogContent dividers>
                 {validationError && (
@@ -114,9 +132,89 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Alert>
                 )}
 
-                <Grid container spacing={2} sx={{ mt: 1 }}>
-                    {/* Consultant Selector */}
+                <Grid container spacing={3} sx={{ mt: 1 }}>
+                    {/* ===== WEEK & DATE SELECTION ===== */}
                     <Grid item xs={12}>
+                        <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
+                                📅 Week & Date Selection
+                            </Typography>
+                            <Divider />
+                        </Box>
+                    </Grid>
+
+                    {/* Week Selector */}
+                    <Grid item xs={12} sm={4}>
+                        <FormControl fullWidth>
+                            <InputLabel>Week</InputLabel>
+                            <Select
+                                value={formData.weekNumber}
+                                onChange={(e) => handleChange('weekNumber', e.target.value)}
+                                label="Week"
+                            >
+                                {/* Show current week and previous 4 weeks */}
+                                {[...Array(5)].map((_, i) => {
+                                    const weekNum = currentWeekInfo.weekNumber - i;
+                                    const year = weekNum > 0 ? currentWeekInfo.year : currentWeekInfo.year - 1;
+                                    const displayWeek = weekNum > 0 ? weekNum : 52 + weekNum;
+                                    return (
+                                        <MenuItem key={i} value={displayWeek}>
+                                            Week {displayWeek} {i === 0 ? '(Current)' : `(${i} weeks ago)`}
+                                        </MenuItem>
+                                    );
+                                })}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+
+                    {/* Date Picker */}
+                    <Grid item xs={12} sm={4}>
+                        <TextField
+                            fullWidth
+                            label="Commitment Date"
+                            type="date"
+                            value={formData.selectedDate}
+                            onChange={(e) => {
+                                const selectedDate = e.target.value;
+                                const dayName = format(new Date(selectedDate), 'EEEE');
+                                setFormData(prev => ({
+                                    ...prev,
+                                    selectedDate,
+                                    dayOfWeek: dayName,
+                                }));
+                            }}
+                            InputLabelProps={{
+                                shrink: true,
+                            }}
+                            helperText="Choose the date of this commitment"
+                        />
+                    </Grid>
+
+                    {/* Day Display */}
+                    <Grid item xs={12} sm={4}>
+                        <TextField
+                            fullWidth
+                            label="Day of Week"
+                            value={formData.dayOfWeek}
+                            InputProps={{
+                                readOnly: true,
+                            }}
+                            helperText="Automatically calculated"
+                        />
+                    </Grid>
+
+                    {/* ===== CONSULTANT & LEAD INFO ===== */}
+                    <Grid item xs={12}>
+                        <Box sx={{ mb: 2, mt: 2 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
+                                👤 Consultant & Lead Details
+                            </Typography>
+                            <Divider />
+                        </Box>
+                    </Grid>
+
+                    {/* Consultant Selector */}
+                    <Grid item xs={12} md={6}>
                         <FormControl fullWidth required>
                             <InputLabel>Consultant (Who is this commitment for?)</InputLabel>
                             <Select
@@ -237,6 +335,68 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             multiline
                             rows={2}
                             placeholder="Optional: Add notes about progress..."
+                        />
+                    </Grid>
+
+                    {/* ===== PROBABILITY & FOLLOW-UP ===== */}
+                    <Grid item xs={12}>
+                        <Box sx={{ mb: 2, mt: 3 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
+                                📊 Conversion Probability & Follow-up
+                            </Typography>
+                            <Divider />
+                        </Box>
+                    </Grid>
+
+                    {/* Conversion Probability Slider */}
+                    <Grid item xs={12} md={6}>
+                        <Box sx={{ px: 2 }}>
+                            <Typography gutterBottom>
+                                Conversion Probability: {formData.conversionProbability}%
+                            </Typography>
+                            <Slider
+                                value={formData.conversionProbability}
+                                onChange={(e, value) => handleChange('conversionProbability', value)}
+                                min={0}
+                                max={100}
+                                step={5}
+                                marks={[
+                                    { value: 0, label: '0%' },
+                                    { value: 50, label: '50%' },
+                                    { value: 100, label: '100%' },
+                                ]}
+                                valueLabelDisplay="auto"
+                                sx={{
+                                    '& .MuiSlider-thumb': {
+                                        backgroundColor:
+                                            formData.conversionProbability >= 70 ? '#4caf50' :
+                                                formData.conversionProbability >= 40 ? '#ff9800' : '#f44336',
+                                    },
+                                    '& .MuiSlider-track': {
+                                        backgroundColor:
+                                            formData.conversionProbability >= 70 ? '#4caf50' :
+                                                formData.conversionProbability >= 40 ? '#ff9800' : '#f44336',
+                                    },
+                                }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                                What's the likelihood this lead will convert?
+                            </Typography>
+                        </Box>
+                    </Grid>
+
+                    {/* Follow-up Date */}
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Follow-up Date"
+                            type="date"
+                            value={formData.followUpDate}
+                            onChange={(e) => handleChange('followUpDate', e.target.value)}
+                            InputLabelProps={{
+                                shrink: true,
+                            }}
+                            helperText="When should you follow up with this lead?"
                         />
                     </Grid>
 

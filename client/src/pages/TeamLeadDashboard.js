@@ -643,7 +643,7 @@ const TeamLeadDashboard = () => {
                                                             )}
                                                         </TableCell>
 
-                                                        {/* TL Comments - Eye icon with tooltip on hover */}
+                                                        {/* TL Comments - Action button: Eye if exists, Comment icon if not */}
                                                         <TableCell align="center">
                                                             {commitment.correctiveActionByTL ? (
                                                                 <Tooltip
@@ -660,14 +660,34 @@ const TeamLeadDashboard = () => {
                                                                     arrow
                                                                     placement="left"
                                                                 >
-                                                                    <IconButton size="small" color="primary">
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="primary"
+                                                                        onClick={() => {
+                                                                            setSelectedCommitment(commitment);
+                                                                            setCorrectiveAction(commitment.correctiveActionByTL || '');
+                                                                            setProspectRating(commitment.prospectForWeek || '');
+                                                                            setCorrectiveDialogOpen(true);
+                                                                        }}
+                                                                        title="View/Edit TL comment"
+                                                                    >
                                                                         <VisibilityIcon fontSize="small" />
                                                                     </IconButton>
                                                                 </Tooltip>
                                                             ) : (
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    -
-                                                                </Typography>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="action"
+                                                                    onClick={() => {
+                                                                        setSelectedCommitment(commitment);
+                                                                        setCorrectiveAction('');
+                                                                        setProspectRating(commitment.prospectForWeek || '');
+                                                                        setCorrectiveDialogOpen(true);
+                                                                    }}
+                                                                    title="Add TL comment"
+                                                                >
+                                                                    <CommentIcon fontSize="small" />
+                                                                </IconButton>
                                                             )}
                                                         </TableCell>
 
