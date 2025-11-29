@@ -509,9 +509,7 @@ const AdminDashboard = () => {
                                                                 </Typography>
                                                             </Box>
                                                         </Box>
-                                                        <IconButton size="small" color="primary">
-                                                            <TrendingUpIcon />
-                                                        </IconButton>
+                                                        <TrendingUpIcon color="primary" />
                                                     </Box>
                                                     <Grid container spacing={2}>
                                                         <Grid item xs={6}>
