@@ -231,27 +231,34 @@ const AdminDashboard = () => {
 
     // Organize teams
     const teamLeads = users.filter(u => u.role === 'team_lead');
-    const consultants = users.filter(u => u.role === 'consultant');
     const admins = users.filter(u => u.role === 'admin');
 
     const teams = teamLeads.map(tl => {
-        const teamConsultants = consultants.filter(c => c.teamLead === tl._id || c.teamName === tl.teamName);
+        // Get all commitments for this team
         const teamComms = commitments.filter(c => c.teamName === tl.teamName);
+
+        // Get unique consultant names from commitments
+        const consultantNames = [...new Set(teamComms.map(c => c.consultantName))];
+
+        // Build consultant stats from commitments
+        const consultantsStats = consultantNames.map(consultantName => {
+            const consultantComms = teamComms.filter(c => c.consultantName === consultantName);
+            return {
+                name: consultantName,
+                commitmentCount: consultantComms.length,
+                achievedCount: consultantComms.filter(c => c.admissionClosed || c.status === 'achieved').length,
+                meetingsTotal: consultantComms.reduce((sum, c) => sum + (c.meetingsDone || 0), 0),
+            };
+        });
 
         return {
             teamName: tl.teamName,
             teamLead: tl,
-            consultants: teamConsultants.map(consultant => {
-                const consultantComms = commitments.filter(c =>
-                    c.consultantName === consultant.name
-                );
-                return {
-                    ...consultant,
-                    commitmentCount: consultantComms.length,
-                };
-            }),
+            consultants: consultantsStats,
             totalCommitments: teamComms.length,
-            achievedCommitments: teamComms.filter(c => c.status === 'achieved' || c.admissionClosed).length,
+            achievedCommitments: teamComms.filter(c => c.admissionClosed || c.status === 'achieved').length,
+            totalMeetings: teamComms.reduce((sum, c) => sum + (c.meetingsDone || 0), 0),
+            closedAdmissions: teamComms.filter(c => c.admissionClosed).length,
         };
     });
 
