@@ -29,7 +29,7 @@ router
 // Otherwise /:id will match everything
 
 // Date range queries (BEFORE /:id)
-router.get('/date-range', getCommitmentsByDateRange);
+router.get('/date-range', authorize('team_lead', 'admin'), getCommitmentsByDateRange);
 
 // Week-specific route (BEFORE /:id)
 router.route('/week/:weekNumber/:year').get(getWeekCommitments);
