@@ -142,7 +142,9 @@ const TeamLeadDashboard = () => {
         setPerformanceLoading(true);
 
         try {
-            const data = await commitmentService.getConsultantPerformance(consultant._id, 3);
+            // Use consultant name instead of ID
+            const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
+            const data = await commitmentService.getConsultantPerformance(consultantName, 3);
             setConsultantPerformance(data);
         } catch (err) {
             setError('Failed to load consultant performance');
@@ -204,36 +206,33 @@ const TeamLeadDashboard = () => {
         ? filteredCommitments
         : commitments;
 
-    // Group commitments by consultant
-    const consultantGroups = commitments.reduce((groups, commitment) => {
-        const consultantId = commitment.consultant._id;
-        if (!groups[consultantId]) {
-            groups[consultantId] = {
-                consultant: commitment.consultant,
-                commitments: [],
+    // Calculate consultant stats
+    const consultantStats = commitments.reduce((acc, commitment) => {
+        const consultantName = commitment.consultantName || 'Unknown';
+
+        if (!acc[consultantName]) {
+            acc[consultantName] = {
+                consultant: consultantName, // Store name as string
+                total: 0,
+                achieved: 0,
+                meetings: 0,
+                closed: 0,
             };
         }
-        groups[consultantId].commitments.push(commitment);
-        return groups;
+
+        acc[consultantName].total++;
+        acc[consultantName].meetings += commitment.meetingsDone || 0;
+        if (commitment.status === 'achieved' || commitment.admissionClosed) acc[consultantName].achieved++;
+        if (commitment.admissionClosed) acc[consultantName].closed++;
+
+        return acc;
     }, {});
 
-    const consultantStats = Object.values(consultantGroups).map(group => {
-        const total = group.commitments.length;
-        const achieved = group.commitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
-        const meetings = group.commitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
-        const closed = group.commitments.filter(c => c.admissionClosed).length;
-        const achievementRate = total > 0 ? Math.round((achieved / total) * 100) : 0;
+    const consultantStatsArray = Object.values(consultantStats).map(stat => ({
+        ...stat,
+        achievementRate: stat.total > 0 ? Math.round((stat.achieved / stat.total) * 100) : 0,
+    }));
 
-        return {
-            consultant: group.consultant,
-            total,
-            achieved,
-            meetings,
-            closed,
-            achievementRate,
-            commitments: group.commitments,
-        };
-    });
 
     // Overall team metrics
     const totalCommitments = commitments.length;
@@ -363,7 +362,7 @@ const TeamLeadDashboard = () => {
                                 <LeadStageChart commitments={commitments} />
                             </Grid>
                             <Grid item xs={12} lg={6}>
-                                <ConsultantPerformanceChart consultantStats={consultantStats} />
+                                <ConsultantPerformanceChart consultantStats={consultantStatsArray} />
                             </Grid>
                             <Grid item xs={12}>
                                 <ActivityHeatmap commitments={commitments} month={new Date()} />
@@ -388,8 +387,8 @@ const TeamLeadDashboard = () => {
                             Consultant Performance - Click to View Details
                         </Typography>
                         <Grid container spacing={3}>
-                            {consultantStats.map(stat => (
-                                <Grid item xs={12} sm={6} lg={4} key={stat.consultant._id}>
+                            {consultantStatsArray.map(stat => (
+                                <Grid item xs={12} sm={6} lg={4} key={stat.consultant}>
                                     <Card
                                         elevation={2}
                                         sx={{
@@ -405,9 +404,14 @@ const TeamLeadDashboard = () => {
                                         <CardActionArea onClick={() => handleConsultantClick(stat.consultant)}>
                                             <CardContent>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                                        {stat.consultant.name}
-                                                    </Typography>
+                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                        <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
+                                                            <PersonIcon />
+                                                        </Avatar>
+                                                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                                            {stat.consultant}
+                                                        </Typography>
+                                                    </Box>
                                                     <IconButton size="small" color="primary">
                                                         <TrendingUpIcon />
                                                     </IconButton>
@@ -505,7 +509,7 @@ const TeamLeadDashboard = () => {
                                             {displayCommitments.map((commitment) => (
                                                 <TableRow key={commitment._id} hover>
                                                     <TableCell>W{commitment.weekNumber}</TableCell>
-                                                    <TableCell>{commitment.consultant.name}</TableCell>
+                                                    <TableCell>{commitment.consultantName}</TableCell>
                                                     <TableCell>{commitment.studentName || 'N/A'}</TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
@@ -580,7 +584,7 @@ const TeamLeadDashboard = () => {
                 <DialogContent>
                     <Box sx={{ pt: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>
-                            Consultant: {selectedCommitment?.consultant.name}
+                            Consultant: {selectedCommitment?.consultantName}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
                             Commitment: {selectedCommitment?.commitmentMade}

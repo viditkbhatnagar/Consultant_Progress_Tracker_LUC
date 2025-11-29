@@ -388,20 +388,9 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
 
         // Role-based filtering (only team_lead and admin)
         if (req.user.role === 'team_lead') {
-            if (consultantId) {
-                // Team lead viewing specific consultant
-                query.consultant = consultantId;
-                query.teamLead = req.user.id;
-            } else {
-                // Team lead viewing all team
-                query.teamLead = req.user.id;
-            }
-        } else if (req.user.role === 'admin') {
-            if (consultantId) {
-                query.consultant = consultantId;
-            }
-            // Admin can see all if no consultant specified
+            query.teamLead = req.user.id;
         }
+        // Admin sees all by default
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email')
