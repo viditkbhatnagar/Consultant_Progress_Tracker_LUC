@@ -3,14 +3,10 @@ const mongoose = require('mongoose');
 const CommitmentSchema = new mongoose.Schema(
     {
         // Ownership
-        consultant: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-            required: [true, 'Consultant is required'],
-        },
         consultantName: {
             type: String,
-            required: true,
+            required: [true, 'Consultant name is required'],
+            trim: true,
         },
         teamLead: {
             type: mongoose.Schema.Types.ObjectId,
@@ -167,7 +163,7 @@ const CommitmentSchema = new mongoose.Schema(
 );
 
 // Indexes for faster queries
-CommitmentSchema.index({ consultant: 1, weekNumber: 1, year: 1 });
+CommitmentSchema.index({ consultantName: 1, weekNumber: 1, year: 1 });
 CommitmentSchema.index({ teamLead: 1, weekNumber: 1, year: 1 });
 CommitmentSchema.index({ weekStartDate: 1 });
 CommitmentSchema.index({ leadStage: 1 });
