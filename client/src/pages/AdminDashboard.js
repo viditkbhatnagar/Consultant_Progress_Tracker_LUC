@@ -171,7 +171,8 @@ const AdminDashboard = () => {
         setPerformanceLoading(true);
 
         try {
-            const data = await commitmentService.getConsultantPerformance(consultant._id, 3);
+            const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
+            const data = await commitmentService.getConsultantPerformance(consultantName, 3);
             setConsultantPerformance(data);
         } catch (err) {
             setError('Failed to load consultant performance');
@@ -242,7 +243,7 @@ const AdminDashboard = () => {
             teamLead: tl,
             consultants: teamConsultants.map(consultant => {
                 const consultantComms = commitments.filter(c =>
-                    c.consultant && (c.consultant._id === consultant._id || c.consultant === consultant._id)
+                    c.consultantName === consultant.name
                 );
                 return {
                     ...consultant,
@@ -591,7 +592,7 @@ const AdminDashboard = () => {
                                                     <TableCell>
                                                         <Chip label={commitment.teamName} size="small" variant="outlined" />
                                                     </TableCell>
-                                                    <TableCell>{commitment.consultant.name}</TableCell>
+                                                    <TableCell>{commitment.consultantName}</TableCell>
                                                     <TableCell>{commitment.studentName || 'N/A'}</TableCell>
                                                     <TableCell>
                                                         <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
