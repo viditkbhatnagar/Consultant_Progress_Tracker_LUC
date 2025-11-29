@@ -30,6 +30,7 @@ import {
     MenuItem,
     CardActionArea,
     Avatar,
+    Tooltip,
 } from '@mui/material';
 import {
     Edit as EditIcon,
@@ -39,6 +40,8 @@ import {
     TrendingUp as TrendingUpIcon,
     Person as PersonIcon,
     Add as AddIcon,
+    Visibility as VisibilityIcon,
+    Comment as CommentIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -543,75 +546,145 @@ const TeamLeadDashboard = () => {
                                         <TableHead>
                                             <TableRow>
                                                 <TableCell>Week</TableCell>
+                                                <TableCell>Date</TableCell>
+                                                <TableCell>Day</TableCell>
+                                                <TableCell>Time</TableCell>
                                                 <TableCell>Consultant</TableCell>
                                                 <TableCell>Student</TableCell>
-                                                <TableCell>Commitment</TableCell>
+                                                <TableCell>Description</TableCell>
                                                 <TableCell>Lead Stage</TableCell>
                                                 <TableCell align="center">Achievement</TableCell>
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
+                                                <TableCell align="center">TL Comments</TableCell>
                                                 <TableCell align="center">Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {displayCommitments.map((commitment) => (
-                                                <TableRow key={commitment._id} hover>
-                                                    <TableCell>W{commitment.weekNumber}</TableCell>
-                                                    <TableCell>{commitment.consultantName}</TableCell>
-                                                    <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-                                                    <TableCell>
-                                                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                                            {commitment.commitmentMade}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={commitment.leadStage}
-                                                            size="small"
-                                                            sx={{
-                                                                backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                                color: 'white',
-                                                            }}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell align="center">
-                                                        <Typography
-                                                            sx={{ color: getAchievementColor(commitment.achievementPercentage || 0), fontWeight: 600 }}
-                                                        >
-                                                            {commitment.achievementPercentage || 0}%
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell align="center">
-                                                        {commitment.meetingsDone || 0}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {commitment.admissionClosed ? (
+                                            {displayCommitments.map((commitment) => {
+                                                // Calculate simple achievement: 100% if admission closed, else 0%
+                                                const achievement = commitment.admissionClosed ? 100 : 0;
+                                                const commitmentDate = new Date(commitment.weekStartDate);
+                                                const dayOfWeek = format(commitmentDate, 'EEEE');
+                                                const dateFormatted = format(commitmentDate, 'MMM dd, yyyy');
+                                                const timeFormatted = format(commitment.createdAt ? new Date(commitment.createdAt) : commitmentDate, 'hh:mm a');
+
+                                                return (
+                                                    <TableRow key={commitment._id} hover>
+                                                        {/* Week */}
+                                                        <TableCell>W{commitment.weekNumber}</TableCell>
+
+                                                        {/* Date */}
+                                                        <TableCell>{dateFormatted}</TableCell>
+
+                                                        {/* Day */}
+                                                        <TableCell>{dayOfWeek}</TableCell>
+
+                                                        {/* Time */}
+                                                        <TableCell>{timeFormatted}</TableCell>
+
+                                                        {/* Consultant */}
+                                                        <TableCell>{commitment.consultantName}</TableCell>
+
+                                                        {/* Student */}
+                                                        <TableCell>{commitment.studentName || 'N/A'}</TableCell>
+
+                                                        {/* Description (renamed from Commitment) */}
+                                                        <TableCell>
+                                                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                                                                {commitment.commitmentMade}
+                                                            </Typography>
+                                                        </TableCell>
+
+                                                        {/* Lead Stage */}
+                                                        <TableCell>
                                                             <Chip
-                                                                label="Closed"
-                                                                color="success"
+                                                                label={commitment.leadStage}
                                                                 size="small"
-                                                                icon={<CheckCircleIcon />}
+                                                                sx={{
+                                                                    backgroundColor: getLeadStageColor(commitment.leadStage),
+                                                                    color: 'white',
+                                                                }}
                                                             />
-                                                        ) : (
-                                                            <Chip
-                                                                label={commitment.status}
+                                                        </TableCell>
+
+                                                        {/* Achievement - Simplified: 100% if closed, 0% otherwise */}
+                                                        <TableCell align="center">
+                                                            <Typography
+                                                                sx={{
+                                                                    color: achievement === 100 ? 'success.main' : 'text.secondary',
+                                                                    fontWeight: 600
+                                                                }}
+                                                            >
+                                                                {achievement}%
+                                                            </Typography>
+                                                        </TableCell>
+
+                                                        {/* Meetings */}
+                                                        <TableCell align="center">
+                                                            {commitment.meetingsDone || 0}
+                                                        </TableCell>
+
+                                                        {/* Status */}
+                                                        <TableCell>
+                                                            {commitment.admissionClosed ? (
+                                                                <Chip
+                                                                    label="Admitted & Closed"
+                                                                    color="success"
+                                                                    size="small"
+                                                                    icon={<CheckCircleIcon />}
+                                                                />
+                                                            ) : (
+                                                                <Chip
+                                                                    label={commitment.status}
+                                                                    size="small"
+                                                                    variant="outlined"
+                                                                />
+                                                            )}
+                                                        </TableCell>
+
+                                                        {/* TL Comments - Eye icon with tooltip on hover */}
+                                                        <TableCell align="center">
+                                                            {commitment.correctiveActionByTL ? (
+                                                                <Tooltip
+                                                                    title={
+                                                                        <Box sx={{ p: 1 }}>
+                                                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                                Team Lead Comment:
+                                                                            </Typography>
+                                                                            <Typography variant="body2">
+                                                                                {commitment.correctiveActionByTL}
+                                                                            </Typography>
+                                                                        </Box>
+                                                                    }
+                                                                    arrow
+                                                                    placement="left"
+                                                                >
+                                                                    <IconButton size="small" color="primary">
+                                                                        <VisibilityIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    -
+                                                                </Typography>
+                                                            )}
+                                                        </TableCell>
+
+                                                        {/* Actions - Edit for both consultants and TLs */}
+                                                        <TableCell align="center">
+                                                            <IconButton
                                                                 size="small"
-                                                                variant="outlined"
-                                                            />
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell align="center">
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleOpenCorrective(commitment)}
-                                                            color="primary"
-                                                            title="Add Corrective Action"
-                                                        >
-                                                            <EditIcon />
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
+                                                                color="primary"
+                                                                onClick={() => handleEditCommitment(commitment)}
+                                                                title="Edit commitment"
+                                                            >
+                                                                <EditIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
                                         </TableBody>
                                     </Table>
                                 </TableContainer>

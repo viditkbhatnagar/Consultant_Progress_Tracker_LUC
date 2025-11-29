@@ -42,7 +42,7 @@ const CommitmentSchema = new mongoose.Schema(
             enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
         },
 
-        // Commitment details
+        // Lead details
         studentName: {
             type: String,
             trim: true,
@@ -51,6 +51,22 @@ const CommitmentSchema = new mongoose.Schema(
             type: String,
             required: [true, 'Commitment description is required'],
             trim: true,
+        },
+        description: {
+            type: String,
+            trim: true,
+            // Alias for commitmentMade for clearer naming
+            get: function () {
+                return this.commitmentMade;
+            },
+            set: function (value) {
+                this.commitmentMade = value;
+            }
+        },
+        leadStage: {
+            type: String,
+            enum: ['Cold', 'Warm', 'Hot', 'Unresponsive', 'Meeting Scheduled', 'Admission'],
+            default: 'Cold',
         },
         commitmentAchieved: {
             type: String,
