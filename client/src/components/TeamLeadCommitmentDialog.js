@@ -103,9 +103,19 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             setValidationError('Student name and commitment are required');
             return;
         }
+        if (!formData.selectedDate) {
+            setValidationError('Please select a commitment date');
+            return;
+        }
 
         // Calculate week start and end dates based on selected date
-        const selectedDateObj = new Date(formData.selectedDate);
+        const selectedDateObj = new Date(formData.selectedDate + 'T00:00:00'); // Add time to ensure valid date
+
+        if (isNaN(selectedDateObj.getTime())) {
+            setValidationError('Invalid date selected');
+            return;
+        }
+
         const weekStart = startOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Monday
         const weekEnd = endOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Sunday
 
