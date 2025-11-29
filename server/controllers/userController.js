@@ -9,8 +9,8 @@ exports.getUsers = async (req, res, next) => {
 
         // Role-based filtering
         if (req.user.role === 'team_lead') {
-            // Team lead can only see their consultants
-            query = User.find({ teamLead: req.user.id });
+            // Team leads can see all team leads and admins (for organizational view)
+            query = User.find({ role: { $in: ['team_lead', 'admin'] } });
         } else if (req.user.role === 'admin') {
             // Admin can see all users
             query = User.find();
