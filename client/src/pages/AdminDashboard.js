@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Container,
     Box,
@@ -12,28 +12,43 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     Chip,
+    IconButton,
+    Button,
     AppBar,
     Toolbar,
-    IconButton,
     Alert,
     CircularProgress,
     Tabs,
     Tab,
-    Button,
+    Menu,
+    MenuItem,
+    CardActionArea,
+    Avatar,
 } from '@mui/material';
 import {
     Logout as LogoutIcon,
+    Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
-    People as PeopleIcon,
+    Groups as GroupsIcon,
+    TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
-import authService from '../services/authService';
+import { getUsers } from '../services/authService';
+import exportService from '../services/exportService';
+import NotificationBell from '../components/NotificationBell';
+import CommitmentFilters from '../components/CommitmentFilters';
+import DateRangeSelector from '../components/DateRangeSelector';
+import TeamDetailDialog from '../components/TeamDetailDialog';
+import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
+import TeamHierarchyView from '../components/TeamHierarchyView';
+import ActivityHeatmap from '../components/ActivityHeatmap';
+import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
-import { getLeadStageColor, getAchievementColor } from '../utils/constants';
+import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
@@ -45,86 +60,197 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [tabValue, setTabValue] = useState(0);
+    const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+    const [filteredCommitments, setFilteredCommitments] = useState([]);
+    const [filters, setFilters] = useState({ search: '', stage: '', status: '' });
 
-    // Load data
-    const loadData = async () => {
+    // Date range state
+    const [dateRange, setDateRange] = useState({
+        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        viewType: 'current-week',
+    });
+
+    // Dialog states
+    const [selectedTeam, setSelectedTeam] = useState(null);
+    const [teamDetailOpen, setTeamDetailOpen] = useState(false);
+    const [teamCommitments, setTeamCommitments] = useState([]);
+
+    const [selectedConsultant, setSelectedConsultant] = useState(null);
+    const [consultantDetailOpen, setConsultantDetailOpen] = useState(false);
+    const [consultantPerformance, setConsultantPerformance] = useState(null);
+    const [performanceLoading, setPerformanceLoading] = useState(false);
+
+    // Load commitments by date range
+    const loadCommitments = useCallback(async () => {
         try {
             setLoading(true);
-            const [commitmentsData, usersData] = await Promise.all([
-                commitmentService.getCurrentWeekCommitments(),
-                authService.getUsers(),
-            ]);
-            setCommitments(commitmentsData.data || []);
-            setUsers(usersData.data || []);
+            const data = await commitmentService.getCommitmentsByDateRange(
+                dateRange.startDate,
+                dateRange.endDate
+            );
+            setCommitments(data.data || []);
             setError('');
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to load data');
+            setError(err.response?.data?.message || 'Failed to load commitments');
         } finally {
             setLoading(false);
+        }
+    }, [dateRange.startDate, dateRange.endDate]);
+
+    // Load users
+    const loadUsers = async () => {
+        try {
+            const userData = await getUsers();
+            setUsers(userData.data || []);
+        } catch (err) {
+            console.error('Failed to load users:', err);
         }
     };
 
     useEffect(() => {
-        loadData();
+        loadUsers();
     }, []);
+
+    useEffect(() => {
+        if (dateRange.startDate && dateRange.endDate) {
+            loadCommitments();
+        }
+    }, [dateRange, loadCommitments]);
+
+    // Filter commitments
+    useEffect(() => {
+        let filtered = [...commitments];
+
+        if (filters.search) {
+            const searchLower = filters.search.toLowerCase();
+            filtered = filtered.filter(c =>
+                c.studentName?.toLowerCase().includes(searchLower) ||
+                c.commitmentMade?.toLowerCase().includes(searchLower) ||
+                c.consultant?.name?.toLowerCase().includes(searchLower) ||
+                c.teamName?.toLowerCase().includes(searchLower)
+            );
+        }
+
+        if (filters.stage) {
+            filtered = filtered.filter(c => c.leadStage === filters.stage);
+        }
+
+        if (filters.status) {
+            filtered = filtered.filter(c => c.status === filters.status);
+        }
+
+        setFilteredCommitments(filtered);
+    }, [commitments, filters]);
+
+    const handleFilterChange = (newFilters) => {
+        setFilters(newFilters);
+    };
+
+    const handleDateRangeChange = (newRange) => {
+        setDateRange(newRange);
+    };
+
+    const handleTeamClick = (team) => {
+        setSelectedTeam(team);
+        const teamComms = commitments.filter(c => c.teamName === team.teamName);
+        setTeamCommitments(teamComms);
+        setTeamDetailOpen(true);
+    };
+
+    const handleConsultantClick = async (consultant) => {
+        setSelectedConsultant(consultant);
+        setConsultantDetailOpen(true);
+        setPerformanceLoading(true);
+
+        try {
+            const data = await commitmentService.getConsultantPerformance(consultant._id, 3);
+            setConsultantPerformance(data);
+        } catch (err) {
+            setError('Failed to load consultant performance');
+        } finally {
+            setPerformanceLoading(false);
+        }
+    };
+
+    const handleExportExcel = () => {
+        const periodLabel = dateRange.viewType.replace('-', '_');
+        exportService.exportCommitmentsToExcel(commitments, `organization_commitments_${periodLabel}`);
+        setExportMenuAnchor(null);
+    };
+
+    const handleExportCSV = () => {
+        const csvData = commitments.map(c => ({
+            Team: c.teamName,
+            Consultant: c.consultant?.name || 'N/A',
+            Student: c.studentName || 'N/A',
+            Commitment: c.commitmentMade,
+            'Lead Stage': c.leadStage,
+            'Achievement %': c.achievementPercentage || 0,
+            Meetings: c.meetingsDone || 0,
+            Status: c.status,
+            Week: `W${c.weekNumber}`,
+        }));
+        const periodLabel = dateRange.viewType.replace('-', '_');
+        exportService.exportToCSV(csvData, `organization_commitments_${periodLabel}`);
+        setExportMenuAnchor(null);
+    };
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // Calculate organization-wide metrics
+    // Display commitments
+    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status
+        ? filteredCommitments
+        : commitments;
+
+    // Organize teams
+    const teamLeads = users.filter(u => u.role === 'team_lead');
+    const consultants = users.filter(u => u.role === 'consultant');
+
+    const teams = teamLeads.map(tl => {
+        const teamConsultants = consultants.filter(c => c.teamLead === tl._id);
+        const teamComms = commitments.filter(c => c.teamName === tl.teamName);
+
+        return {
+            teamName: tl.teamName,
+            teamLead: tl,
+            consultants: teamConsultants.map(consultant => ({
+                ...consultant,
+                commitmentCount: commitments.filter(c => c.consultant._id === consultant._id).length,
+            })),
+            totalCommitments: teamComms.length,
+            achievedCommitments: teamComms.filter(c => c.status === 'achieved' || c.admissionClosed).length,
+        };
+    });
+
+    // Organization metrics
     const totalCommitments = commitments.length;
     const totalAchieved = commitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
     const totalMeetings = commitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
     const totalClosed = commitments.filter(c => c.admissionClosed).length;
     const orgAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
-    const totalConsultants = users.filter(u => u.role === 'consultant').length;
-    const totalTeamLeads = users.filter(u => u.role === 'team_lead').length;
-
-    // Group by team lead for team stats
-    const teamGroups = commitments.reduce((groups, commitment) => {
-        const teamLeadId = commitment.teamLead._id;
-        if (!groups[teamLeadId]) {
-            groups[teamLeadId] = {
-                teamLead: commitment.teamLead,
-                teamName: commitment.teamName,
-                commitments: [],
-            };
-        }
-        groups[teamLeadId].commitments.push(commitment);
-        return groups;
-    }, {});
-
-    const teamStats = Object.values(teamGroups).map(group => {
-        const total = group.commitments.length;
-        const achieved = group.commitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
-        const meetings = group.commitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
-        const closed = group.commitments.filter(c => c.admissionClosed).length;
-        const achievementRate = total > 0 ? Math.round((achieved / total) * 100) : 0;
-
-        return {
-            teamLead: group.teamLead,
-            teamName: group.teamName,
-            total,
-            achieved,
-            meetings,
-            closed,
-            achievementRate,
-        };
-    });
-
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
             {/* App Bar */}
             <AppBar position="static">
                 <Toolbar>
                     <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                         Team Progress Tracker - Admin Dashboard
                     </Typography>
-                    <Typography variant="body1" sx={{ mr: 2 }}>
-                        {user?.name}
+                    <Button
+                        color="inherit"
+                        startIcon={<DownloadIcon />}
+                        onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                    >
+                        Export
+                    </Button>
+                    <NotificationBell />
+                    <Typography variant="body1" sx={{ ml: 2, mr: 2 }}>
+                        {user?.name} (Admin)
                     </Typography>
                     <IconButton color="inherit" onClick={handleLogout}>
                         <LogoutIcon />
@@ -132,16 +258,33 @@ const AdminDashboard = () => {
                 </Toolbar>
             </AppBar>
 
+            {/* Export Menu */}
+            <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={() => setExportMenuAnchor(null)}
+            >
+                <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
+                <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
+            </Menu>
+
             <Container maxWidth="xl" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
                 {/* Header */}
-                <Box sx={{ mb: 4 }}>
+                <Box sx={{ mb: 3 }}>
                     <Typography variant="h4" gutterBottom>
                         Organization Dashboard
                     </Typography>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary">
                         {formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
                     </Typography>
                 </Box>
+
+                {/* Date Range Selector */}
+                <Card elevation={2} sx={{ mb: 3 }}>
+                    <CardContent>
+                        <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                    </CardContent>
+                </Card>
 
                 {error && (
                     <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -149,275 +292,364 @@ const AdminDashboard = () => {
                     </Alert>
                 )}
 
-                {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <>
-                        {/* Organization Metrics */}
-                        <Grid container spacing={3} sx={{ mb: 4 }}>
-                            <Grid item xs={12} sm={6} md={2.4}>
-                                <Card>
+                {/* Organization Metrics */}
+                <Grid container spacing={3} sx={{ mb: 4 }}>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
+                                    Total Commitments
+                                </Typography>
+                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalCommitments}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {teams.length} Teams
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
+                                    Organization Achievement
+                                </Typography>
+                                <Typography
+                                    variant="h3"
+                                    sx={{ color: getAchievementColor(orgAchievementRate), fontWeight: 700 }}
+                                >
+                                    {orgAchievementRate}%
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
+                                    Total Meetings
+                                </Typography>
+                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalMeetings}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {consultants.length} Consultants
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
+                            <CardContent>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
+                                    Admissions Closed
+                                </Typography>
+                                <Typography variant="h3" sx={{ color: '#4CAF50', fontWeight: 700 }}>
+                                    {totalClosed}
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
+
+                {/* Analytics Charts and Heatmap */}
+                {commitments.length > 0 && (
+                    <Box sx={{ mb: 4 }}>
+                        <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+                            Organization Analytics
+                        </Typography>
+                        <Grid container spacing={3}>
+                            <Grid item xs={12} lg={6}>
+                                <LeadStageChart commitments={commitments} />
+                            </Grid>
+                            <Grid item xs={12} lg={6}>
+                                <Card elevation={2}>
                                     <CardContent>
-                                        <Typography color="text.secondary" gutterBottom variant="body2">
-                                            Total Commitments
+                                        <Typography variant="h6" gutterBottom>
+                                            Team Performance Overview
                                         </Typography>
-                                        <Typography variant="h4">{totalCommitments}</Typography>
+                                        <Grid container spacing={2}>
+                                            {teams.map(team => {
+                                                const achievementRate = team.totalCommitments > 0
+                                                    ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
+                                                    : 0;
+                                                return (
+                                                    <Grid item xs={12} key={team.teamName}>
+                                                        <Box sx={{ mb: 1 }}>
+                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                    {team.teamName}
+                                                                </Typography>
+                                                                <Typography
+                                                                    variant="body2"
+                                                                    sx={{ color: getAchievementColor(achievementRate), fontWeight: 600 }}
+                                                                >
+                                                                    {achievementRate}%
+                                                                </Typography>
+                                                            </Box>
+                                                            <Box
+                                                                sx={{
+                                                                    height: 8,
+                                                                    bgcolor: 'grey.200',
+                                                                    borderRadius: 1,
+                                                                    overflow: 'hidden',
+                                                                }}
+                                                            >
+                                                                <Box
+                                                                    sx={{
+                                                                        height: '100%',
+                                                                        width: `${achievementRate}%`,
+                                                                        bgcolor: getAchievementColor(achievementRate),
+                                                                        transition: 'width 0.3s ease',
+                                                                    }}
+                                                                />
+                                                            </Box>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {team.totalCommitments} commitments • {team.consultants.length} consultants
+                                                            </Typography>
+                                                        </Box>
+                                                    </Grid>
+                                                );
+                                            })}
+                                        </Grid>
                                     </CardContent>
                                 </Card>
                             </Grid>
-                            <Grid item xs={12} sm={6} md={2.4}>
-                                <Card>
-                                    <CardContent>
-                                        <Typography color="text.secondary" gutterBottom variant="body2">
-                                            Achievement Rate
-                                        </Typography>
-                                        <Typography
-                                            variant="h4"
-                                            sx={{ color: getAchievementColor(orgAchievementRate) }}
-                                        >
-                                            {orgAchievementRate}%
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={2.4}>
-                                <Card>
-                                    <CardContent>
-                                        <Typography color="text.secondary" gutterBottom variant="body2">
-                                            Total Meetings
-                                        </Typography>
-                                        <Typography variant="h4">{totalMeetings}</Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={2.4}>
-                                <Card>
-                                    <CardContent>
-                                        <Typography color="text.secondary" gutterBottom variant="body2">
-                                            Admissions Closed
-                                        </Typography>
-                                        <Typography variant="h4" sx={{ color: '#4CAF50' }}>
-                                            {totalClosed}
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                            <Grid item xs={12} sm={6} md={2.4}>
-                                <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                                    <CardContent>
-                                        <Typography color="white" gutterBottom variant="body2">
-                                            Active Users
-                                        </Typography>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', color: 'white' }}>
-                                            <PeopleIcon sx={{ mr: 1, fontSize: 32 }} />
-                                            <Typography variant="h4">{users.length}</Typography>
-                                        </Box>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                                            {totalConsultants} Consultants, {totalTeamLeads} Leads
-                                        </Typography>
-                                    </CardContent>
-                                </Card>
+                            <Grid item xs={12}>
+                                <ActivityHeatmap commitments={commitments} month={new Date()} />
                             </Grid>
                         </Grid>
+                    </Box>
+                )}
 
-                        {/* Tabs */}
-                        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                            <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-                                <Tab label="Team Performance" />
-                                <Tab label="All Commitments" />
-                                <Tab label="User Management" />
-                            </Tabs>
-                        </Box>
+                {/* Tabs */}
+                <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                    <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
+                        <Tab label="Teams Overview" />
+                        <Tab label="All Commitments" />
+                        <Tab label="Organization Hierarchy" />
+                    </Tabs>
+                </Box>
 
-                        {/* Team Performance Tab */}
-                        {tabValue === 0 && (
-                            <Box>
-                                <Typography variant="h6" gutterBottom>
-                                    Performance by Team
-                                </Typography>
-                                <Grid container spacing={3}>
-                                    {teamStats.map(stat => (
-                                        <Grid item xs={12} md={6} lg={4} key={stat.teamLead._id}>
-                                            <Card>
+                {/* Tab Content */}
+                {tabValue === 0 && (
+                    // Teams Overview Tab
+                    <Box>
+                        <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+                            Teams - Click to View Details
+                        </Typography>
+                        <Grid container spacing={3}>
+                            {teams.map(team => {
+                                const achievementRate = team.totalCommitments > 0
+                                    ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
+                                    : 0;
+                                return (
+                                    <Grid item xs={12} sm={6} lg={4} key={team.teamName}>
+                                        <Card
+                                            elevation={2}
+                                            sx={{
+                                                height: '100%',
+                                                transition: 'all 0.3s ease',
+                                                '&:hover': {
+                                                    transform: 'translateY(-8px)',
+                                                    boxShadow: 6,
+                                                    cursor: 'pointer',
+                                                },
+                                            }}
+                                        >
+                                            <CardActionArea onClick={() => handleTeamClick(team)}>
                                                 <CardContent>
-                                                    <Typography variant="h6" gutterBottom>
-                                                        {stat.teamName}
-                                                    </Typography>
-                                                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                                                        Lead: {stat.teamLead.name}
-                                                    </Typography>
-                                                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                            <Avatar sx={{ bgcolor: 'primary.main', mr: 1.5 }}>
+                                                                <GroupsIcon />
+                                                            </Avatar>
+                                                            <Box>
+                                                                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                                                    {team.teamName}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {team.teamLead.name}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Box>
+                                                        <IconButton size="small" color="primary">
+                                                            <TrendingUpIcon />
+                                                        </IconButton>
+                                                    </Box>
+                                                    <Grid container spacing={2}>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="body2" color="text.secondary">
+                                                            <Typography variant="caption" color="text.secondary" display="block">
                                                                 Commitments
                                                             </Typography>
-                                                            <Typography variant="h5">{stat.total}</Typography>
+                                                            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                                                                {team.totalCommitments}
+                                                            </Typography>
                                                         </Grid>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="body2" color="text.secondary">
+                                                            <Typography variant="caption" color="text.secondary" display="block">
                                                                 Achievement
                                                             </Typography>
                                                             <Typography
-                                                                variant="h5"
-                                                                sx={{ color: getAchievementColor(stat.achievementRate) }}
+                                                                variant="h4"
+                                                                sx={{ color: getAchievementColor(achievementRate), fontWeight: 600 }}
                                                             >
-                                                                {stat.achievementRate}%
+                                                                {achievementRate}%
                                                             </Typography>
                                                         </Grid>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                Meetings
-                                                            </Typography>
-                                                            <Typography variant="h6">{stat.meetings}</Typography>
-                                                        </Grid>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                Closed
-                                                            </Typography>
-                                                            <Typography variant="h6" sx={{ color: '#4CAF50' }}>
-                                                                {stat.closed}
+                                                        <Grid item xs={12}>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {team.consultants.length} Team Members
                                                             </Typography>
                                                         </Grid>
                                                     </Grid>
+                                                    <Box sx={{ mt: 2, textAlign: 'center' }}>
+                                                        <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
+                                                            Click to view team details →
+                                                        </Typography>
+                                                    </Box>
                                                 </CardContent>
-                                            </Card>
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            </Box>
-                        )}
+                                            </CardActionArea>
+                                        </Card>
+                                    </Grid>
+                                );
+                            })}
+                        </Grid>
+                    </Box>
+                )}
 
-                        {/* All Commitments Tab */}
-                        {tabValue === 1 && (
-                            <Card>
-                                <CardContent>
-                                    <Typography variant="h6" gutterBottom>
-                                        All Organization Commitments
+                {tabValue === 1 && (
+                    // All Commitments Tab
+                    <Card elevation={2}>
+                        <CardContent>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                                All Organization Commitments
+                            </Typography>
+
+                            <CommitmentFilters
+                                onFilterChange={handleFilterChange}
+                                leadStages={LEAD_STAGES_LIST}
+                                statuses={STATUS_LIST}
+                            />
+
+                            {loading ? (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                                    <CircularProgress />
+                                </Box>
+                            ) : displayCommitments.length === 0 ? (
+                                <Box sx={{ textAlign: 'center', py: 4 }}>
+                                    <Typography color="text.secondary">
+                                        {commitments.length === 0
+                                            ? 'No commitments for this period.'
+                                            : 'No commitments match your filters.'}
                                     </Typography>
-                                    <TableContainer>
-                                        <Table>
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Team</TableCell>
-                                                    <TableCell>Consultant</TableCell>
-                                                    <TableCell>Student</TableCell>
-                                                    <TableCell>Commitment</TableCell>
-                                                    <TableCell>Lead Stage</TableCell>
-                                                    <TableCell align="center">Achievement</TableCell>
-                                                    <TableCell>Status</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {commitments.map((commitment) => (
-                                                    <TableRow key={commitment._id}>
-                                                        <TableCell>{commitment.teamName}</TableCell>
-                                                        <TableCell>{commitment.consultant.name}</TableCell>
-                                                        <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-                                                        <TableCell>
-                                                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                                                {commitment.commitmentMade}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Chip
-                                                                label={commitment.leadStage}
-                                                                size="small"
-                                                                sx={{
-                                                                    backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                                    color: 'white',
-                                                                }}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell align="center">
+                                </Box>
+                            ) : (
+                                <TableContainer sx={{ mt: 2 }}>
+                                    <Table>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Team</TableCell>
+                                                <TableCell>Consultant</TableCell>
+                                                <TableCell>Student</TableCell>
+                                                <TableCell>Commitment</TableCell>
+                                                <TableCell>Lead Stage</TableCell>
+                                                <TableCell align="center">Achievement</TableCell>
+                                                <TableCell align="center">Meetings</TableCell>
+                                                <TableCell>Status</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {displayCommitments.map((commitment) => (
+                                                <TableRow key={commitment._id} hover>
+                                                    <TableCell>
+                                                        <Chip label={commitment.teamName} size="small" variant="outlined" />
+                                                    </TableCell>
+                                                    <TableCell>{commitment.consultant.name}</TableCell>
+                                                    <TableCell>{commitment.studentName || 'N/A'}</TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                                                            {commitment.commitmentMade}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={commitment.leadStage}
+                                                            size="small"
+                                                            sx={{
+                                                                backgroundColor: getLeadStageColor(commitment.leadStage),
+                                                                color: 'white',
+                                                            }}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <Typography
+                                                            sx={{ color: getAchievementColor(commitment.achievementPercentage || 0), fontWeight: 600 }}
+                                                        >
                                                             {commitment.achievementPercentage || 0}%
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {commitment.admissionClosed ? (
-                                                                <Chip
-                                                                    label="Closed"
-                                                                    color="success"
-                                                                    size="small"
-                                                                    icon={<CheckCircleIcon />}
-                                                                />
-                                                            ) : (
-                                                                <Chip
-                                                                    label={commitment.status}
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                />
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* User Management Tab */}
-                        {tabValue === 2 && (
-                            <Card>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                                        <Typography variant="h6">
-                                            User Management
-                                        </Typography>
-                                        <Button variant="contained" size="small">
-                                            Add User
-                                        </Button>
-                                    </Box>
-                                    <TableContainer>
-                                        <Table>
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Name</TableCell>
-                                                    <TableCell>Email</TableCell>
-                                                    <TableCell>Role</TableCell>
-                                                    <TableCell>Team</TableCell>
-                                                    <TableCell>Phone</TableCell>
-                                                    <TableCell>Status</TableCell>
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        {commitment.meetingsDone || 0}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {commitment.admissionClosed ? (
+                                                            <Chip
+                                                                label="Closed"
+                                                                color="success"
+                                                                size="small"
+                                                                icon={<CheckCircleIcon />}
+                                                            />
+                                                        ) : (
+                                                            <Chip
+                                                                label={commitment.status}
+                                                                size="small"
+                                                                variant="outlined"
+                                                            />
+                                                        )}
+                                                    </TableCell>
                                                 </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {users.map((u) => (
-                                                    <TableRow key={u._id}>
-                                                        <TableCell>{u.name}</TableCell>
-                                                        <TableCell>{u.email}</TableCell>
-                                                        <TableCell>
-                                                            <Chip
-                                                                label={u.role.replace('_', ' ')}
-                                                                size="small"
-                                                                color={
-                                                                    u.role === 'admin' ? 'error' :
-                                                                        u.role === 'team_lead' ? 'primary' :
-                                                                            'default'
-                                                                }
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell>{u.teamName || '-'}</TableCell>
-                                                        <TableCell>{u.phone || '-'}</TableCell>
-                                                        <TableCell>
-                                                            <Chip
-                                                                label={u.isActive ? 'Active' : 'Inactive'}
-                                                                size="small"
-                                                                color={u.isActive ? 'success' : 'default'}
-                                                            />
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {tabValue === 2 && (
+                    // Organization Hierarchy Tab
+                    <TeamHierarchyView
+                        teams={teams}
+                        onTeamClick={handleTeamClick}
+                        onConsultantClick={handleConsultantClick}
+                    />
                 )}
             </Container>
+
+            {/* Team Detail Dialog */}
+            <TeamDetailDialog
+                open={teamDetailOpen}
+                onClose={() => {
+                    setTeamDetailOpen(false);
+                    setSelectedTeam(null);
+                    setTeamCommitments([]);
+                }}
+                team={selectedTeam}
+                commitments={teamCommitments}
+                onConsultantClick={handleConsultantClick}
+            />
+
+            {/* Consultant Detail Dialog */}
+            <ConsultantDetailDialog
+                open={consultantDetailOpen}
+                onClose={() => {
+                    setConsultantDetailOpen(false);
+                    setSelectedConsultant(null);
+                    setConsultantPerformance(null);
+                }}
+                consultant={selectedConsultant}
+                performanceData={consultantPerformance}
+                loading={performanceLoading}
+            />
         </Box>
     );
 };
