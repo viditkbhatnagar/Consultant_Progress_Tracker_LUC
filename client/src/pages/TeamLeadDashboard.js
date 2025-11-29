@@ -38,6 +38,7 @@ import {
     CheckCircle as CheckCircleIcon,
     TrendingUp as TrendingUpIcon,
     Person as PersonIcon,
+    Add as AddIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -48,6 +49,7 @@ import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import ActivityHeatmap from '../components/ActivityHeatmap';
+import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
 import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -82,6 +84,10 @@ const TeamLeadDashboard = () => {
     const [consultantDetailOpen, setConsultantDetailOpen] = useState(false);
     const [consultantPerformance, setConsultantPerformance] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(false);
+
+    // Commitment form dialog state
+    const [commitmentDialogOpen, setCommitmentDialogOpen] = useState(false);
+    const [editingCommitment, setEditingCommitment] = useState(null);
 
     // Load commitments by date range - use useCallback to fix dependency warning
     const loadCommitments = useCallback(async () => {
@@ -184,7 +190,7 @@ const TeamLeadDashboard = () => {
 
     const handleExportCSV = () => {
         const csvData = commitments.map(c => ({
-            Consultant: c.consultant?.name || 'N/A',
+            Consultant: c.consultantName || 'N/A',
             Student: c.studentName || 'N/A',
             Commitment: c.commitmentMade,
             'Lead Stage': c.leadStage,
@@ -196,6 +202,33 @@ const TeamLeadDashboard = () => {
         const periodLabel = dateRange.viewType.replace('-', '_');
         exportService.exportToCSV(csvData, `team_commitments_${periodLabel}`);
         setExportMenuAnchor(null);
+    };
+
+    const handleAddCommitment = () => {
+        setEditingCommitment(null);
+        setCommitmentDialogOpen(true);
+    };
+
+    const handleEditCommitment = (commitment) => {
+        setEditingCommitment(commitment);
+        setCommitmentDialogOpen(true);
+    };
+
+    const handleSaveCommitment = async (commitmentData) => {
+        try {
+            if (editingCommitment) {
+                // Update existing commitment
+                await commitmentService.updateCommitment(editingCommitment._id, commitmentData);
+            } else {
+                // Create new commitment
+                await commitmentService.createCommitment(commitmentData);
+            }
+            // Reload commitments
+            await loadCommitments();
+            setCommitmentDialogOpen(false);
+        } catch (error) {
+            throw error; // Let dialog handle the error
+        }
     };
 
     const handleLogout = () => {
@@ -235,6 +268,11 @@ const TeamLeadDashboard = () => {
         achievementRate: stat.total > 0 ? Math.round((stat.achieved / stat.total) * 100) : 0,
     }));
 
+    // Extract unique consultants for form dropdown
+    const teamConsultants = consultantStatsArray.map(stat => ({
+        name: stat.consultant,
+    }));
+
 
     // Overall team metrics
     const totalCommitments = commitments.length;
@@ -251,6 +289,14 @@ const TeamLeadDashboard = () => {
                     <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                         Team Progress Tracker - Team Lead Dashboard
                     </Typography>
+                    <Button
+                        color="inherit"
+                        startIcon={<AddIcon />}
+                        onClick={handleAddCommitment}
+                        sx={{ mr: 2 }}
+                    >
+                        Add Commitment
+                    </Button>
                     <Button
                         color="inherit"
                         startIcon={<DownloadIcon />}
@@ -633,6 +679,19 @@ const TeamLeadDashboard = () => {
                 consultant={selectedConsultant}
                 performanceData={consultantPerformance}
                 loading={performanceLoading}
+            />
+
+            {/* Add/Edit Commitment Dialog */}
+            <TeamLeadCommitmentDialog
+                open={commitmentDialogOpen}
+                onClose={() => {
+                    setCommitmentDialogOpen(false);
+                    setEditingCommitment(null);
+                }}
+                onSave={handleSaveCommitment}
+                commitment={editingCommitment}
+                teamConsultants={teamConsultants}
+                user={user}
             />
         </Box>
     );
