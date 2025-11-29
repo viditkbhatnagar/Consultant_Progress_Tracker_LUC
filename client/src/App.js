@@ -5,7 +5,6 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
-import ConsultantDashboard from './pages/ConsultantDashboard';
 import TeamLeadDashboard from './pages/TeamLeadDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import theme from './theme';
@@ -18,13 +17,11 @@ const HomeRedirect = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect based on role
+  // Redirect based on role (only admin and team_lead)
   if (user.role === 'admin') {
     return <Navigate to="/admin/dashboard" replace />;
   } else if (user.role === 'team_lead') {
     return <Navigate to="/team-lead/dashboard" replace />;
-  } else if (user.role === 'consultant') {
-    return <Navigate to="/consultant/dashboard" replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -39,16 +36,6 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<HomeRedirect />} />
-
-            {/* Consultant Routes */}
-            <Route
-              path="/consultant/dashboard"
-              element={
-                <PrivateRoute allowedRoles={['consultant']}>
-                  <ConsultantDashboard />
-                </PrivateRoute>
-              }
-            />
 
             {/* Team Lead Routes */}
             <Route
