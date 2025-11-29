@@ -269,6 +269,9 @@ const AdminDashboard = () => {
     const totalClosed = commitments.filter(c => c.admissionClosed).length;
     const orgAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
+    // Calculate total consultants from teams
+    const totalConsultants = teams.reduce((sum, team) => sum + team.consultants.length, 0);
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
             {/* App Bar */}
@@ -366,7 +369,7 @@ const AdminDashboard = () => {
                                 </Typography>
                                 <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalMeetings}</Typography>
                                 <Typography variant="caption" color="text.secondary">
-                                    {consultants.length} Consultants
+                                    {totalConsultants} Consultants
                                 </Typography>
                             </CardContent>
                         </Card>
