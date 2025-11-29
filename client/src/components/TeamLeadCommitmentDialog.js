@@ -104,9 +104,22 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             return;
         }
 
+        // Calculate week start and end dates based on selected date
+        const selectedDateObj = new Date(formData.selectedDate);
+        const weekStart = startOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Monday
+        const weekEnd = endOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Sunday
+
+        // Prepare data with calculated fields
+        const submitData = {
+            ...formData,
+            weekStartDate: format(weekStart, 'yyyy-MM-dd'),
+            weekEndDate: format(weekEnd, 'yyyy-MM-dd'),
+            year: formData.year || new Date().getFullYear(),
+        };
+
         setSaving(true);
         try {
-            await onSave(formData);
+            await onSave(submitData);
             onClose();
         } catch (error) {
             setValidationError(error.response?.data?.message || 'Failed to save commitment');
