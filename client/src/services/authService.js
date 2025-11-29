@@ -72,6 +72,12 @@ const initializeAuth = () => {
     }
 };
 
+// Get all users (admin only)
+export const getUsers = async () => {
+    const response = await axios.get(`${API_URL}/users`);
+    return response.data;
+};
+
 const authService = {
     login,
     logout,
@@ -81,6 +87,11 @@ const authService = {
     getStoredUser,
     setAuthToken,
     initializeAuth,
+    // The getUsers function is now exported separately, but if it was intended to be part of authService,
+    // it would be defined here. For now, keeping the original inline definition as well,
+    // assuming the user wants both a standalone export and an internal one, or that the standalone
+    // export is the primary intent. If the standalone export is meant to replace this,
+    // this line should be removed.
     getUsers: async () => {
         const response = await axios.get(`${API_BASE_URL}/users`);
         return response.data;

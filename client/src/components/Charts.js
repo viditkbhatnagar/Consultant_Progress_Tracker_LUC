@@ -1,7 +1,7 @@
 import React from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Box, Typography, Card, CardContent, Grid } from '@mui/material';
-import { getLeadStageColor, getAchievementColor } from '../utils/constants';
+import { Card, CardContent, Typography, Chip } from '@mui/material';
+import { getLeadStageColor } from '../utils/constants';
 
 // Lead Stage Distribution Chart
 export const LeadStageChart = ({ commitments }) => {

@@ -10,7 +10,7 @@ import {
     Chip,
     Grid,
 } from '@mui/material';
-import { Search as SearchIcon, FilterList as FilterListIcon } from '@mui/icons-material';
+import { Search as SearchIcon } from '@mui/icons-material';
 
 const CommitmentFilters = ({ onFilterChange, leadStages, statuses }) => {
     const [searchTerm, setSearchTerm] = useState('');

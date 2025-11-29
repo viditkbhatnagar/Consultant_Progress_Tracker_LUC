@@ -24,12 +24,8 @@ import {
     MenuItem,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Edit as EditIcon,
-    CheckCircle as CheckCircleIcon,
     Logout as LogoutIcon,
     Download as DownloadIcon,
-    MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
