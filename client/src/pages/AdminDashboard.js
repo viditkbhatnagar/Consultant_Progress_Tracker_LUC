@@ -32,6 +32,8 @@ import {
     CheckCircle as CheckCircleIcon,
     Groups as GroupsIcon,
     TrendingUp as TrendingUpIcon,
+    Comment as CommentIcon,
+    Edit as EditIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +47,7 @@ import TeamDetailDialog from '../components/TeamDetailDialog';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamHierarchyView from '../components/TeamHierarchyView';
 import ActivityHeatmap from '../components/ActivityHeatmap';
+import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -80,6 +83,10 @@ const AdminDashboard = () => {
     const [consultantDetailOpen, setConsultantDetailOpen] = useState(false);
     const [consultantPerformance, setConsultantPerformance] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(false);
+
+    // Admin comment dialog state
+    const [selectedCommitment, setSelectedCommitment] = useState(null);
+    const [adminCommentDialogOpen, setAdminCommentDialogOpen] = useState(false);
 
     // Load commitments by date range
     const loadCommitments = useCallback(async () => {
@@ -199,6 +206,21 @@ const AdminDashboard = () => {
     const handleLogout = () => {
         logout();
         navigate('/login');
+    };
+
+    const handleOpenAdminComment = (commitment) => {
+        setSelectedCommitment(commitment);
+        setAdminCommentDialogOpen(true);
+    };
+
+    const handleSaveAdminComment = async (commitmentId, data) => {
+        try {
+            await commitmentService.updateCommitment(commitmentId, data);
+            // Reload commitments
+            await loadCommitments();
+        } catch (err) {
+            setError('Failed to save admin comment');
+        }
     };
 
     // Display commitments
@@ -560,6 +582,7 @@ const AdminDashboard = () => {
                                                 <TableCell align="center">Achievement</TableCell>
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
+                                                <TableCell align="center">Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
@@ -611,6 +634,16 @@ const AdminDashboard = () => {
                                                             />
                                                         )}
                                                     </TableCell>
+                                                    <TableCell align="center">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleOpenAdminComment(commitment)}
+                                                            color={commitment.adminComment ? 'primary' : 'default'}
+                                                            title={commitment.adminComment ? 'View/Edit Admin Comment' : 'Add Admin Comment'}
+                                                        >
+                                                            {commitment.adminComment ? <CommentIcon /> : <EditIcon />}
+                                                        </IconButton>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
@@ -656,6 +689,17 @@ const AdminDashboard = () => {
                 consultant={selectedConsultant}
                 performanceData={consultantPerformance}
                 loading={performanceLoading}
+            />
+
+            {/* Admin Comment Dialog */}
+            <AdminCommitmentDialog
+                open={adminCommentDialogOpen}
+                onClose={() => {
+                    setAdminCommentDialogOpen(false);
+                    setSelectedCommitment(null);
+                }}
+                commitment={selectedCommitment}
+                onSave={handleSaveAdminComment}
             />
         </Box>
     );
