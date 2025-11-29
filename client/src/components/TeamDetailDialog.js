@@ -36,31 +36,30 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
 
     // Group by consultant
     const consultantStats = commitments.reduce((acc, commitment) => {
-        const consultantId = commitment.consultant._id;
-        if (!acc[consultantId]) {
-            acc[consultantId] = {
-                consultant: commitment.consultant,
+        const consultantName = commitment.consultantName;
+        if (!acc[consultantName]) {
+            acc[consultantName] = {
+                name: consultantName,
                 total: 0,
                 achieved: 0,
                 meetings: 0,
                 closed: 0,
             };
         }
-        acc[consultantId].total++;
-        acc[consultantId].meetings += commitment.meetingsDone || 0;
-        if (commitment.status === 'achieved' || commitment.admissionClosed) acc[consultantId].achieved++;
-        if (commitment.admissionClosed) acc[consultantId].closed++;
+        acc[consultantName].total++;
+        acc[consultantName].meetings += commitment.meetingsDone || 0;
+        if (commitment.status === 'achieved' || commitment.admissionClosed) acc[consultantName].achieved++;
+        if (commitment.admissionClosed) acc[consultantName].closed++;
         return acc;
     }, {});
 
     const consultantData = Object.values(consultantStats).map(stat => ({
-        name: stat.consultant.name,
+        name: stat.name,
         commitments: stat.total,
         achieved: stat.achieved,
         achievementRate: stat.total > 0 ? Math.round((stat.achieved / stat.total) * 100) : 0,
         meetings: stat.meetings,
         closed: stat.closed,
-        consultant: stat.consultant,
     }));
 
     return (
@@ -156,7 +155,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                 </Typography>
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {consultantData.map((data) => (
-                        <Grid item xs={12} sm={6} md={4} key={data.consultant._id}>
+                        <Grid item xs={12} sm={6} md={4} key={data.name}>
                             <Card
                                 elevation={2}
                                 sx={{
@@ -167,7 +166,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                                     },
                                 }}
                             >
-                                <CardActionArea onClick={() => onConsultantClick && onConsultantClick(data.consultant)}>
+                                <CardActionArea onClick={() => onConsultantClick && onConsultantClick(data.name)}>
                                     <CardContent>
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                             <Typography variant="h6" sx={{ fontWeight: 600 }}>
@@ -239,7 +238,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                         <TableBody>
                             {commitments.slice(0, 10).map((commitment) => (
                                 <TableRow key={commitment._id} hover>
-                                    <TableCell>{commitment.consultant.name}</TableCell>
+                                    <TableCell>{commitment.consultantName}</TableCell>
                                     <TableCell>{commitment.studentName || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
