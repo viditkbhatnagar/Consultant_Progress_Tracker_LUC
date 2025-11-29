@@ -17,13 +17,15 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     AppBar,
     Toolbar,
     Menu,
     MenuItem,
 } from '@mui/material';
 import {
+    Add as AddIcon,
+    Edit as EditIcon,
+    CheckCircle as CheckCircleIcon,
     Logout as LogoutIcon,
     Download as DownloadIcon,
 } from '@mui/icons-material';

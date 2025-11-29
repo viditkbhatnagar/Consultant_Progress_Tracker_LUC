@@ -1,6 +1,6 @@
 import React from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, Typography, Chip } from '@mui/material';
+import { Card, CardContent, Typography } from '@mui/material';
 import { getLeadStageColor } from '../utils/constants';
 
 // Lead Stage Distribution Chart
