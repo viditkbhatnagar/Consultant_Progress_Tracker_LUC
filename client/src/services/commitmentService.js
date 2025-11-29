@@ -3,6 +3,20 @@ import { API_BASE_URL } from '../utils/constants';
 
 const API_URL = `${API_BASE_URL}/commitments`;
 
+// Add axios interceptor to include auth token
+axios.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
 // Get all commitments (filtered by role automatically on backend)
 const getCommitments = async (filters = {}) => {
     const params = new URLSearchParams();
