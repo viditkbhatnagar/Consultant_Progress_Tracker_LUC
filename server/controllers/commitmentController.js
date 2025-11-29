@@ -9,11 +9,8 @@ exports.getCommitments = async (req, res, next) => {
         let query;
         const { weekNumber, year, status } = req.query;
 
-        // Role-based filtering
-        if (req.user.role === 'consultant') {
-            // Consultants can only see their own commitments
-            query = { consultant: req.user.id };
-        } else if (req.user.role === 'team_lead') {
+        // Role-based filtering (only team_lead and admin remain)
+        if (req.user.role === 'team_lead') {
             // Team leads can see their team's commitments
             query = { teamLead: req.user.id };
         } else if (req.user.role === 'admin') {
@@ -33,7 +30,6 @@ exports.getCommitments = async (req, res, next) => {
         }
 
         const commitments = await Commitment.find(query)
-            .populate('consultant', 'name email')
             .populate('teamLead', 'name email')
             .sort('-createdAt');
 
@@ -53,7 +49,6 @@ exports.getCommitments = async (req, res, next) => {
 exports.getCommitment = async (req, res, next) => {
     try {
         const commitment = await Commitment.findById(req.params.id)
-            .populate('consultant', 'name email')
             .populate('teamLead', 'name email');
 
         if (!commitment) {
@@ -63,14 +58,7 @@ exports.getCommitment = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'consultant' && commitment.consultant._id.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to view this commitment',
-            });
-        }
-
+        // Authorization check (only team_lead and admin now)
         if (req.user.role === 'team_lead' && commitment.teamLead._id.toString() !== req.user.id) {
             return res.status(403).json({
                 success: false,
@@ -361,14 +349,11 @@ exports.getWeekCommitments = async (req, res, next) => {
         };
 
         // Role-based filtering
-        if (req.user.role === 'consultant') {
-            query.consultant = req.user.id;
-        } else if (req.user.role === 'team_lead') {
+        if (req.user.role === 'team_lead') {
             query.teamLead = req.user.id;
         }
 
         const commitments = await Commitment.find(query)
-            .populate('consultant', 'name email')
             .populate('teamLead', 'name email')
             .sort('-createdAt');
 
@@ -401,10 +386,8 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
             weekEndDate: { $lte: new Date(endDate) },
         };
 
-        // Role-based filtering
-        if (req.user.role === 'consultant') {
-            query.consultant = req.user.id;
-        } else if (req.user.role === 'team_lead') {
+        // Role-based filtering (only team_lead and admin)
+        if (req.user.role === 'team_lead') {
             if (consultantId) {
                 // Team lead viewing specific consultant
                 query.consultant = consultantId;
@@ -421,7 +404,6 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
         }
 
         const commitments = await Commitment.find(query)
-            .populate('consultant', 'name email')
             .populate('teamLead', 'name email')
             .sort('-weekStartDate');
 
