@@ -116,7 +116,15 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{
+                sx: { maxHeight: '90vh' }
+            }}
+        >
             <DialogTitle>
                 <Typography variant="h5" component="span">
                     {commitment ? 'Edit Commitment' : 'Add New Commitment'}
@@ -125,7 +133,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     Fill in all details carefully for accurate tracking
                 </Typography>
             </DialogTitle>
-            <DialogContent dividers>
+            <DialogContent dividers sx={{ overflowY: 'auto' }}>
                 {validationError && (
                     <Alert severity="error" sx={{ mb: 2 }}>
                         {validationError}
@@ -144,7 +152,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Week Selector */}
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12}>
                         <FormControl fullWidth>
                             <InputLabel>Week</InputLabel>
                             <Select
@@ -168,7 +176,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Date Picker */}
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12}>
                         <TextField
                             fullWidth
                             label="Commitment Date"
@@ -223,7 +231,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Student Name */}
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12}>
                         <TextField
                             fullWidth
                             label="Student Name"
@@ -234,7 +242,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Lead Stage */}
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12}>
                         <FormControl fullWidth>
                             <InputLabel>Lead Stage</InputLabel>
                             <Select
@@ -271,7 +279,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Meetings Done */}
-                    <Grid item xs={12} sm={6}>
+                    <Grid item xs={12}>
                         <TextField
                             fullWidth
                             label="Meetings Done"
@@ -296,7 +304,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Conversion Probability Slider */}
-                    <Grid item xs={12} md={6}>
+                    <Grid item xs={12}>
                         <Box sx={{ px: 2 }}>
                             <Typography gutterBottom>
                                 Conversion Probability: {formData.conversionProbability}%
@@ -333,7 +341,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Follow-up Date */}
-                    <Grid item xs={12} md={6}>
+                    <Grid item xs={12}>
                         <TextField
                             fullWidth
                             label="Follow-up Date"

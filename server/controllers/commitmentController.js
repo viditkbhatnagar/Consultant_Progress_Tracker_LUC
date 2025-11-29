@@ -80,25 +80,24 @@ exports.getCommitment = async (req, res, next) => {
 // @access  Private/Consultant
 exports.createCommitment = async (req, res, next) => {
     try {
-        // Get consultant's team lead
-        const consultant = await User.findById(req.user.id);
-
-        if (!consultant.teamLead) {
-            return res.status(400).json({
-                success: false,
-                message: 'You must be assigned to a team lead to create commitments',
-            });
+        // Team leads create commitments for their consultants
+        if (req.user.role === 'team_lead') {
+            // Team lead is creating commitment, set team info from their profile
+            req.body.teamLead = req.user.id;
+            req.body.teamName = req.user.teamName;
+            req.body.createdBy = req.user.id;
+            req.body.lastUpdatedBy = req.user.id;
+        } else if (req.user.role === 'admin') {
+            // Admin can create commitments, need to verify team lead exists
+            if (!req.body.teamLead || !req.body.teamName) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Team lead and team name are required',
+                });
+            }
+            req.body.createdBy = req.user.id;
+            req.body.lastUpdatedBy = req.user.id;
         }
-
-        const teamLead = await User.findById(consultant.teamLead);
-
-        // Add user info to req.body
-        req.body.consultant = req.user.id;
-        req.body.consultantName = req.user.name;
-        req.body.teamLead = consultant.teamLead;
-        req.body.teamName = teamLead.teamName;
-        req.body.createdBy = req.user.id;
-        req.body.lastUpdatedBy = req.user.id;
 
         const commitment = await Commitment.create(req.body);
 
