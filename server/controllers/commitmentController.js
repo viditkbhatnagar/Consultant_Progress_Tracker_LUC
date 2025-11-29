@@ -417,21 +417,13 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
     }
 };
 
-// @desc    Get consultant performance details
-// @route   GET /api/commitments/consultant/:consultantId/performance
+// @desc    Get consultant performance details  
+// @route   GET /api/commitments/consultant/:consultantName/performance
 // @access  Private (Team Lead/Admin)
 exports.getConsultantPerformance = async (req, res, next) => {
     try {
-        const { consultantId } = req.params;
+        const { consultantName } = req.params;
         const { months = 3 } = req.query; // Default to last 3 months
-
-        // Authorization check
-        if (req.user.role === 'consultant' && req.user.id !== consultantId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized',
-            });
-        }
 
         // Calculate date range
         const endDate = new Date();
@@ -439,7 +431,7 @@ exports.getConsultantPerformance = async (req, res, next) => {
         startDate.setMonth(startDate.getMonth() - parseInt(months));
 
         let query = {
-            consultant: consultantId,
+            consultantName: consultantName,
             weekStartDate: { $gte: startDate },
             weekEndDate: { $lte: endDate },
         };
@@ -450,7 +442,7 @@ exports.getConsultantPerformance = async (req, res, next) => {
         }
 
         const commitments = await Commitment.find(query)
-            .populate('consultant', 'name email teamName')
+            .populate('teamLead', 'name email teamName')
             .sort('weekStartDate');
 
         // Calculate monthly aggregates
@@ -476,7 +468,7 @@ exports.getConsultantPerformance = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            consultant: commitments[0]?.consultant,
+            consultant: { name: consultantName }, // Return consultant name as object for compatibility
             totalCommitments: commitments.length,
             monthlyStats: Object.values(monthlyStats),
             allCommitments: commitments,

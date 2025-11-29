@@ -23,7 +23,7 @@ router.use(protect);
 router
     .route('/')
     .get(getCommitments)
-    .post(authorize('consultant'), createCommitment);
+    .post(authorize('team_lead'), createCommitment);
 
 // IMPORTANT: Specific routes MUST come BEFORE parameterized routes like /:id
 // Otherwise /:id will match everything
@@ -36,14 +36,14 @@ router.route('/week/:weekNumber/:year').get(getWeekCommitments);
 
 // Consultant performance details (BEFORE /:id)
 router.get(
-    '/consultant/:consultantId/performance',
-    authorize('team_lead', 'admin', 'consultant'),
+    '/consultant/:consultantName/performance',
+    authorize('team_lead', 'admin'),
     getConsultantPerformance
 );
 
 // Special action routes (BEFORE /:id)
-router.patch('/:id/close', authorize('consultant', 'admin'), closeAdmission);
-router.patch('/:id/meetings', authorize('consultant', 'admin'), updateMeetings);
+router.patch('/:id/close', authorize('team_lead', 'admin'), closeAdmission);
+router.patch('/:id/meetings', authorize('team_lead', 'admin'), updateMeetings);
 
 // Specific commitment routes (This /:id route MUST come LAST)
 router
