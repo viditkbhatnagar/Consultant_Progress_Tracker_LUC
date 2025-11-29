@@ -15,7 +15,7 @@ import {
     Groups as GroupsIcon,
 } from '@mui/icons-material';
 
-const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick }) => {
+const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick, adminUser }) => {
     return (
         <Card elevation={3}>
             <CardContent>
@@ -32,16 +32,32 @@ const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick }) => {
                         elevation={2}
                         sx={{
                             display: 'inline-block',
-                            p: 2,
+                            p: 3,
                             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                             color: 'white',
+                            minWidth: 280,
                         }}
                     >
-                        <GroupsIcon sx={{ fontSize: 40, mb: 1 }} />
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            Administration
+                        <GroupsIcon sx={{ fontSize: 50, mb: 1 }} />
+                        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+                            {adminUser?.name || 'Administration'}
                         </Typography>
-                        <Typography variant="caption">Organization Level</Typography>
+                        <Typography variant="caption" display="block" sx={{ mb: 1 }}>
+                            {adminUser?.email || 'admin@learnerseducation.com'}
+                        </Typography>
+                        <Chip
+                            label="Administrator"
+                            sx={{
+                                bgcolor: 'rgba(255,255,255,0.3)',
+                                color: 'white',
+                                fontWeight: 600
+                            }}
+                        />
+                        <Box sx={{ mt: 2 }}>
+                            <Typography variant="body2">
+                                {teams.length} Teams • {teams.reduce((sum, t) => sum + t.consultants.length, 0)} Consultants
+                            </Typography>
+                        </Box>
                     </Paper>
                 </Box>
 

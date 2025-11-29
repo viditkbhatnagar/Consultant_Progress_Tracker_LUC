@@ -209,18 +209,24 @@ const AdminDashboard = () => {
     // Organize teams
     const teamLeads = users.filter(u => u.role === 'team_lead');
     const consultants = users.filter(u => u.role === 'consultant');
+    const admins = users.filter(u => u.role === 'admin');
 
     const teams = teamLeads.map(tl => {
-        const teamConsultants = consultants.filter(c => c.teamLead === tl._id);
+        const teamConsultants = consultants.filter(c => c.teamLead === tl._id || c.teamName === tl.teamName);
         const teamComms = commitments.filter(c => c.teamName === tl.teamName);
 
         return {
             teamName: tl.teamName,
             teamLead: tl,
-            consultants: teamConsultants.map(consultant => ({
-                ...consultant,
-                commitmentCount: commitments.filter(c => c.consultant._id === consultant._id).length,
-            })),
+            consultants: teamConsultants.map(consultant => {
+                const consultantComms = commitments.filter(c =>
+                    c.consultant && (c.consultant._id === consultant._id || c.consultant === consultant._id)
+                );
+                return {
+                    ...consultant,
+                    commitmentCount: consultantComms.length,
+                };
+            }),
             totalCommitments: teamComms.length,
             achievedCommitments: teamComms.filter(c => c.status === 'achieved' || c.admissionClosed).length,
         };
@@ -619,6 +625,7 @@ const AdminDashboard = () => {
                     // Organization Hierarchy Tab
                     <TeamHierarchyView
                         teams={teams}
+                        adminUser={user}
                         onTeamClick={handleTeamClick}
                         onConsultantClick={handleConsultantClick}
                     />

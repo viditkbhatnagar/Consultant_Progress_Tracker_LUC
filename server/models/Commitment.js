@@ -118,6 +118,10 @@ const CommitmentSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        adminComment: {
+            type: String,
+            trim: true,
+        },
         prospectForWeek: {
             type: Number,
             min: 0,
