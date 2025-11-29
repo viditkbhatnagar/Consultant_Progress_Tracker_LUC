@@ -168,7 +168,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Date Picker */}
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={6}>
                         <TextField
                             fullWidth
                             label="Commitment Date"
@@ -187,19 +187,6 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 shrink: true,
                             }}
                             helperText="Choose the date of this commitment"
-                        />
-                    </Grid>
-
-                    {/* Day Display */}
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            label="Day of Week"
-                            value={formData.dayOfWeek}
-                            InputProps={{
-                                readOnly: true,
-                            }}
-                            helperText="Automatically calculated"
                         />
                     </Grid>
 
@@ -283,58 +270,18 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         />
                     </Grid>
 
-                    {/* Achievement Percentage */}
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            label="Achievement %"
-                            type="number"
-                            value={formData.achievementPercentage}
-                            onChange={(e) => handleChange('achievementPercentage', Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
-                            InputProps={{
-                                inputProps: { min: 0, max: 100 }
-                            }}
-                        />
-                    </Grid>
-
                     {/* Meetings Done */}
-                    <Grid item xs={12} sm={4}>
+                    <Grid item xs={12} sm={6}>
                         <TextField
                             fullWidth
-                            label="Meetings Done"
-                            type="number"
-                            value={formData.meetingsDone}
-                            onChange={(e) => handleChange('meetingsDone', Math.max(0, parseInt(e.target.value) || 0))}
-                            InputProps={{
-                                inputProps: { min: 0 }
-                            }}
-                        />
-                    </Grid>
-
-                    {/* Prospect Rating */}
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            fullWidth
-                            label="Prospect Rating"
-                            type="number"
-                            value={formData.prospectForWeek}
-                            onChange={(e) => handleChange('prospectForWeek', Math.max(0, Math.min(10, parseInt(e.target.value) || 0)))}
-                            InputProps={{
-                                inputProps: { min: 0, max: 10 }
-                            }}
-                        />
-                    </Grid>
-
-                    {/* Commitment vs Achieved */}
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            label="Commitment vs Achieved (Notes)"
-                            value={formData.commitmentVsAchieved}
-                            onChange={(e) => handleChange('commitmentVsAchieved', e.target.value)}
-                            multiline
-                            rows={2}
-                            placeholder="Optional: Add notes about progress..."
+                            label=\"Meetings Done\"
+                        type="number"
+                        value={formData.meetingsDone}
+                        onChange={(e) => handleChange('meetingsDone', Math.max(0, parseInt(e.target.value) || 0))}
+                        InputProps={{
+                            inputProps: { min: 0 }
+                        }}
+                        helperText="Number of meetings conducted with this student"
                         />
                     </Grid>
 
