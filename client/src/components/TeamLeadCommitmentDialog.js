@@ -49,7 +49,15 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
 
     useEffect(() => {
         if (commitment) {
-            // Editing existing commitment
+            // Editing existing commitment - pre-fill ALL fields
+            const commitmentDate = commitment.weekStartDate
+                ? format(new Date(commitment.weekStartDate), 'yyyy-MM-dd')
+                : format(new Date(), 'yyyy-MM-dd');
+
+            const dayName = commitmentDate
+                ? format(new Date(commitmentDate), 'EEEE')
+                : format(new Date(), 'EEEE');
+
             setFormData({
                 consultantName: commitment.consultantName || '',
                 studentName: commitment.studentName || '',
@@ -60,9 +68,16 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 admissionClosed: commitment.admissionClosed || false,
                 prospectForWeek: commitment.prospectForWeek || 0,
                 commitmentVsAchieved: commitment.commitmentVsAchieved || '',
+                // New fields
+                weekNumber: commitment.weekNumber || currentWeekInfo.weekNumber,
+                year: commitment.year || currentWeekInfo.year,
+                selectedDate: commitmentDate,
+                dayOfWeek: dayName,
+                conversionProbability: commitment.conversionProbability || 50,
+                followUpDate: commitment.followUpDate || '',
             });
         } else {
-            // Creating new commitment
+            // Creating new commitment - use defaults
             setFormData({
                 consultantName: '',
                 studentName: '',
@@ -73,6 +88,13 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 admissionClosed: false,
                 prospectForWeek: 0,
                 commitmentVsAchieved: '',
+                // New fields
+                weekNumber: currentWeekInfo.weekNumber,
+                year: currentWeekInfo.year,
+                selectedDate: format(new Date(), 'yyyy-MM-dd'),
+                dayOfWeek: format(new Date(), 'EEEE'),
+                conversionProbability: 50,
+                followUpDate: '',
             });
         }
         setValidationError('');
