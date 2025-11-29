@@ -29,12 +29,14 @@ import {
     Tab,
     Menu,
     MenuItem,
+    CardActionArea,
 } from '@mui/material';
 import {
     Edit as EditIcon,
     Logout as LogoutIcon,
     Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
+    TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -42,9 +44,13 @@ import commitmentService from '../services/commitmentService';
 import exportService from '../services/exportService';
 import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
-import { ConsultantPerformanceChart, LeadStageChart, WeeklyTrendChart } from '../components/Charts';
+import DateRangeSelector from '../components/DateRangeSelector';
+import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
+import ActivityHeatmap from '../components/ActivityHeatmap';
+import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const TeamLeadDashboard = () => {
     const { user, logout } = useAuth();
@@ -63,11 +69,27 @@ const TeamLeadDashboard = () => {
     const [filteredCommitments, setFilteredCommitments] = useState([]);
     const [filters, setFilters] = useState({ search: '', stage: '', status: '' });
 
-    // Load commitments
+    // Date range state
+    const [dateRange, setDateRange] = useState({
+        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        viewType: 'current-week',
+    });
+
+    // Consultant detail dialog state
+    const [selectedConsultant, setSelectedConsultant] = useState(null);
+    const [consultantDetailOpen, setConsultantDetailOpen] = useState(false);
+    const [consultantPerformance, setConsultantPerformance] = useState(null);
+    const [performanceLoading, setPerformanceLoading] = useState(false);
+
+    // Load commitments by date range
     const loadCommitments = async () => {
         try {
             setLoading(true);
-            const data = await commitmentService.getCurrentWeekCommitments();
+            const data = await commitmentService.getCommitmentsByDateRange(
+                dateRange.startDate,
+                dateRange.endDate
+            );
             setCommitments(data.data || []);
             setError('');
         } catch (err) {
@@ -78,8 +100,10 @@ const TeamLeadDashboard = () => {
     };
 
     useEffect(() => {
-        loadCommitments();
-    }, []);
+        if (dateRange.startDate && dateRange.endDate) {
+            loadCommitments();
+        }
+    }, [dateRange]);
 
     // Filter commitments
     useEffect(() => {
@@ -109,6 +133,25 @@ const TeamLeadDashboard = () => {
         setFilters(newFilters);
     };
 
+    const handleDateRangeChange = (newRange) => {
+        setDateRange(newRange);
+    };
+
+    const handleConsultantClick = async (consultant) => {
+        setSelectedConsultant(consultant);
+        setConsultantDetailOpen(true);
+        setPerformanceLoading(true);
+
+        try {
+            const data = await commitmentService.getConsultantPerformance(consultant._id, 3);
+            setConsultantPerformance(data);
+        } catch (err) {
+            setError('Failed to load consultant performance');
+        } finally {
+            setPerformanceLoading(false);
+        }
+    };
+
     const handleOpenCorrective = (commitment) => {
         setSelectedCommitment(commitment);
         setCorrectiveAction(commitment.correctiveActionByTL || '');
@@ -131,7 +174,8 @@ const TeamLeadDashboard = () => {
     };
 
     const handleExportExcel = () => {
-        exportService.exportCommitmentsToExcel(commitments, `team_commitments_week${weekInfo.weekNumber}`);
+        const periodLabel = dateRange.viewType.replace('-', '_');
+        exportService.exportCommitmentsToExcel(commitments, `team_commitments_${periodLabel}`);
         setExportMenuAnchor(null);
     };
 
@@ -144,8 +188,10 @@ const TeamLeadDashboard = () => {
             'Achievement %': c.achievementPercentage || 0,
             Meetings: c.meetingsDone || 0,
             Status: c.status,
+            Week: `W${c.weekNumber}`,
         }));
-        exportService.exportToCSV(csvData, `team_commitments_week${weekInfo.weekNumber}`);
+        const periodLabel = dateRange.viewType.replace('-', '_');
+        exportService.exportToCSV(csvData, `team_commitments_${periodLabel}`);
         setExportMenuAnchor(null);
     };
 
@@ -198,7 +244,7 @@ const TeamLeadDashboard = () => {
     const teamAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
             {/* App Bar */}
             <AppBar position="static">
                 <Toolbar>
@@ -234,14 +280,21 @@ const TeamLeadDashboard = () => {
 
             <Container maxWidth="xl" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
                 {/* Header */}
-                <Box sx={{ mb: 4 }}>
+                <Box sx={{ mb: 3 }}>
                     <Typography variant="h4" gutterBottom>
                         Team Dashboard - {user?.teamName}
                     </Typography>
-                    <Typography variant="body1" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary">
                         {formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
                     </Typography>
                 </Box>
+
+                {/* Date Range Selector */}
+                <Card elevation={2} sx={{ mb: 3 }}>
+                    <CardContent>
+                        <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                    </CardContent>
+                </Card>
 
                 {error && (
                     <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -252,24 +305,24 @@ const TeamLeadDashboard = () => {
                 {/* Team Metrics Cards */}
                 <Grid container spacing={3} sx={{ mb: 4 }}>
                     <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
                             <CardContent>
-                                <Typography color="text.secondary" gutterBottom>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
                                     Total Commitments
                                 </Typography>
-                                <Typography variant="h3">{totalCommitments}</Typography>
+                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalCommitments}</Typography>
                             </CardContent>
                         </Card>
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
                             <CardContent>
-                                <Typography color="text.secondary" gutterBottom>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
                                     Team Achievement
                                 </Typography>
                                 <Typography
                                     variant="h3"
-                                    sx={{ color: getAchievementColor(teamAchievementRate) }}
+                                    sx={{ color: getAchievementColor(teamAchievementRate), fontWeight: 700 }}
                                 >
                                     {teamAchievementRate}%
                                 </Typography>
@@ -277,22 +330,22 @@ const TeamLeadDashboard = () => {
                         </Card>
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
                             <CardContent>
-                                <Typography color="text.secondary" gutterBottom>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
                                     Total Meetings
                                 </Typography>
-                                <Typography variant="h3">{totalMeetings}</Typography>
+                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalMeetings}</Typography>
                             </CardContent>
                         </Card>
                     </Grid>
                     <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3}>
+                        <Card elevation={3} sx={{ height: '100%' }}>
                             <CardContent>
-                                <Typography color="text.secondary" gutterBottom>
+                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
                                     Admissions Closed
                                 </Typography>
-                                <Typography variant="h3" sx={{ color: '#4CAF50' }}>
+                                <Typography variant="h3" sx={{ color: '#4CAF50', fontWeight: 700 }}>
                                     {totalClosed}
                                 </Typography>
                             </CardContent>
@@ -300,18 +353,21 @@ const TeamLeadDashboard = () => {
                     </Grid>
                 </Grid>
 
-                {/* Analytics Charts */}
+                {/* Analytics Charts and Heatmap */}
                 {commitments.length > 0 && (
                     <Box sx={{ mb: 4 }}>
-                        <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+                        <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
                             Team Analytics
                         </Typography>
                         <Grid container spacing={3}>
-                            <Grid item xs={12} md={6}>
+                            <Grid item xs={12} lg={6}>
                                 <LeadStageChart commitments={commitments} />
                             </Grid>
-                            <Grid item xs={12} md={6}>
+                            <Grid item xs={12} lg={6}>
                                 <ConsultantPerformanceChart consultantStats={consultantStats} />
+                            </Grid>
+                            <Grid item xs={12}>
+                                <ActivityHeatmap commitments={commitments} month={new Date()} />
                             </Grid>
                         </Grid>
                     </Box>
@@ -329,51 +385,74 @@ const TeamLeadDashboard = () => {
                 {tabValue === 0 && (
                     // Team Overview Tab
                     <Box>
-                        <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                            Consultant Performance
+                        <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+                            Consultant Performance - Click to View Details
                         </Typography>
                         <Grid container spacing={3}>
                             {consultantStats.map(stat => (
-                                <Grid item xs={12} md={6} lg={4} key={stat.consultant._id}>
-                                    <Card elevation={2}>
-                                        <CardContent>
-                                            <Typography variant="h6" gutterBottom>
-                                                {stat.consultant.name}
-                                            </Typography>
-                                            <Grid container spacing={2}>
-                                                <Grid item xs={6}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Commitments
+                                <Grid item xs={12} sm={6} lg={4} key={stat.consultant._id}>
+                                    <Card
+                                        elevation={2}
+                                        sx={{
+                                            height: '100%',
+                                            transition: 'all 0.3s ease',
+                                            '&:hover': {
+                                                transform: 'translateY(-8px)',
+                                                boxShadow: 6,
+                                                cursor: 'pointer',
+                                            },
+                                        }}
+                                    >
+                                        <CardActionArea onClick={() => handleConsultantClick(stat.consultant)}>
+                                            <CardContent>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                                        {stat.consultant.name}
                                                     </Typography>
-                                                    <Typography variant="h4">{stat.total}</Typography>
+                                                    <IconButton size="small" color="primary">
+                                                        <TrendingUpIcon />
+                                                    </IconButton>
+                                                </Box>
+                                                <Grid container spacing={2}>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            Commitments
+                                                        </Typography>
+                                                        <Typography variant="h4" sx={{ fontWeight: 600 }}>{stat.total}</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            Achievement
+                                                        </Typography>
+                                                        <Typography
+                                                            variant="h4"
+                                                            sx={{ color: getAchievementColor(stat.achievementRate), fontWeight: 600 }}
+                                                        >
+                                                            {stat.achievementRate}%
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            Meetings
+                                                        </Typography>
+                                                        <Typography variant="h5" sx={{ fontWeight: 600 }}>{stat.meetings}</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="text.secondary" display="block">
+                                                            Closed
+                                                        </Typography>
+                                                        <Typography variant="h5" sx={{ color: '#4CAF50', fontWeight: 600 }}>
+                                                            {stat.closed}
+                                                        </Typography>
+                                                    </Grid>
                                                 </Grid>
-                                                <Grid item xs={6}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Achievement
+                                                <Box sx={{ mt: 2, textAlign: 'center' }}>
+                                                    <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
+                                                        Click to view full details →
                                                     </Typography>
-                                                    <Typography
-                                                        variant="h4"
-                                                        sx={{ color: getAchievementColor(stat.achievementRate) }}
-                                                    >
-                                                        {stat.achievementRate}%
-                                                    </Typography>
-                                                </Grid>
-                                                <Grid item xs={6}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Meetings
-                                                    </Typography>
-                                                    <Typography variant="h5">{stat.meetings}</Typography>
-                                                </Grid>
-                                                <Grid item xs={6}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Closed
-                                                    </Typography>
-                                                    <Typography variant="h5" sx={{ color: '#4CAF50' }}>
-                                                        {stat.closed}
-                                                    </Typography>
-                                                </Grid>
-                                            </Grid>
-                                        </CardContent>
+                                                </Box>
+                                            </CardContent>
+                                        </CardActionArea>
                                     </Card>
                                 </Grid>
                             ))}
@@ -385,7 +464,7 @@ const TeamLeadDashboard = () => {
                     // All Commitments Tab
                     <Card elevation={2}>
                         <CardContent>
-                            <Typography variant="h6" gutterBottom>
+                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
                                 All Team Commitments
                             </Typography>
 
@@ -403,15 +482,16 @@ const TeamLeadDashboard = () => {
                                 <Box sx={{ textAlign: 'center', py: 4 }}>
                                     <Typography color="text.secondary">
                                         {commitments.length === 0
-                                            ? 'No commitments for this week.'
+                                            ? 'No commitments for this period.'
                                             : 'No commitments match your filters.'}
                                     </Typography>
                                 </Box>
                             ) : (
-                                <TableContainer>
+                                <TableContainer sx={{ mt: 2 }}>
                                     <Table>
                                         <TableHead>
                                             <TableRow>
+                                                <TableCell>Week</TableCell>
                                                 <TableCell>Consultant</TableCell>
                                                 <TableCell>Student</TableCell>
                                                 <TableCell>Commitment</TableCell>
@@ -424,11 +504,12 @@ const TeamLeadDashboard = () => {
                                         </TableHead>
                                         <TableBody>
                                             {displayCommitments.map((commitment) => (
-                                                <TableRow key={commitment._id}>
+                                                <TableRow key={commitment._id} hover>
+                                                    <TableCell>W{commitment.weekNumber}</TableCell>
                                                     <TableCell>{commitment.consultant.name}</TableCell>
                                                     <TableCell>{commitment.studentName || 'N/A'}</TableCell>
                                                     <TableCell>
-                                                        <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
+                                                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
                                                             {commitment.commitmentMade}
                                                         </Typography>
                                                     </TableCell>
@@ -444,7 +525,7 @@ const TeamLeadDashboard = () => {
                                                     </TableCell>
                                                     <TableCell align="center">
                                                         <Typography
-                                                            sx={{ color: getAchievementColor(commitment.achievementPercentage || 0) }}
+                                                            sx={{ color: getAchievementColor(commitment.achievementPercentage || 0), fontWeight: 600 }}
                                                         >
                                                             {commitment.achievementPercentage || 0}%
                                                         </Typography>
@@ -535,6 +616,19 @@ const TeamLeadDashboard = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Consultant Detail Dialog */}
+            <ConsultantDetailDialog
+                open={consultantDetailOpen}
+                onClose={() => {
+                    setConsultantDetailOpen(false);
+                    setSelectedConsultant(null);
+                    setConsultantPerformance(null);
+                }}
+                consultant={selectedConsultant}
+                performanceData={consultantPerformance}
+                loading={performanceLoading}
+            />
         </Box>
     );
 };

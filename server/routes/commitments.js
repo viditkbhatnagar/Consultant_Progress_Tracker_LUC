@@ -8,6 +8,8 @@ const {
     closeAdmission,
     updateMeetings,
     getWeekCommitments,
+    getCommitmentsByDateRange,
+    getConsultantPerformance,
 } = require('../controllers/commitmentController');
 
 const router = express.Router();
@@ -37,4 +39,11 @@ router
 router.patch('/:id/close', authorize('consultant', 'admin'), closeAdmission);
 router.patch('/:id/meetings', authorize('consultant', 'admin'), updateMeetings);
 
+// Date range queries
+router.get('/date-range', getCommitmentsByDateRange);
+
+// Consultant performance
+router.get('/consultant/:consultantId/performance', authorize('team_lead', 'admin', 'consultant'), getConsultantPerformance);
+
 module.exports = router;
+

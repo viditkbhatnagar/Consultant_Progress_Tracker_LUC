@@ -79,6 +79,24 @@ const getWeekNumber = (date) => {
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 };
 
+// Get commitments by date range
+const getCommitmentsByDateRange = async (startDate, endDate, consultantId = null) => {
+    const params = { startDate, endDate };
+    if (consultantId) params.consultantId = consultantId;
+
+    const response = await axios.get(`${API_URL}/date-range`, { params });
+    return response.data;
+};
+
+// Get consultant performance details
+const getConsultantPerformance = async (consultantId, months = 3) => {
+    const response = await axios.get(
+        `${API_URL}/consultant/${consultantId}/performance`,
+        { params: { months } }
+    );
+    return response.data;
+};
+
 const commitmentService = {
     getCommitments,
     getCommitment,
@@ -89,6 +107,8 @@ const commitmentService = {
     updateMeetings,
     getWeekCommitments,
     getCurrentWeekCommitments,
+    getCommitmentsByDateRange,
+    getConsultantPerformance,
 };
 
 export default commitmentService;

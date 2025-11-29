@@ -381,3 +381,125 @@ exports.getWeekCommitments = async (req, res, next) => {
         next(error);
     }
 };
+
+// @desc    Get commitments by date range
+// @route   GET /api/commitments/date-range
+// @access  Private
+exports.getCommitmentsByDateRange = async (req, res, next) => {
+    try {
+        const { startDate, endDate, consultantId } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide startDate and endDate',
+            });
+        }
+
+        let query = {
+            weekStartDate: { $gte: new Date(startDate) },
+            weekEndDate: { $lte: new Date(endDate) },
+        };
+
+        // Role-based filtering
+        if (req.user.role === 'consultant') {
+            query.consultant = req.user.id;
+        } else if (req.user.role === 'team_lead') {
+            if (consultantId) {
+                // Team lead viewing specific consultant
+                query.consultant = consultantId;
+                query.teamLead = req.user.id;
+            } else {
+                // Team lead viewing all team
+                query.teamLead = req.user.id;
+            }
+        } else if (req.user.role === 'admin') {
+            if (consultantId) {
+                query.consultant = consultantId;
+            }
+            // Admin can see all if no consultant specified
+        }
+
+        const commitments = await Commitment.find(query)
+            .populate('consultant', 'name email')
+            .populate('teamLead', 'name email')
+            .sort('-weekStartDate');
+
+        res.status(200).json({
+            success: true,
+            count: commitments.length,
+            data: commitments,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Get consultant performance details
+// @route   GET /api/commitments/consultant/:consultantId/performance
+// @access  Private (Team Lead/Admin)
+exports.getConsultantPerformance = async (req, res, next) => {
+    try {
+        const { consultantId } = req.params;
+        const { months = 3 } = req.query; // Default to last 3 months
+
+        // Authorization check
+        if (req.user.role === 'consultant' && req.user.id !== consultantId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized',
+            });
+        }
+
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setMonth(startDate.getMonth() - parseInt(months));
+
+        let query = {
+            consultant: consultantId,
+            weekStartDate: { $gte: startDate },
+            weekEndDate: { $lte: endDate },
+        };
+
+        // Team lead can only view their team members
+        if (req.user.role === 'team_lead') {
+            query.teamLead = req.user.id;
+        }
+
+        const commitments = await Commitment.find(query)
+            .populate('consultant', 'name email teamName')
+            .sort('weekStartDate');
+
+        // Calculate monthly aggregates
+        const monthlyStats = {};
+        commitments.forEach(c => {
+            const monthKey = `${c.year}-${String(c.weekStartDate.getMonth() + 1).padStart(2, '0')}`;
+            if (!monthlyStats[monthKey]) {
+                monthlyStats[monthKey] = {
+                    month: monthKey,
+                    total: 0,
+                    achieved: 0,
+                    meetings: 0,
+                    closed: 0,
+                    commitments: [],
+                };
+            }
+            monthlyStats[monthKey].total++;
+            monthlyStats[monthKey].meetings += c.meetingsDone || 0;
+            if (c.status === 'achieved' || c.admissionClosed) monthlyStats[monthKey].achieved++;
+            if (c.admissionClosed) monthlyStats[monthKey].closed++;
+            monthlyStats[monthKey].commitments.push(c);
+        });
+
+        res.status(200).json({
+            success: true,
+            consultant: commitments[0]?.consultant,
+            totalCommitments: commitments.length,
+            monthlyStats: Object.values(monthlyStats),
+            allCommitments: commitments,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
