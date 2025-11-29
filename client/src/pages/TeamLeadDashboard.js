@@ -29,6 +29,7 @@ import {
     Menu,
     MenuItem,
     CardActionArea,
+    Avatar,
 } from '@mui/material';
 import {
     Edit as EditIcon,
@@ -36,6 +37,7 @@ import {
     Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
     TrendingUp as TrendingUpIcon,
+    Person as PersonIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
