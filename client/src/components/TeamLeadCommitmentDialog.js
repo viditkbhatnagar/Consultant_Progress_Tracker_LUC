@@ -274,14 +274,14 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     <Grid item xs={12} sm={6}>
                         <TextField
                             fullWidth
-                            label=\"Meetings Done\"
-                        type="number"
-                        value={formData.meetingsDone}
-                        onChange={(e) => handleChange('meetingsDone', Math.max(0, parseInt(e.target.value) || 0))}
-                        InputProps={{
-                            inputProps: { min: 0 }
-                        }}
-                        helperText="Number of meetings conducted with this student"
+                            label="Meetings Done"
+                            type="number"
+                            value={formData.meetingsDone}
+                            onChange={(e) => handleChange('meetingsDone', Math.max(0, parseInt(e.target.value) || 0))}
+                            InputProps={{
+                                inputProps: { min: 0 }
+                            }}
+                            helperText="Number of meetings conducted with this student"
                         />
                     </Grid>
 

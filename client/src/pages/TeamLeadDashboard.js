@@ -553,6 +553,7 @@ const TeamLeadDashboard = () => {
                                                 <TableCell>Student</TableCell>
                                                 <TableCell>Description</TableCell>
                                                 <TableCell>Lead Stage</TableCell>
+                                                <TableCell align="center">Probability</TableCell>
                                                 <TableCell align="center">Achievement</TableCell>
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
@@ -606,6 +607,20 @@ const TeamLeadDashboard = () => {
                                                                     color: 'white',
                                                                 }}
                                                             />
+                                                        </TableCell>
+
+                                                        {/* Conversion Probability */}
+                                                        <TableCell align="center">
+                                                            <Typography
+                                                                sx={{
+                                                                    color:
+                                                                        (commitment.conversionProbability || 0) >= 70 ? 'success.main' :
+                                                                            (commitment.conversionProbability || 0) >= 40 ? 'warning.main' : 'error.main',
+                                                                    fontWeight: 600
+                                                                }}
+                                                            >
+                                                                {commitment.conversionProbability || 0}%
+                                                            </Typography>
                                                         </TableCell>
 
                                                         {/* Achievement - Simplified: 100% if closed, 0% otherwise */}
