@@ -1,7 +1,7 @@
 import React from 'react';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
-import { Card, CardContent, Typography, Tooltip as MuiTooltip, Box } from '@mui/material';
+import { Card, CardContent, Typography, Box } from '@mui/material';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 
 const ActivityHeatmap = ({ commitments, month = new Date() }) => {
@@ -38,27 +38,6 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
             achieved: activityMap[dateStr]?.achieved || 0,
         };
     });
-
-    // Custom tooltip
-    const TooltipContent = ({ value }) => {
-        if (!value || value.count === 0) return null;
-        return (
-            <Box sx={{ p: 1 }}>
-                <Typography variant="caption" display="block">
-                    {format(new Date(value.date), 'MMM dd, yyyy')}
-                </Typography>
-                <Typography variant="caption" display="block">
-                    Commitments: {value.count}
-                </Typography>
-                <Typography variant="caption" display="block">
-                    Meetings: {value.meetings}
-                </Typography>
-                <Typography variant="caption" display="block">
-                    Achieved: {value.achieved}
-                </Typography>
-            </Box>
-        );
-    };
 
     return (
         <Card elevation={2}>

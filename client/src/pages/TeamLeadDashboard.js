@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Container,
     Box,
@@ -12,7 +12,6 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     Chip,
     IconButton,
     TextField,
@@ -82,8 +81,8 @@ const TeamLeadDashboard = () => {
     const [consultantPerformance, setConsultantPerformance] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(false);
 
-    // Load commitments by date range
-    const loadCommitments = async () => {
+    // Load commitments by date range - use useCallback to fix dependency warning
+    const loadCommitments = useCallback(async () => {
         try {
             setLoading(true);
             const data = await commitmentService.getCommitmentsByDateRange(
@@ -97,13 +96,13 @@ const TeamLeadDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dateRange.startDate, dateRange.endDate]);
 
     useEffect(() => {
         if (dateRange.startDate && dateRange.endDate) {
             loadCommitments();
         }
-    }, [dateRange]);
+    }, [dateRange, loadCommitments]);
 
     // Filter commitments
     useEffect(() => {
