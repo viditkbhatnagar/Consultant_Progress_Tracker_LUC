@@ -41,16 +41,16 @@ router.get(
     getConsultantPerformance
 );
 
-// Special action routes (BEFORE /:id)
-router.patch('/:id/close', authorize('team_lead', 'admin'), closeAdmission);
-router.patch('/:id/meetings', authorize('team_lead', 'admin'), updateMeetings);
+// Specific actions (BEFORE /:id)
+router.put('/:id/close-admission', authorize('team_lead', 'admin'), closeAdmission);
+router.put('/:id/meetings', authorize('team_lead', 'admin'), updateMeetings);
 
-// Specific commitment routes (This /:id route MUST come LAST)
+// Single commitment operations (This /:id route MUST come LAST)
 router
     .route('/:id')
     .get(getCommitment)
-    .put(updateCommitment)
-    .delete(deleteCommitment);
+    .put(authorize('team_lead', 'admin'), updateCommitment)
+    .delete(authorize('admin'), deleteCommitment);
 
 module.exports = router;
 
