@@ -74,7 +74,7 @@ const initializeAuth = () => {
 
 // Get all users (admin only)
 export const getUsers = async () => {
-    const response = await axios.get(`${API_URL}/users`);
+    const response = await axios.get(`${API_BASE_URL}/users`);
     return response.data;
 };
 
