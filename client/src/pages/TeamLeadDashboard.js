@@ -226,14 +226,32 @@ const TeamLeadDashboard = () => {
                 // Create new commitment
                 await commitmentService.createCommitment(commitmentData);
             }
+
             // Reload commitments
             await loadCommitments();
+
+            // If consultant detail dialog is open, refresh its data to show the new/updated commitment
+            if (consultantDetailOpen && selectedConsultant) {
+                setPerformanceLoading(true);
+                try {
+                    const consultantName = typeof selectedConsultant === 'string' ? selectedConsultant : selectedConsultant.name;
+                    const data = await commitmentService.getConsultantPerformance(consultantName, 3);
+                    setConsultantPerformance(data);
+                } catch (err) {
+                    console.error('Failed to refresh consultant performance:', err);
+                } finally {
+                    setPerformanceLoading(false);
+                }
+            }
+
+            // Close the commitment dialog
             setCommitmentDialogOpen(false);
-        } catch (error) {
-            throw error; // Let dialog handle the error
+            setEditingCommitment(null);
+        } catch (err) {
+            console.error('Error saving commitment:', err);
+            setError('Failed to save commitment');
         }
     };
-
     const handleLogout = () => {
         logout();
         navigate('/login');
