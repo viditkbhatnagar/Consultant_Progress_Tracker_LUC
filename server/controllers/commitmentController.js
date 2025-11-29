@@ -125,83 +125,25 @@ exports.updateCommitment = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'consultant') {
-            if (commitment.consultant.toString() !== req.user.id) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Not authorized to update this commitment',
-                });
-            }
-
-            // Consultants can update specific fields
-            const allowedFields = [
-                'commitmentAchieved',
-                'meetingsDone',
-                'achievementPercentage',
-                'reasonForNotAchieving',
-                'leadStage',
-                'conversionProbability',
-                'followUpDate',
-                'followUpNotes',
-                'admissionClosed',
-                'closedDate',
-                'closedAmount',
-                'status',
-            ];
-
-            const updateData = {};
-            allowedFields.forEach(field => {
-                if (req.body[field] !== undefined) {
-                    updateData[field] = req.body[field];
-                }
-            });
-
-            updateData.lastUpdatedBy = req.user.id;
-
-            commitment = await Commitment.findByIdAndUpdate(
-                req.params.id,
-                updateData,
-                { new: true, runValidators: true }
-            );
-        } else if (req.user.role === 'team_lead') {
+        // Authorization check (no consultant role anymore)
+        if (req.user.role === 'team_lead') {
+            // Team lead can only update their team's commitments
             if (commitment.teamLead.toString() !== req.user.id) {
                 return res.status(403).json({
                     success: false,
                     message: 'Not authorized to update this commitment',
                 });
             }
-
-            // Team leads can add corrective actions and prospect ratings
-            const allowedFields = [
-                'commitmentVsAchieved',
-                'correctiveActionByTL',
-                'prospectForWeek',
-            ];
-
-            const updateData = {};
-            allowedFields.forEach(field => {
-                if (req.body[field] !== undefined) {
-                    updateData[field] = req.body[field];
-                }
-            });
-
-            updateData.lastUpdatedBy = req.user.id;
-
-            commitment = await Commitment.findByIdAndUpdate(
-                req.params.id,
-                updateData,
-                { new: true, runValidators: true }
-            );
-        } else if (req.user.role === 'admin') {
-            // Admin can update any field
-            req.body.lastUpdatedBy = req.user.id;
-            commitment = await Commitment.findByIdAndUpdate(
-                req.params.id,
-                req.body,
-                { new: true, runValidators: true }
-            );
         }
+        // Admin can update anything (no check needed)
+
+        // Update last modified info
+        req.body.lastUpdatedBy = req.user.id;
+
+        commitment = await Commitment.findByIdAndUpdate(req.params.id, req.body, {
+            new: true,
+            runValidators: true,
+        }).populate('teamLead', 'name email');
 
         res.status(200).json({
             success: true,
