@@ -66,9 +66,16 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     }, [commitment, open]);
 
     const handleChange = (field, value) => {
+        let updates = { [field]: value };
+
+        // Auto-close when leadStage is set to "Admission"
+        if (field === 'leadStage' && value === 'Admission') {
+            updates.admissionClosed = true;
+        }
+
         setFormData(prev => ({
             ...prev,
-            [field]: value,
+            ...updates,
         }));
         setValidationError('');
     };
@@ -157,6 +164,11 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 ))}
                             </Select>
                         </FormControl>
+                        {formData.leadStage === 'Admission' && (
+                            <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
+                                ✓ Lead will be automatically closed when stage is Admission
+                            </Typography>
+                        )}
                     </Grid>
 
                     {/* Commitment */}
@@ -235,10 +247,15 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 <Checkbox
                                     checked={formData.admissionClosed}
                                     onChange={(e) => handleChange('admissionClosed', e.target.checked)}
+                                    disabled={formData.leadStage === 'Admission'} // Auto-set when Admission
                                     color="success"
                                 />
                             }
-                            label="Admission Closed (Student admitted)"
+                            label={
+                                formData.leadStage === 'Admission'
+                                    ? "Admission Closed (Auto-set for Admission stage)"
+                                    : "Admission Closed (Student admitted)"
+                            }
                         />
                     </Grid>
                 </Grid>
