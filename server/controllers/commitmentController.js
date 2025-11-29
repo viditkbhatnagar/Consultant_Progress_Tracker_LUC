@@ -362,8 +362,7 @@ exports.getConsultantPerformance = async (req, res, next) => {
 
         let query = {
             consultantName: consultantName,
-            weekStartDate: { $gte: startDate },
-            weekEndDate: { $lte: endDate },
+            weekStartDate: { $gte: startDate }, // Only check start date to include current week
         };
 
         // Team lead can only view their team members
