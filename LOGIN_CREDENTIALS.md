@@ -1,121 +1,198 @@
 # Team Progress Tracker - Login Credentials
 
-## 🔐 All User Login Credentials
-
-All passwords are: The role name followed by `@123` (e.g., `Admin@123`, `TeamLead@123`, `Consultant@123`)
+This document contains all login credentials for testing and accessing the Team Progress Tracker application.
 
 ---
 
-## 👤 ADMIN
+## � Admin Account
 
-**Name:** Bhanu Prakash  
-**Email:** `bhanu@learnerseducation.com`  
-**Password:** `Admin@123`  
-**Role:** Administrator  
-**Access:** Full system access, all teams, user management
+The admin has full access to all features, including user management, viewing all teams and commitments across the organization.
 
----
+**Email:** `admin@learnerseducation.com`  
+**Password:** `admin123`
 
-## 👥 TEAM LEADS
-
-### 1. North Region Team Lead
-
-**Name:** Shasin Kumar  
-**Email:** `shasin@learnerseducation.com`  
-**Password:** `TeamLead@123`  
-**Team:** North Region Team  
-**Team Size:** 3 Consultants
-
-### 2. South Region Team Lead
-
-**Name:** Priya Sharma  
-**Email:** `priya@learnerseducation.com`  
-**Password:** `TeamLead@123`  
-**Team:** South Region Team  
-**Team Size:** 2 Consultants
+**Access Level:** 
+- View all teams and consultants
+- Manage users (create, edit, delete)
+- Access all commitments across the organization
+- View organization-wide analytics
 
 ---
 
-## 💼 CONSULTANTS
+## � Team Lead Accounts
 
-### North Region Team (Team Lead: Shasin Kumar)
+Team leads can view and manage their team's commitments, provide corrective actions, and rate prospects.
+
+### North Region Team
+
+**Name:** Shagun Kumar  
+**Email:** `shagun.kumar@learnerseducation.com`  
+**Password:** `teamlead123`
+
+**Team Members:**
+- Linta Joseph
+- Rahul Verma
+- Anjali Desai
+
+**Access Level:**
+- View team commitments
+- Add corrective actions
+- Rate prospect potential
+- Export team data
+- View individual consultant performance
+
+---
+
+### South Region Team
+
+**Name:** Priya Singh  
+**Email:** `priya.singh@learnerseducation.com`  
+**Password:** `teamlead123`
+
+**Team Members:**
+- Arjun Reddy
+- Kavya Nair
+
+**Access Level:**
+- View team commitments
+- Add corrective actions
+- Rate prospect potential
+- Export team data
+- View individual consultant performance
+
+---
+
+## 👨‍💼 Consultant Accounts
+
+Consultants can manage their own commitments, track meetings, and update lead stages.
+
+### North Region Team Consultants
 
 #### 1. Linta Joseph
-- **Email:** `linta@learnerseducation.com`
-- **Password:** `Consultant@123`
-- **Commitments this week:** 3
+**Email:** `linta.joseph@learnerseducation.com`  
+**Password:** `consultant123`  
+**Team Lead:** Shagun Kumar (North Region Team)
 
 #### 2. Rahul Verma
-- **Email:** `rahul@learnerseducation.com`
-- **Password:** `Consultant@123`
-- **Commitments this week:** 2
+**Email:** `rahul.verma@learnerseducation.com`  
+**Password:** `consultant123`  
+**Team Lead:** Shagun Kumar (North Region Team)
 
 #### 3. Anjali Desai
-- **Email:** `anjali@learnerseducation.com`
-- **Password:** `Consultant@123`
-- **Commitments this week:** 2
-
-### South Region Team (Team Lead: Priya Sharma)
-
-#### 4. Vikram Singh
-- **Email:** `vikram@learnerseducation.com`
-- **Password:** `Consultant@123`
-- **Commitments this week:** 2
-
-#### 5. Meera Patel
-- **Email:** `meera@learnerseducation.com`
-- **Password:** `Consultant@123`
-- **Commitments this week:** 2
+**Email:** `anjali.desai@learnerseducation.com`  
+**Password:** `consultant123`  
+**Team Lead:** Shagun Kumar (North Region Team)
 
 ---
 
-## 📊 Database Summary
+### South Region Team Consultants
 
-- **Week:** 48, Year: 2025 (November 24-30, 2025)
-- **Total Users:** 8 (1 Admin, 2 Team Leads, 5 Consultants)
-- **Total Commitments:** 11 active commitments
-- **Teams:** 2 teams (North Region, South Region)
-- **Admissions Closed:** 3 successful closures this week
+#### 4. Arjun Reddy
+**Email:** `arjun.reddy@learnerseducation.com`  
+**Password:** `consultant123`  
+**Team Lead:** Priya Singh (South Region Team)
 
----
+#### 5. Kavya Nair
+**Email:** `kavya.nair@learnerseducation.com`  
+**Password:** `consultant123`  
+**Team Lead:** Priya Singh (South Region Team)
 
-## 🎯 Quick Test Logins
-
-**To test Consultant view:**
-```
-Email: linta@learnerseducation.com
-Password: Consultant@123
-```
-
-**To test Team Lead view:**
-```
-Email: shasin@learnerseducation.com
-Password: TeamLead@123
-```
-
-**To test Admin view:**
-```
-Email: bhanu@learnerseducation.com
-Password: Admin@123
-```
+**Access Level:** (All Consultants)
+- Create and manage own commitments
+- Update meeting counts
+- Mark admissions as closed
+- Track lead stages
+- View own performance analytics
+- Export own commitment data
 
 ---
 
-## 🔄 Re-seeding the Database
+## 📊 Test Data Overview
 
-To re-seed the database with fresh data, run:
-
-```bash
-cd server
-node utils/seedUsers.js
-```
-
-This will:
-1. Clear all existing users and commitments
-2. Create new users with the emails above
-3. Create 11 sample commitments for Week 48, 2025
-4. Display login credentials in the console
+The database is populated with:
+- **506 commitments** across **52 weeks of 2025**
+- **5 consultants** in **2 teams**
+- Each consultant has **1-3 commitments per week**
+- Realistic data with varied lead stages, statuses, and achievement percentages
+- Multiple admissions closed for testing
 
 ---
 
-**Note:** All data is for Week 48, 2025 (November 24-30, 2025) - the current week at the time of seeding.
+## 🚀 Quick Login Guide
+
+1. Navigate to `http://localhost:3000` (or your deployed URL)
+2. Click on "Login"
+3. Enter email and password from above
+4. Click "Sign In"
+5. You will be automatically redirected to your role-specific dashboard
+
+---
+
+## 🔒 Security Notes
+
+- **For Development Only:** These credentials are for development and testing purposes
+- **Production:** Change all passwords before deploying to production
+- **Password Policy:** All passwords use simple values for testing convenience
+- **Environment Variables:** Sensitive configuration is stored in `.env` files (not in version control)
+
+---
+
+## � Role-Based Dashboard Features
+
+### Admin Dashboard
+- Organization-wide metrics
+- All team performance overview
+- User management interface
+- All commitments table
+- Global analytics and charts
+
+### Team Lead Dashboard
+- Team metrics and performance
+- Consultant performance cards (clickable for details)
+- Team commitments table
+- Lead stage distribution charts
+- Activity heatmap
+- Date range selector (Current Week/Month/Last 3 Months/Custom)
+- Export functionality (Excel/CSV)
+- Search and filter capabilities
+
+### Consultant Dashboard
+- Personal performance metrics
+- Own commitments management
+- Analytics charts
+- Create new commitments
+- Update meetings and lead stages
+- Mark admissions as closed
+- Export own data
+
+---
+
+## 🆘 Troubleshooting
+
+**Login Failed?**
+- Ensure you're using the correct email domain: `@learnerseducation.com`
+- Passwords are case-sensitive
+- Clear browser cache and try again
+- Verify the backend server is running on port 5001
+
+**Database Empty?**
+- Run the seed script: `node server/utils/seed2025.js`
+- This will populate the database with full year 2025 data
+
+**Need Fresh Data?**
+- Run the seed script again to reset all data
+- This will clear existing data and create new test data
+
+---
+
+## 📞 Support
+
+For issues or questions:
+1. Check `HOW_TO_RUN.md` for setup instructions
+2. Check `README.md` for project overview
+3. Review `DEPLOYMENT.md` for deployment guide
+
+---
+
+**Last Updated:** November 2025  
+**Database Version:** 2025 Full Year Data (52 weeks, 506 commitments)
