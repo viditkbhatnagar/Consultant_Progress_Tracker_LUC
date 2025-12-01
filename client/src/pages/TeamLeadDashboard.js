@@ -69,7 +69,6 @@ const TeamLeadDashboard = () => {
     const [selectedCommitment, setSelectedCommitment] = useState(null);
     const [correctiveDialogOpen, setCorrectiveDialogOpen] = useState(false);
     const [correctiveAction, setCorrectiveAction] = useState('');
-    const [prospectRating, setProspectRating] = useState('');
     const [tabValue, setTabValue] = useState(0);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
@@ -175,7 +174,6 @@ const TeamLeadDashboard = () => {
         try {
             await commitmentService.updateCommitment(selectedCommitment._id, {
                 correctiveActionByTL: correctiveAction,
-                prospectForWeek: prospectRating ? parseInt(prospectRating) : null,
             });
             loadCommitments();
             setCorrectiveDialogOpen(false);
@@ -775,15 +773,6 @@ const TeamLeadDashboard = () => {
                             sx={{ mb: 2 }}
                         />
 
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Prospect Rating (1-10)"
-                            value={prospectRating}
-                            onChange={(e) => setProspectRating(e.target.value)}
-                            inputProps={{ min: 1, max: 10 }}
-                            helperText="Rate the prospect potential for this week"
-                        />
                     </Box>
                 </DialogContent>
                 <DialogActions>
