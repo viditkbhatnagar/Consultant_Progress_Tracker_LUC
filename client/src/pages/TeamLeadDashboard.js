@@ -163,12 +163,7 @@ const TeamLeadDashboard = () => {
         }
     };
 
-    const handleOpenCorrective = (commitment) => {
-        setSelectedCommitment(commitment);
-        setCorrectiveAction(commitment.correctiveActionByTL || '');
-        setProspectRating(commitment.prospectForWeek || '');
-        setCorrectiveDialogOpen(true);
-    };
+
 
     const handleSaveCorrective = async () => {
         try {
@@ -574,6 +569,7 @@ const TeamLeadDashboard = () => {
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
                                                 <TableCell align="center">TL Comments</TableCell>
+                                                <TableCell align="center">Admin Comments</TableCell>
                                                 <TableCell align="center">Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
@@ -697,7 +693,7 @@ const TeamLeadDashboard = () => {
                                                                         onClick={() => {
                                                                             setSelectedCommitment(commitment);
                                                                             setCorrectiveAction(commitment.correctiveActionByTL || '');
-                                                                            setProspectRating(commitment.prospectForWeek || '');
+
                                                                             setCorrectiveDialogOpen(true);
                                                                         }}
                                                                         title="View/Edit TL comment"
@@ -712,7 +708,7 @@ const TeamLeadDashboard = () => {
                                                                     onClick={() => {
                                                                         setSelectedCommitment(commitment);
                                                                         setCorrectiveAction('');
-                                                                        setProspectRating(commitment.prospectForWeek || '');
+
                                                                         setCorrectiveDialogOpen(true);
                                                                     }}
                                                                     title="Add TL comment"
