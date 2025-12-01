@@ -718,6 +718,17 @@ const TeamLeadDashboard = () => {
                                                             )}
                                                         </TableCell>
 
+                                                        {/* Admin Comments - Display only */}
+                                                        <TableCell align="center">
+                                                            {commitment.adminComment ? (
+                                                                <Typography variant="body2" sx={{ maxWidth: 150 }} noWrap title={commitment.adminComment}>
+                                                                    {commitment.adminComment}
+                                                                </Typography>
+                                                            ) : (
+                                                                <Typography variant="body2" color="text.secondary">--</Typography>
+                                                            )}
+                                                        </TableCell>
+
                                                         {/* Actions - Edit for both consultants and TLs */}
                                                         <TableCell align="center">
                                                             <IconButton
