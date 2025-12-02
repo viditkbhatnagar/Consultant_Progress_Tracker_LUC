@@ -232,7 +232,6 @@ const AdminDashboard = () => {
     // User management handlers
     const handleCreateUser = async (userData) => {
         try {
-            await authService.setAuthToken(localStorage.getItem('token'));
             const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/auth/register`, {
                 method: 'POST',
                 headers: {
