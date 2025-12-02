@@ -41,6 +41,7 @@ import commitmentService from '../services/commitmentService';
 import { getUsers } from '../services/authService';
 import exportService from '../services/exportService';
 import consultantService from '../services/consultantService';
+import { API_BASE_URL } from '../utils/constants';
 import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
@@ -293,7 +294,7 @@ const AdminDashboard = () => {
     // User management handlers
     const handleCreateUser = async (userData) => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/auth/register`, {
+            const response = await fetch(`${API_BASE_URL}/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -331,7 +332,7 @@ const AdminDashboard = () => {
                 updateData.password = userData.password;
             }
 
-            await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/users/${selectedUser._id}`, {
+            await fetch(`${API_BASE_URL}/users/${selectedUser._id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -359,7 +360,7 @@ const AdminDashboard = () => {
     const handleDeactivateUser = async (userId) => {
         if (window.confirm('Are you sure you want to deactivate this user?')) {
             try {
-                await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/users/${userId}`, {
+                await fetch(`${API_BASE_URL}/users/${userId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
