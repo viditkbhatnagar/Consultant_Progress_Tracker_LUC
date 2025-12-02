@@ -54,7 +54,6 @@ import DateRangeSelector from '../components/DateRangeSelector';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
-import CorrectiveActionDialog from '../components/CorrectiveActionDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';

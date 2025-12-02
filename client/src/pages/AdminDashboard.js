@@ -379,7 +379,6 @@ const AdminDashboard = () => {
 
     // Organize teams
     const teamLeads = users.filter(u => u.role === 'team_lead');
-    const admins = users.filter(u => u.role === 'admin');
 
     const teams = teamLeads.map(tl => {
         // Get all commitments for this team
