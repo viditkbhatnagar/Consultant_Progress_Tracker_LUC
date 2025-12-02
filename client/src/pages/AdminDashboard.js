@@ -40,6 +40,7 @@ import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import { getUsers } from '../services/authService';
 import exportService from '../services/exportService';
+import consultantService from '../services/consultantService';
 import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
@@ -49,6 +50,7 @@ import TeamHierarchyView from '../components/TeamHierarchyView';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
 import UserManagementDialog from '../components/UserManagementDialog';
+import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -93,6 +95,11 @@ const AdminDashboard = () => {
     const [userDialogOpen, setUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
 
+    // Consultant management state
+    const [consultants, setConsultants] = useState([]);
+    const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
+    // Reusing selectedConsultant state from line 85
+
     // Load commitments by date range
     const loadCommitments = useCallback(async () => {
         try {
@@ -113,16 +120,70 @@ const AdminDashboard = () => {
     // Load users
     const loadUsers = async () => {
         try {
-            const userData = await getUsers();
-            setUsers(userData.data || []);
+            const data = await getUsers();
+            setUsers(data);
         } catch (err) {
-            console.error('Failed to load users:', err);
+            setError('Failed to load users');
         }
     };
 
+    // Load consultants
+    const loadConsultants = useCallback(async () => {
+        try {
+            const response = await consultantService.getConsultants();
+            setConsultants(response.data || []);
+        } catch (err) {
+            console.error('Failed to load consultants:', err);
+        }
+    }, []);
+
+    // Consultant CRUD handlers
+    const handleCreateConsultant = async (consultantData) => {
+        try {
+            await consultantService.createConsultant(consultantData);
+            await loadConsultants();
+            setConsultantDialogOpen(false);
+            setSelectedConsultant(null);
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    const handleUpdateConsultant = async (consultantData) => {
+        try {
+            await consultantService.updateConsultant(selectedConsultant._id, consultantData);
+            await loadConsultants();
+            setConsultantDialogOpen(false);
+            setSelectedConsultant(null);
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    const handleSaveConsultant = async (consultantData) => {
+        if (selectedConsultant) {
+            await handleUpdateConsultant(consultantData);
+        } else {
+            await handleCreateConsultant(consultantData);
+        }
+    };
+
+    const handleDeactivateConsultant = async (consultantId) => {
+        if (window.confirm('Are you sure you want to deactivate this consultant?')) {
+            try {
+                await consultantService.deleteConsultant(consultantId);
+                await loadConsultants();
+            } catch (err) {
+                setError('Failed to deactivate consultant');
+            }
+        }
+    };
+
+
     useEffect(() => {
         loadUsers();
-    }, []);
+        loadConsultants();
+    }, [loadConsultants]);
 
     useEffect(() => {
         if (dateRange.startDate && dateRange.endDate) {
@@ -887,6 +948,80 @@ const AdminDashboard = () => {
                                     </TableBody>
                                 </Table>
                             </TableContainer>
+
+                            {/* Divider */}
+                            <Box sx={{ my: 4, borderBottom: 1, borderColor: 'divider' }} />
+
+                            {/* Consultant Management Section */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h5">Consultant Management</Typography>
+                                <Button
+                                    variant="contained"
+                                    color="secondary"
+                                    onClick={() => {
+                                        setSelectedConsultant(null);
+                                        setConsultantDialogOpen(true);
+                                    }}
+                                >
+                                    Add Consultant
+                                </Button>
+                            </Box>
+
+                            <TableContainer>
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Name</TableCell>
+                                            <TableCell>Email</TableCell>
+                                            <TableCell>Phone</TableCell>
+                                            <TableCell>Team Name</TableCell>
+                                            <TableCell>Team Lead</TableCell>
+                                            <TableCell>Status</TableCell>
+                                            <TableCell align="center">Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {consultants.map((consultant) => (
+                                            <TableRow key={consultant._id} hover>
+                                                <TableCell>{consultant.name}</TableCell>
+                                                <TableCell>{consultant.email || '--'}</TableCell>
+                                                <TableCell>{consultant.phone || '--'}</TableCell>
+                                                <TableCell>{consultant.teamName}</TableCell>
+                                                <TableCell>{consultant.teamLead?.name || '--'}</TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={consultant.isActive !== false ? 'Active' : 'Inactive'}
+                                                        size="small"
+                                                        color={consultant.isActive !== false ? 'success' : 'default'}
+                                                    />
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="primary"
+                                                        onClick={() => {
+                                                            setSelectedConsultant(consultant);
+                                                            setConsultantDialogOpen(true);
+                                                        }}
+                                                        title="Edit consultant"
+                                                    >
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                    <IconButton
+                                                        size="small"
+                                                        color="error"
+                                                        onClick={() => handleDeactivateConsultant(consultant._id)}
+                                                        title="Deactivate consultant"
+                                                        disabled={consultant.isActive === false}
+                                                    >
+                                                        <CheckCircleIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
                         </CardContent>
                     </Card>
                 )}
@@ -938,6 +1073,20 @@ const AdminDashboard = () => {
                 }}
                 onSave={handleSaveUser}
                 user={selectedUser}
+            />
+
+            {/* Consultant Management Dialog */}
+            <ConsultantManagementDialog
+                open={consultantDialogOpen}
+                onClose={() => {
+                    setConsultantDialogOpen(false);
+                    setSelectedConsultant(null);
+                }}
+                onSave={handleSaveConsultant}
+                consultant={selectedConsultant}
+                teamLeads={users.filter(u => u.role === 'team_lead')}
+                currentUserRole={user?.role}
+                currentUserTeamName={user?.teamName}
             />
         </Box>
     );
