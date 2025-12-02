@@ -48,6 +48,7 @@ import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamHierarchyView from '../components/TeamHierarchyView';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
+import UserManagementDialog from '../components/UserManagementDialog';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -87,6 +88,10 @@ const AdminDashboard = () => {
     // Admin comment dialog state
     const [selectedCommitment, setSelectedCommitment] = useState(null);
     const [adminCommentDialogOpen, setAdminCommentDialogOpen] = useState(false);
+
+    // User management dialog state
+    const [userDialogOpen, setUserDialogOpen] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
 
     // Load commitments by date range
     const loadCommitments = useCallback(async () => {
@@ -221,6 +226,89 @@ const AdminDashboard = () => {
             await loadCommitments();
         } catch (err) {
             setError('Failed to save admin comment');
+        }
+    };
+
+    // User management handlers
+    const handleCreateUser = async (userData) => {
+        try {
+            await authService.setAuthToken(localStorage.getItem('token'));
+            const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    ...userData,
+                    role: 'team_lead' // Only create team leads
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to create user');
+            }
+
+            await loadUsers();
+            setUserDialogOpen(false);
+            setSelectedUser(null);
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    const handleUpdateUser = async (userData) => {
+        try {
+            const updateData = {
+                name: userData.name,
+                teamName: userData.teamName,
+                isActive: userData.isActive
+            };
+
+            // Only include password if it was provided
+            if (userData.password) {
+                updateData.password = userData.password;
+            }
+
+            await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/users/${selectedUser._id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(updateData)
+            });
+
+            await loadUsers();
+            setUserDialogOpen(false);
+            setSelectedUser(null);
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    const handleSaveUser = async (userData) => {
+        if (selectedUser) {
+            await handleUpdateUser(userData);
+        } else {
+            await handleCreateUser(userData);
+        }
+    };
+
+    const handleDeactivateUser = async (userId) => {
+        if (window.confirm('Are you sure you want to deactivate this user?')) {
+            try {
+                await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}/api/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                await loadUsers();
+            } catch (err) {
+                setError('Failed to deactivate user');
+            }
         }
     };
 
@@ -464,6 +552,7 @@ const AdminDashboard = () => {
                         <Tab label="Teams Overview" />
                         <Tab label="All Commitments" />
                         <Tab label="Organization Hierarchy" />
+                        <Tab label="User Management" />
                     </Tabs>
                 </Box>
 
@@ -719,6 +808,89 @@ const AdminDashboard = () => {
                         onConsultantClick={handleConsultantClick}
                     />
                 )}
+
+                {tabValue === 3 && (
+                    // User Management Tab
+                    <Card>
+                        <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Typography variant="h5">User Management</Typography>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={() => {
+                                        setSelectedUser(null);
+                                        setUserDialogOpen(true);
+                                    }}
+                                >
+                                    Add Team Lead
+                                </Button>
+                            </Box>
+
+                            <TableContainer>
+                                <Table>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Name</TableCell>
+                                            <TableCell>Email</TableCell>
+                                            <TableCell>Team Name</TableCell>
+                                            <TableCell>Role</TableCell>
+                                            <TableCell>Status</TableCell>
+                                            <TableCell align="center">Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {users.filter(u => u.role !== 'consultant').map((user) => (
+                                            <TableRow key={user._id} hover>
+                                                <TableCell>{user.name}</TableCell>
+                                                <TableCell>{user.email}</TableCell>
+                                                <TableCell>{user.teamName || '--'}</TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={user.role === 'admin' ? 'Admin' : 'Team Lead'}
+                                                        size="small"
+                                                        color={user.role === 'admin' ? 'secondary' : 'primary'}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={user.isActive !== false ? 'Active' : 'Inactive'}
+                                                        size="small"
+                                                        color={user.isActive !== false ? 'success' : 'default'}
+                                                    />
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        color="primary"
+                                                        onClick={() => {
+                                                            setSelectedUser(user);
+                                                            setUserDialogOpen(true);
+                                                        }}
+                                                        title="Edit user"
+                                                    >
+                                                        <EditIcon />
+                                                    </IconButton>
+                                                    {user.role !== 'admin' && (
+                                                        <IconButton
+                                                            size="small"
+                                                            color="error"
+                                                            onClick={() => handleDeactivateUser(user._id)}
+                                                            title="Deactivate user"
+                                                            disabled={user.isActive === false}
+                                                        >
+                                                            <CheckCircleIcon />
+                                                        </IconButton>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </CardContent>
+                    </Card>
+                )}
             </Container>
 
             {/* Team Detail Dialog */}
@@ -756,6 +928,17 @@ const AdminDashboard = () => {
                 }}
                 commitment={selectedCommitment}
                 onSave={handleSaveAdminComment}
+            />
+
+            {/* User Management Dialog */}
+            <UserManagementDialog
+                open={userDialogOpen}
+                onClose={() => {
+                    setUserDialogOpen(false);
+                    setSelectedUser(null);
+                }}
+                onSave={handleSaveUser}
+                user={selectedUser}
             />
         </Box>
     );
