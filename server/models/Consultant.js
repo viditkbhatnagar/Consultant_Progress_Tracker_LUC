@@ -40,9 +40,8 @@ const ConsultantSchema = new mongoose.Schema({
 });
 
 // Update timestamp on save
-ConsultantSchema.pre('save', function (next) {
+ConsultantSchema.pre('save', function () {
     this.updatedAt = Date.now();
-    next();
 });
 
 module.exports = mongoose.model('Consultant', ConsultantSchema);
