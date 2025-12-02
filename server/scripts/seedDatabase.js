@@ -76,295 +76,37 @@ const seedDatabase = async () => {
             console.log(`✅ ${tlData.name} created`);
         }
 
-        // Create Consultants for Team Shasin
-        console.log('\n🤝 Creating Consultants for Team Shasin...');
-        const shasinConsultants = ['OPTIN', 'ORNV', 'MOHAMMED', 'JAKIM', 'MUNMUN', 'JAMAL'];
-        const consultantDocs = {};
 
-        for (const name of shasinConsultants) {
-            const consultant = await Consultant.create({
-                name,
-                email: `${name.toLowerCase()}@learnerseducation.com`,
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                isActive: true
-            });
-            consultantDocs[name] = consultant;
-            console.log(`✅ ${name} created`);
-        }
+        // Create Consultants for all teams
+        console.log('\n🤝 Creating Consultants...');
 
-        // Helper function to get date for specific week and day
-        const getDateForWeek = (weekStart, dayOffset = 0) => {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + dayOffset);
-            return date;
+        const teamConsultants = {
+            'Tony': ['Elizabeth', 'Swetha', 'Nimra', 'Sulu', 'Neelu'],
+            'Shaik': ['Syed Faizaan', 'Thanusree'],
+            'Shasin': ['Linta', 'Dipin', 'Rahul', 'Munashe'],
+            'Shakil': ['Nihala', 'Lijia', 'Neha'],
+            'Anousha': ['Farineen', 'Arunima'],
+            'Jamshad': ['Arfas', 'Kasanjali'],
+            'Manoj': ['Shahal', 'Eslam'],
+            'Bahrain': ['Chitra', 'Aghin'],
+            'Arfath': ['Lilian', 'Aysha Riswin', 'Aishwarya']
         };
 
-        // Helper to get week start and end dates
-        const getWeekDates = (weekStart) => {
-            const start = new Date(weekStart);
-            const end = new Date(weekStart);
-            end.setDate(end.getDate() + 6); // Week ends on Sunday
-            return { start, end };
-        };
-
-        // Populate Team Shasin Commitments
-        console.log('\n📊 Populating Team Shasin Commitments (Nov 2025)...');
-
-        // Week 1: Nov 3-7, 2025 (Week 45)
-        const week1Start = new Date('2025-11-03');
-        const week1Dates = getWeekDates(week1Start);
-        const week1Commitments = [
-            {
-                consultantName: 'OPTIN',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 45,
-                year: 2025,
-                weekStartDate: week1Dates.start,
-                weekEndDate: week1Dates.end,
-                commitmentMade: 'Students prolonged decisions',
-                leadStage: 'Hot',
-                conversionProbability: 50,
-                admissionClosed: false,
-                tlComment: 'Cross verified - she accepted that committed to pay on the 17th',
-                status: 'pending'
-            },
-            {
-                consultantName: 'ORNV',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 45,
-                year: 2025,
-                weekStartDate: week1Dates.start,
-                weekEndDate: week1Dates.end,
-                commitmentMade: 'Committed payment meeting was done, but WAS not open to resources that the payment was committed',
-                leadStage: 'Unresponsive',
-                conversionProbability: 75,
-                admissionClosed: false,
-                tlComment: 'Unapproachable Lead',
-                status: 'pending'
-            },
-            {
-                consultantName: 'MOHAMMED',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 45,
-                year: 2025,
-                weekStartDate: week1Dates.start,
-                weekEndDate: week1Dates.end,
-                commitmentMade: 'Availability mismatch',
-                leadStage: 'Cold',
-                conversionProbability: 75,
-                admissionClosed: false,
-                tlComment: 'Unwanted but scheduled',
-                status: 'pending'
+        for (const [teamLeadName, consultantNames] of Object.entries(teamConsultants)) {
+            console.log(`\n  Creating consultants for Team ${teamLeadName}...`);
+            for (const name of consultantNames) {
+                await Consultant.create({
+                    name,
+                    email: `${name.toLowerCase().replace(/ /g, '.')}@learnerseducation.com`,
+                    teamName: `Team ${teamLeadName}`,
+                    teamLead: teamLeads[teamLeadName]._id,
+                    isActive: true
+                });
+                console.log(`    ✅ ${name}`);
             }
-        ];
-
-        // Week 2: Nov 10-14, 2025 (Week 46)
-        const week2Start = new Date('2025-11-10');
-        const week2Dates = getWeekDates(week2Start);
-        const week2Commitments = [
-            {
-                consultantName: 'JAKIM',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Did into follow',
-                leadStage: 'Admission',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'Poach follow up done',
-                status: 'pending'
-            },
-            {
-                consultantName: 'MUNMUN',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Did not follow up done works call',
-                leadStage: 'Admission',
-                conversionProbability: 70,
-                admissionClosed: false,
-                tlComment: 'scheduled follow up today',
-                status: 'pending'
-            },
-            {
-                consultantName: 'ORNV',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'ADMISSION',
-                leadStage: 'Admission',
-                conversionProbability: 100,
-                admissionClosed: true,
-                achievementPercentage: 100,
-                tlComment: 'scheduled follow up today',
-                status: 'achieved'
-            },
-            {
-                consultantName: 'ORNV',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Not of interest - user will be blocked by DPIN FLOW',
-                leadStage: 'Meeting Scheduled',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'admission',
-                status: 'pending'
-            },
-            {
-                consultantName: 'MOHAMMED',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Needs More Time',
-                leadStage: 'Warm',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'scheduled follow up today',
-                status: 'pending'
-            },
-            {
-                consultantName: 'MOHAMMED',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Warm follow up',
-                leadStage: 'Warm',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'on point- is scheduled',
-                status: 'pending'
-            },
-            {
-                consultantName: 'JAMAL',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 46,
-                year: 2025,
-                weekStartDate: week2Dates.start,
-                weekEndDate: week2Dates.end,
-                commitmentMade: 'Postponed to the week',
-                leadStage: 'Warm',
-                conversionProbability: 50,
-                admissionClosed: false,
-                tlComment: 'meeting scheduled for today',
-                status: 'pending'
-            }
-        ];
-
-        // Week 3: Nov 17-21, 2025 (Week 47)
-        const week3Start = new Date('2025-11-17');
-        const week3Dates = getWeekDates(week3Start);
-        const week3Commitments = [
-            {
-                consultantName: 'JAKIM',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 47,
-                year: 2025,
-                weekStartDate: week3Dates.start,
-                weekEndDate: week3Dates.end,
-                commitmentMade: 'Meeting Monday',
-                leadStage: 'Admission',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'NEXT YEAR',
-                status: 'pending'
-            },
-            {
-                consultantName: 'JAKIM',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 47,
-                year: 2025,
-                weekStartDate: week3Dates.start,
-                weekEndDate: week3Dates.end,
-                commitmentMade: 'Meeting Tuesday',
-                leadStage: 'Cold',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'Spoke confirmed but four decider is up late',
-                status: 'pending'
-            },
-            {
-                consultantName: 'ORNV',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 47,
-                year: 2025,
-                weekStartDate: week3Dates.start,
-                weekEndDate: week3Dates.end,
-                commitmentMade: 'Results not found complete yet',
-                leadStage: 'Cold',
-                conversionProbability: 0,
-                admissionClosed: false,
-                tlComment: 'NEXT YEAR',
-                status: 'pending'
-            },
-            {
-                consultantName: 'ORNV',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 47,
-                year: 2025,
-                weekStartDate: week3Dates.start,
-                weekEndDate: week3Dates.end,
-                commitmentMade: 'Meeting Monday call',
-                leadStage: 'Cold',
-                conversionProbability: 80,
-                admissionClosed: false,
-                tlComment: 'Strongly cross verified and reminded not the payment',
-                status: 'pending'
-            },
-            {
-                consultantName: 'MOHAMMED',
-                teamName: 'Team Shasin',
-                teamLead: teamLeads['Shasin']._id,
-                weekNumber: 47,
-                year: 2025,
-                weekStartDate: week3Dates.start,
-                weekEndDate: week3Dates.end,
-                commitmentMade: 'Figured out the form',
-                leadStage: 'Cold',
-                conversionProbability: 80,
-                admissionClosed: false,
-                tlComment: 'Saturday cross verified and told me the data and information that was asked and she was open to use about the amount and the decision but final wasn\'t made',
-                status: 'pending'
-            }
-        ];
-
-
-        // Insert all commitments
-        const allCommitments = [...week1Commitments, ...week2Commitments, ...week3Commitments];
-
-        for (const commitmentData of allCommitments) {
-            await Commitment.create(commitmentData);
         }
 
-        console.log(`✅ Created ${allCommitments.length} commitments for Team Shasin`);
-
+        console.log(`\n✅ Created ${Object.values(teamConsultants).flat().length} consultants across all teams`);
 
         // Print credentials
         console.log('\n\n═══════════════════════════════════════════════════════');

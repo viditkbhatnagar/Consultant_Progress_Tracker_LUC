@@ -332,9 +332,10 @@ const TeamLeadDashboard = () => {
         achievementRate: stat.total > 0 ? Math.round((stat.achieved / stat.total) * 100) : 0,
     }));
 
-    // Extract unique consultants for form dropdown
-    const teamConsultants = consultantStatsArray.map(stat => ({
-        name: stat.consultant,
+    // Extract unique consultants for form dropdown - use actual consultants, not stats
+    const teamConsultants = consultants.map(consultant => ({
+        name: consultant.name,
+        _id: consultant._id,
     }));
 
 
