@@ -38,8 +38,8 @@ export const DAYS_OF_WEEK = [
     'Sunday',
 ];
 
-// API base URL
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// API Base URL
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 // Achievement percentage color coding
 export const getAchievementColor = (percentage) => {
