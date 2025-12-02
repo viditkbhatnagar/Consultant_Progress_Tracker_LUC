@@ -40,6 +40,14 @@ exports.createConsultant = async (req, res, next) => {
     try {
         const { name, email, phone, teamName, teamLead } = req.body;
 
+        // Validate required fields
+        if (!name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Consultant name is required',
+            });
+        }
+
         // Determine team lead ID and team name
         let teamLeadId;
         let finalTeamName;
@@ -78,7 +86,11 @@ exports.createConsultant = async (req, res, next) => {
             data: consultant,
         });
     } catch (error) {
-        next(error);
+        console.error('Error creating consultant:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to create consultant',
+        });
     }
 };
 
