@@ -227,52 +227,87 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                     <Table size="small">
                         <TableHead>
                             <TableRow>
+                                <TableCell>Week</TableCell>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Day</TableCell>
+                                <TableCell>Time</TableCell>
                                 <TableCell>Consultant</TableCell>
                                 <TableCell>Student</TableCell>
-                                <TableCell>Commitment</TableCell>
+                                <TableCell>Description</TableCell>
                                 <TableCell>Lead Stage</TableCell>
+                                <TableCell align="center">Probability</TableCell>
                                 <TableCell align="center">Achievement</TableCell>
                                 <TableCell>Status</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {commitments.slice(0, 10).map((commitment) => (
-                                <TableRow key={commitment._id} hover>
-                                    <TableCell>{commitment.consultantName}</TableCell>
-                                    <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-                                    <TableCell>
-                                        <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                            {commitment.commitmentMade}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={commitment.leadStage}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                color: 'white',
-                                                fontSize: '0.75rem',
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Typography
-                                            variant="body2"
-                                            sx={{ color: getAchievementColor(commitment.achievementPercentage || 0), fontWeight: 600 }}
-                                        >
-                                            {commitment.achievementPercentage || 0}%
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        {commitment.admissionClosed ? (
-                                            <Chip label="Closed" color="success" size="small" />
-                                        ) : (
-                                            <Chip label={commitment.status} size="small" variant="outlined" />
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                            {commitments.slice(0, 10).map((commitment) => {
+                                const commitmentDate = new Date(commitment.weekStartDate);
+                                const dayOfWeek = commitmentDate.toLocaleDateString('en-US', { weekday: 'long' });
+                                const dateFormatted = commitmentDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+                                const timeFormatted = commitment.createdAt
+                                    ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                                    : '--:--';
+                                const achievement = commitment.admissionClosed ? 100 : 0;
+
+                                return (
+                                    <TableRow key={commitment._id} hover>
+                                        <TableCell>W{commitment.weekNumber}</TableCell>
+                                        <TableCell>{dateFormatted}</TableCell>
+                                        <TableCell>{dayOfWeek}</TableCell>
+                                        <TableCell>{timeFormatted}</TableCell>
+                                        <TableCell>{commitment.consultantName}</TableCell>
+                                        <TableCell>{commitment.studentName || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                                                {commitment.commitmentMade}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={commitment.leadStage}
+                                                size="small"
+                                                sx={{
+                                                    backgroundColor: getLeadStageColor(commitment.leadStage),
+                                                    color: 'white',
+                                                    fontSize: '0.75rem',
+                                                }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color:
+                                                        (commitment.conversionProbability || 0) >= 70 ? '#4caf50' :
+                                                            (commitment.conversionProbability || 0) >= 40 ? '#ff9800' : '#f44336',
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                {commitment.conversionProbability || 0}%
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: achievement === 100 ? '#4caf50' : 'text.secondary',
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                {achievement}%
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            {commitment.admissionClosed ? (
+                                                <Chip label="Closed" color="success" size="small" />
+                                            ) : (
+                                                <Chip label={commitment.status} size="small" variant="outlined" />
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </TableContainer>
