@@ -40,14 +40,16 @@ exports.createConsultant = async (req, res, next) => {
     try {
         const { name, email, phone, teamName, teamLead } = req.body;
 
-        // Determine team lead ID
+        // Determine team lead ID and team name
         let teamLeadId;
+        let finalTeamName;
+
         if (req.user.role === 'team_lead') {
             // Team lead can only create for their own team
             teamLeadId = req.user.id;
-            req.body.teamName = req.user.teamName; // Force their own team name
+            finalTeamName = req.user.teamName;
         } else if (req.user.role === 'admin') {
-            // Admin can create for any team
+            // Admin must provide team lead ID
             if (!teamLead) {
                 return res.status(400).json({
                     success: false,
@@ -55,6 +57,7 @@ exports.createConsultant = async (req, res, next) => {
                 });
             }
             teamLeadId = teamLead;
+            finalTeamName = teamName; // Use provided team name
         } else {
             return res.status(403).json({
                 success: false,
@@ -66,7 +69,7 @@ exports.createConsultant = async (req, res, next) => {
             name,
             email,
             phone,
-            teamName: req.body.teamName,
+            teamName: finalTeamName,
             teamLead: teamLeadId,
         });
 
