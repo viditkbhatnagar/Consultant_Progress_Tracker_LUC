@@ -47,12 +47,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import exportService from '../services/exportService';
+import consultantService from '../services/consultantService';
 import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import ActivityHeatmap from '../components/ActivityHeatmap';
 import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
+import CorrectiveActionDialog from '../components/CorrectiveActionDialog';
+import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -72,6 +75,11 @@ const TeamLeadDashboard = () => {
     const [tabValue, setTabValue] = useState(0);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
+
+    // Consultant management state
+    const [consultants, setConsultants] = useState([]);
+    const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
+    const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
     const [filters, setFilters] = useState({ search: '', stage: '', status: '' });
 
     // Date range state
@@ -95,6 +103,7 @@ const TeamLeadDashboard = () => {
     const loadCommitments = useCallback(async () => {
         try {
             setLoading(true);
+            if (!dateRange.startDate || !dateRange.endDate) return;
             const data = await commitmentService.getCommitmentsByDateRange(
                 dateRange.startDate,
                 dateRange.endDate
@@ -107,6 +116,48 @@ const TeamLeadDashboard = () => {
             setLoading(false);
         }
     }, [dateRange.startDate, dateRange.endDate]);
+
+    // Load consultants
+    const loadConsultants = useCallback(async () => {
+        try {
+            const response = await consultantService.getConsultants();
+            setConsultants(response.data || []);
+        } catch (err) {
+            console.error('Failed to load consultants:', err);
+        }
+    }, []);
+
+    // Consultant CRUD handlers
+    const handleSaveConsultant = async (consultantData) => {
+        try {
+            if (selectedConsultantForEdit) {
+                await consultantService.updateConsultant(selectedConsultantForEdit._id, consultantData);
+            } else {
+                await consultantService.createConsultant(consultantData);
+            }
+            await loadConsultants();
+            setConsultantDialogOpen(false);
+            setSelectedConsultantForEdit(null);
+        } catch (err) {
+            console.error('Failed to save consultant:', err);
+            throw err;
+        }
+    };
+
+    const handleDeactivateConsultant = async (consultantId) => {
+        if (window.confirm('Are you sure you want to deactivate this consultant?')) {
+            try {
+                await consultantService.deleteConsultant(consultantId);
+                await loadConsultants();
+            } catch (err) {
+                console.error('Failed to deactivate consultant:', err);
+            }
+        }
+    };
+
+    useEffect(() => {
+        loadConsultants();
+    }, [loadConsultants]);
 
     useEffect(() => {
         if (dateRange.startDate && dateRange.endDate) {
@@ -445,6 +496,76 @@ const TeamLeadDashboard = () => {
                 {tabValue === 0 && (
                     // Team Overview Tab
                     <Box>
+                        {/* Consultant Management Card */}
+                        <Card sx={{ mb: 3 }}>
+                            <CardContent>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="h6">My Team Consultants</Typography>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => {
+                                            setSelectedConsultantForEdit(null);
+                                            setConsultantDialogOpen(true);
+                                        }}
+                                    >
+                                        Add Consultant
+                                    </Button>
+                                </Box>
+                                <TableContainer>
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Name</TableCell>
+                                                <TableCell>Email</TableCell>
+                                                <TableCell>Phone</TableCell>
+                                                <TableCell>Status</TableCell>
+                                                <TableCell align="center">Actions</TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {consultants.map((consultant) => (
+                                                <TableRow key={consultant._id} hover>
+                                                    <TableCell>{consultant.name}</TableCell>
+                                                    <TableCell>{consultant.email || '--'}</TableCell>
+                                                    <TableCell>{consultant.phone || '--'}</TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={consultant.isActive !== false ? 'Active' : 'Inactive'}
+                                                            size="small"
+                                                            color={consultant.isActive !== false ? 'success' : 'default'}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => {
+                                                                setSelectedConsultantForEdit(consultant);
+                                                                setConsultantDialogOpen(true);
+                                                            }}
+                                                            title="Edit consultant"
+                                                        >
+                                                            <EditIcon fontSize="small" />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            color="error"
+                                                            onClick={() => handleDeactivateConsultant(consultant._id)}
+                                                            title="Deactivate consultant"
+                                                            disabled={consultant.isActive === false}
+                                                        >
+                                                            <CheckCircleIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </CardContent>
+                        </Card>
+
                         <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
                             Consultant Performance - Click to View Details
                         </Typography>
@@ -814,6 +935,20 @@ const TeamLeadDashboard = () => {
                 commitment={editingCommitment}
                 teamConsultants={teamConsultants}
                 user={user}
+            />
+
+            {/* Consultant Management Dialog */}
+            <ConsultantManagementDialog
+                open={consultantDialogOpen}
+                onClose={() => {
+                    setConsultantDialogOpen(false);
+                    setSelectedConsultantForEdit(null);
+                }}
+                onSave={handleSaveConsultant}
+                consultant={selectedConsultantForEdit}
+                teamLeads={[]}
+                currentUserRole="team_lead"
+                currentUserTeamName={user?.teamName}
             />
         </Box>
     );
