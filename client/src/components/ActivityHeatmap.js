@@ -1,7 +1,8 @@
 import React from 'react';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
-import { Card, CardContent, Typography, Box } from '@mui/material';
+import { Card, CardContent, Typography, Box, Chip, Stack } from '@mui/material';
+import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 
 const ActivityHeatmap = ({ commitments, month = new Date() }) => {
@@ -39,13 +40,49 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
         };
     });
 
+    // Calculate totals for summary
+    const totalDaysWithActivity = heatmapData.filter(d => d.count > 0).length;
+    const maxActivity = Math.max(...heatmapData.map(d => d.count), 0);
+
     return (
-        <Card elevation={2}>
-            <CardContent>
-                <Typography variant="h6" gutterBottom>
-                    Activity Heatmap - {format(month, 'MMMM yyyy')}
-                </Typography>
-                <Box sx={{ mt: 2 }}>
+        <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CalendarIcon sx={{ color: 'primary.main' }} />
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            Activity Heatmap
+                        </Typography>
+                        <Chip 
+                            label={format(month, 'MMMM yyyy')} 
+                            size="small" 
+                            variant="outlined"
+                            sx={{ fontWeight: 500 }}
+                        />
+                    </Box>
+                    <Stack direction="row" spacing={1}>
+                        <Chip label={`${totalDaysWithActivity} active days`} size="small" color="success" variant="outlined" />
+                        <Chip label={`Peak: ${maxActivity} commitments`} size="small" color="primary" variant="outlined" />
+                    </Stack>
+                </Box>
+                
+                {/* Compact Heatmap Container */}
+                <Box sx={{ 
+                    maxWidth: 800, 
+                    mx: 'auto',
+                    '& .react-calendar-heatmap': {
+                        width: '100%',
+                        maxHeight: 150,
+                    },
+                    '& .react-calendar-heatmap text': {
+                        fontSize: '8px',
+                        fill: '#666',
+                    },
+                    '& .react-calendar-heatmap rect': {
+                        rx: 2,
+                        ry: 2,
+                    },
+                }}>
                     <CalendarHeatmap
                         startDate={start}
                         endDate={end}
@@ -61,18 +98,36 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
                         }}
                         tooltipDataAttrs={(value) => {
                             return {
-                                'data-tip': value.date ? `${value.count} commitments` : 'No activity',
+                                'data-tip': value.date ? `${value.count} commitments on ${format(new Date(value.date), 'MMM d')}` : 'No activity',
                             };
                         }}
                         showWeekdayLabels
+                        gutterSize={3}
                     />
                 </Box>
+
+                {/* Legend */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary">Less</Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'].map((color, i) => (
+                            <Box
+                                key={i}
+                                sx={{
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: 0.5,
+                                    backgroundColor: color,
+                                }}
+                            />
+                        ))}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">More</Typography>
+                </Box>
+
                 <style>{`
-                    .react-calendar-heatmap {
-                        width: 100%;
-                    }
                     .react-calendar-heatmap .color-empty {
-                        fill: #f0f0f0;
+                        fill: #ebedf0;
                     }
                     .react-calendar-heatmap .color-scale-1 {
                         fill: #9be9a8;
@@ -85,10 +140,6 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
                     }
                     .react-calendar-heatmap .color-scale-4 {
                         fill: #216e39;
-                    }
-                    .react-calendar-heatmap text {
-                        font-size: 10px;
-                        fill: #666;
                     }
                     .react-calendar-heatmap rect:hover {
                         stroke: #555;

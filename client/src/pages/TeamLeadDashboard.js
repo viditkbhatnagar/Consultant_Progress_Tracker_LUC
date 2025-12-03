@@ -420,55 +420,96 @@ const TeamLeadDashboard = () => {
                 )}
 
                 {/* Team Metrics Cards */}
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Total Commitments
-                                </Typography>
-                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalCommitments}</Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Team Achievement
-                                </Typography>
-                                <Typography
-                                    variant="h3"
-                                    sx={{ color: getAchievementColor(teamAchievementRate), fontWeight: 700 }}
-                                >
-                                    {teamAchievementRate}%
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Total Meetings
-                                </Typography>
-                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalMeetings}</Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Admissions Closed
-                                </Typography>
-                                <Typography variant="h3" sx={{ color: '#4CAF50', fontWeight: 700 }}>
-                                    {totalClosed}
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
+                <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Total Commitments
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalCommitments}</Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                {consultantStatsArray.length} Consultants
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: teamAchievementRate >= 70 
+                                ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
+                                : teamAchievementRate >= 40 
+                                    ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                                    : 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Team Achievement
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {teamAchievementRate}%
+                            </Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                {totalAchieved} of {totalCommitments} achieved
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Total Meetings
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalMeetings}</Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                Across all consultants
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Admissions Closed
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {totalClosed}
+                            </Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                Successful conversions
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                </Box>
 
                 {/* Analytics Charts and Heatmap */}
                 {commitments.length > 0 && (
@@ -476,17 +517,69 @@ const TeamLeadDashboard = () => {
                         <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
                             Team Analytics
                         </Typography>
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} lg={6}>
-                                <LeadStageChart commitments={commitments} />
-                            </Grid>
-                            <Grid item xs={12} lg={6}>
-                                <ConsultantPerformanceChart consultantStats={consultantStatsArray} />
-                            </Grid>
-                            <Grid item xs={12}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {/* Charts Row */}
+                            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
+                                    <LeadStageChart commitments={commitments} />
+                                </Box>
+                                <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
+                                    <Card elevation={0} sx={{ height: '100%', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                                        <CardContent sx={{ p: 3 }}>
+                                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                                                Consultant Performance
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                {consultantStatsArray.map(stat => (
+                                                    <Box key={stat.consultant}>
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                {stat.consultant}
+                                                            </Typography>
+                                                            <Typography
+                                                                variant="body2"
+                                                                sx={{ color: getAchievementColor(stat.achievementRate), fontWeight: 700 }}
+                                                            >
+                                                                {stat.achievementRate}%
+                                                            </Typography>
+                                                        </Box>
+                                                        <Box
+                                                            sx={{
+                                                                height: 10,
+                                                                bgcolor: 'grey.100',
+                                                                borderRadius: 5,
+                                                                overflow: 'hidden',
+                                                            }}
+                                                        >
+                                                            <Box
+                                                                sx={{
+                                                                    height: '100%',
+                                                                    width: `${stat.achievementRate}%`,
+                                                                    background: stat.achievementRate >= 70 
+                                                                        ? 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)'
+                                                                        : stat.achievementRate >= 40 
+                                                                            ? 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)'
+                                                                            : 'linear-gradient(90deg, #eb3349 0%, #f45c43 100%)',
+                                                                    borderRadius: 5,
+                                                                    transition: 'width 0.5s ease',
+                                                                }}
+                                                            />
+                                                        </Box>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {stat.total} commitments • {stat.meetings} meetings • {stat.closed} closed
+                                                        </Typography>
+                                                    </Box>
+                                                ))}
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                </Box>
+                            </Box>
+                            {/* Heatmap - Full Width */}
+                            <Box sx={{ width: '100%' }}>
                                 <ActivityHeatmap commitments={commitments} month={new Date()} />
-                            </Grid>
-                        </Grid>
+                            </Box>
+                        </Box>
                     </Box>
                 )}
 

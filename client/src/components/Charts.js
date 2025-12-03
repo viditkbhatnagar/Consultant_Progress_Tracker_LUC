@@ -1,6 +1,6 @@
 import React from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, Typography } from '@mui/material';
+import { Card, CardContent, Typography, Box } from '@mui/material';
 import { getLeadStageColor } from '../utils/constants';
 
 // Lead Stage Distribution Chart
@@ -17,31 +17,64 @@ export const LeadStageChart = ({ commitments }) => {
         color: getLeadStageColor(name),
     }));
 
+    const RADIAN = Math.PI / 180;
+    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+        const radius = innerRadius + (outerRadius - innerRadius) * 1.4;
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+        return (
+            <text x={x} y={y} fill="#333" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
+                {`${name} (${(percent * 100).toFixed(0)}%)`}
+            </text>
+        );
+    };
+
     return (
-        <Card>
-            <CardContent>
-                <Typography variant="h6" gutterBottom>
+        <Card elevation={0} sx={{ height: '100%', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
                     Lead Stage Distribution
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
                         <Pie
                             data={data}
                             cx="50%"
                             cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
+                            labelLine={true}
+                            label={renderCustomizedLabel}
+                            outerRadius={100}
+                            innerRadius={50}
                             fill="#8884d8"
                             dataKey="value"
+                            paddingAngle={2}
                         >
                             {data.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                <Cell key={`cell-${index}`} fill={entry.color} stroke="white" strokeWidth={2} />
                             ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip 
+                            contentStyle={{ 
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                                borderRadius: 8, 
+                                border: 'none',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            }}
+                        />
                     </PieChart>
                 </ResponsiveContainer>
+                {/* Legend */}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2, justifyContent: 'center' }}>
+                    {data.map((entry) => (
+                        <Box key={entry.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: entry.color }} />
+                            <Typography variant="caption" color="text.secondary">
+                                {entry.name}: {entry.value}
+                            </Typography>
+                        </Box>
+                    ))}
+                </Box>
             </CardContent>
         </Card>
     );

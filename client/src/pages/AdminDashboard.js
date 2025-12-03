@@ -514,61 +514,96 @@ const AdminDashboard = () => {
                 )}
 
                 {/* Organization Metrics */}
-                <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Total Commitments
-                                </Typography>
-                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalCommitments}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {teams.length} Teams
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Organization Achievement
-                                </Typography>
-                                <Typography
-                                    variant="h3"
-                                    sx={{ color: getAchievementColor(orgAchievementRate), fontWeight: 700 }}
-                                >
-                                    {orgAchievementRate}%
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Total Meetings
-                                </Typography>
-                                <Typography variant="h3" sx={{ fontWeight: 700 }}>{totalMeetings}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {totalConsultants} Consultants
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                        <Card elevation={3} sx={{ height: '100%' }}>
-                            <CardContent>
-                                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                                    Admissions Closed
-                                </Typography>
-                                <Typography variant="h3" sx={{ color: '#4CAF50', fontWeight: 700 }}>
-                                    {totalClosed}
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                </Grid>
+                <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Total Commitments
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalCommitments}</Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                {teams.length} Teams
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: orgAchievementRate >= 70 
+                                ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
+                                : orgAchievementRate >= 40 
+                                    ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                                    : 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Organization Achievement
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {orgAchievementRate}%
+                            </Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                {totalAchieved} of {totalCommitments} achieved
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Total Meetings
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalMeetings}</Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                {totalConsultants} Consultants
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                    <Card 
+                        elevation={0} 
+                        sx={{ 
+                            flex: '1 1 220px',
+                            minWidth: 220,
+                            background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                            color: 'white',
+                            borderRadius: 3,
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
+                                Admissions Closed
+                            </Typography>
+                            <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {totalClosed}
+                            </Typography>
+                            <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
+                                Successful conversions
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                </Box>
 
                 {/* Analytics Charts and Heatmap */}
                 {commitments.length > 0 && (
@@ -576,40 +611,41 @@ const AdminDashboard = () => {
                         <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
                             Organization Analytics
                         </Typography>
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} lg={6}>
-                                <LeadStageChart commitments={commitments} />
-                            </Grid>
-                            <Grid item xs={12} lg={6}>
-                                <Card elevation={2}>
-                                    <CardContent>
-                                        <Typography variant="h6" gutterBottom>
-                                            Team Performance Overview
-                                        </Typography>
-                                        <Grid container spacing={2}>
-                                            {teams.map(team => {
-                                                const achievementRate = team.totalCommitments > 0
-                                                    ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
-                                                    : 0;
-                                                return (
-                                                    <Grid item xs={12} key={team.teamName}>
-                                                        <Box sx={{ mb: 1 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {/* Charts Row */}
+                            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
+                                    <LeadStageChart commitments={commitments} />
+                                </Box>
+                                <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
+                                    <Card elevation={0} sx={{ height: '100%', border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                                        <CardContent sx={{ p: 3 }}>
+                                            <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+                                                Team Performance Overview
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                {teams.map(team => {
+                                                    const achievementRate = team.totalCommitments > 0
+                                                        ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
+                                                        : 0;
+                                                    return (
+                                                        <Box key={team.teamName}>
                                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                                     {team.teamName}
                                                                 </Typography>
                                                                 <Typography
                                                                     variant="body2"
-                                                                    sx={{ color: getAchievementColor(achievementRate), fontWeight: 600 }}
+                                                                    sx={{ color: getAchievementColor(achievementRate), fontWeight: 700 }}
                                                                 >
                                                                     {achievementRate}%
                                                                 </Typography>
                                                             </Box>
                                                             <Box
                                                                 sx={{
-                                                                    height: 8,
-                                                                    bgcolor: 'grey.200',
-                                                                    borderRadius: 1,
+                                                                    height: 10,
+                                                                    bgcolor: 'grey.100',
+                                                                    borderRadius: 5,
                                                                     overflow: 'hidden',
                                                                 }}
                                                             >
@@ -617,8 +653,13 @@ const AdminDashboard = () => {
                                                                     sx={{
                                                                         height: '100%',
                                                                         width: `${achievementRate}%`,
-                                                                        bgcolor: getAchievementColor(achievementRate),
-                                                                        transition: 'width 0.3s ease',
+                                                                        background: achievementRate >= 70 
+                                                                            ? 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)'
+                                                                            : achievementRate >= 40 
+                                                                                ? 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)'
+                                                                                : 'linear-gradient(90deg, #eb3349 0%, #f45c43 100%)',
+                                                                        borderRadius: 5,
+                                                                        transition: 'width 0.5s ease',
                                                                     }}
                                                                 />
                                                             </Box>
@@ -626,17 +667,18 @@ const AdminDashboard = () => {
                                                                 {team.totalCommitments} commitments • {team.consultants.length} consultants
                                                             </Typography>
                                                         </Box>
-                                                    </Grid>
-                                                );
-                                            })}
-                                        </Grid>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                            <Grid item xs={12}>
+                                                    );
+                                                })}
+                                            </Box>
+                                        </CardContent>
+                                    </Card>
+                                </Box>
+                            </Box>
+                            {/* Heatmap - Full Width */}
+                            <Box sx={{ width: '100%' }}>
                                 <ActivityHeatmap commitments={commitments} month={new Date()} />
-                            </Grid>
-                        </Grid>
+                            </Box>
+                        </Box>
                     </Box>
                 )}
 

@@ -228,9 +228,20 @@ const Login = () => {
                                         background: 'linear-gradient(135deg, #5568d3 0%, #63408a 100%)',
                                         boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
                                     },
+                                    '&.Mui-disabled': {
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        color: 'rgba(255, 255, 255, 0.8)',
+                                    },
                                 }}
                             >
-                                {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
+                                {loading ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                        <CircularProgress size={22} color="inherit" />
+                                        <span>Signing In...</span>
+                                    </Box>
+                                ) : (
+                                    'Sign In'
+                                )}
                             </Button>
                         </form>
                     </Grid>

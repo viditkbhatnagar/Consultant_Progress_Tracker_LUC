@@ -4,13 +4,14 @@ import {
     ToggleButtonGroup,
     ToggleButton,
     TextField,
-    Grid,
     Typography,
+    Chip,
 } from '@mui/material';
+import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subMonths } from 'date-fns';
 
 const DateRangeSelector = ({ value, onChange }) => {
-    const [viewType, setViewType] = React.useState('current-week'); // current-week, current-month, last-3-months, custom
+    const [viewType, setViewType] = React.useState('current-week');
     const [customStart, setCustomStart] = React.useState('');
     const [customEnd, setCustomEnd] = React.useState('');
 
@@ -23,7 +24,7 @@ const DateRangeSelector = ({ value, onChange }) => {
 
             switch (newView) {
                 case 'current-week':
-                    start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+                    start = startOfWeek(today, { weekStartsOn: 1 });
                     end = endOfWeek(today, { weekStartsOn: 1 });
                     break;
                 case 'current-month':
@@ -35,7 +36,6 @@ const DateRangeSelector = ({ value, onChange }) => {
                     end = endOfMonth(today);
                     break;
                 case 'custom':
-                    // Don't auto-set, let user pick
                     return;
                 default:
                     start = startOfWeek(today, { weekStartsOn: 1 });
@@ -60,64 +60,98 @@ const DateRangeSelector = ({ value, onChange }) => {
         }
     };
 
-    return (
-        <Box>
-            <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md="auto">
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        View Period:
-                    </Typography>
-                    <ToggleButtonGroup
-                        value={viewType}
-                        exclusive
-                        onChange={handleViewChange}
-                        size="small"
-                        sx={{ flexWrap: 'wrap' }}
-                    >
-                        <ToggleButton value="current-week">Current Week</ToggleButton>
-                        <ToggleButton value="current-month">Current Month</ToggleButton>
-                        <ToggleButton value="last-3-months">Last 3 Months</ToggleButton>
-                        <ToggleButton value="custom">Custom</ToggleButton>
-                    </ToggleButtonGroup>
-                </Grid>
+    const formatDisplayDate = (dateStr) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return format(date, 'MMM d, yyyy');
+    };
 
-                {viewType === 'custom' && (
-                    <>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                type="date"
-                                label="Start Date"
-                                value={customStart}
-                                onChange={(e) => setCustomStart(e.target.value)}
-                                onBlur={handleCustomDatesChange}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                type="date"
-                                label="End Date"
-                                value={customEnd}
-                                onChange={(e) => setCustomEnd(e.target.value)}
-                                onBlur={handleCustomDatesChange}
-                                InputLabelProps={{ shrink: true }}
-                            />
-                        </Grid>
-                    </>
-                )}
+    return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    View Period:
+                </Typography>
+                <ToggleButtonGroup
+                    value={viewType}
+                    exclusive
+                    onChange={handleViewChange}
+                    size="small"
+                    sx={{ 
+                        flexWrap: 'wrap',
+                        '& .MuiToggleButton-root': {
+                            px: 2,
+                            py: 1,
+                            borderRadius: '8px !important',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            '&.Mui-selected': {
+                                backgroundColor: 'primary.main',
+                                color: 'white',
+                                '&:hover': {
+                                    backgroundColor: 'primary.dark',
+                                },
+                            },
+                        },
+                    }}
+                >
+                    <ToggleButton value="current-week">Current Week</ToggleButton>
+                    <ToggleButton value="current-month">Current Month</ToggleButton>
+                    <ToggleButton value="last-3-months">Last 3 Months</ToggleButton>
+                    <ToggleButton value="custom">Custom</ToggleButton>
+                </ToggleButtonGroup>
 
                 {value && (
-                    <Grid item xs={12}>
-                        <Typography variant="caption" color="text.secondary">
-                            Showing data from {value.startDate} to {value.endDate}
-                        </Typography>
-                    </Grid>
+                    <Chip
+                        icon={<CalendarIcon sx={{ fontSize: 18 }} />}
+                        label={`${formatDisplayDate(value.startDate)} — ${formatDisplayDate(value.endDate)}`}
+                        variant="outlined"
+                        color="primary"
+                        sx={{ 
+                            fontWeight: 500,
+                            borderRadius: 2,
+                            ml: { xs: 0, md: 'auto' },
+                        }}
+                    />
                 )}
-            </Grid>
+            </Box>
+
+            {viewType === 'custom' && (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <TextField
+                        size="small"
+                        type="date"
+                        label="Start Date"
+                        value={customStart}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        onBlur={handleCustomDatesChange}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ 
+                            minWidth: 180,
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 2,
+                            },
+                        }}
+                    />
+                    <TextField
+                        size="small"
+                        type="date"
+                        label="End Date"
+                        value={customEnd}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        onBlur={handleCustomDatesChange}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ 
+                            minWidth: 180,
+                            '& .MuiOutlinedInput-root': {
+                                borderRadius: 2,
+                            },
+                        }}
+                    />
+                </Box>
+            )}
         </Box>
     );
 };
