@@ -38,6 +38,7 @@ import {
     Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
     Close as CloseIcon,
+    TrendingUp as TrendingUpIcon,
     AddCircleOutline as AddCircleIcon,
     Person as PersonIcon,
     Add as AddIcon,
