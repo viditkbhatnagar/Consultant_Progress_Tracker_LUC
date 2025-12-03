@@ -47,6 +47,17 @@ const CommitmentSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        studentPhone: {
+            type: String,
+            trim: true,
+            validate: {
+                validator: function (v) {
+                    // Optional field - only validate if provided
+                    return !v || /^[\d\s\-+()]+$/.test(v);
+                },
+                message: 'Please provide a valid phone number'
+            }
+        },
         commitmentMade: {
             type: String,
             required: [true, 'Commitment description is required'],

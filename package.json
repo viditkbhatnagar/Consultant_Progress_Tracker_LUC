@@ -1,0 +1,23 @@
+{
+    "name": "team-progress-tracker",
+    "version": "1.0.0",
+    "description": "Team Progress Tracker - Monorepo",
+    "scripts": {
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "dev:server": "cd server && npm run dev",
+        "dev:client": "cd client && npm start",
+        "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+        "build": "cd client && npm install && npm run build",
+        "start": "cd server && npm start",
+        "seed": "cd server && node scripts/seedDatabase.js"
+    },
+    "keywords": [
+        "progress-tracker",
+        "team-management"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}

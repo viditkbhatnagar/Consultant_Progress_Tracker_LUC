@@ -29,6 +29,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     const [formData, setFormData] = useState({
         consultantName: '',
         studentName: '',
+        studentPhone: '',
         commitmentMade: '',
         leadStage: 'Cold',
         achievementPercentage: 0,
@@ -61,6 +62,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             setFormData({
                 consultantName: commitment.consultantName || '',
                 studentName: commitment.studentName || '',
+                studentPhone: commitment.studentPhone || '',
                 commitmentMade: commitment.commitmentMade || '',
                 leadStage: commitment.leadStage || 'Cold',
                 achievementPercentage: commitment.achievementPercentage || 0,
@@ -81,6 +83,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             setFormData({
                 consultantName: '',
                 studentName: '',
+                studentPhone: '',
                 commitmentMade: '',
                 leadStage: 'Cold',
                 achievementPercentage: 0,
@@ -210,9 +213,18 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                     const weekNum = currentWeekInfo.weekNumber - i;
                                     const year = weekNum > 0 ? currentWeekInfo.year : currentWeekInfo.year - 1;
                                     const displayWeek = weekNum > 0 ? weekNum : 52 + weekNum;
+
+                                    // Calculate week dates
+                                    const today = new Date();
+                                    const daysToSubtract = i * 7;
+                                    const weekStart = startOfWeek(new Date(today.getTime() - daysToSubtract * 24 * 60 * 60 * 1000), { weekStartsOn: 1 });
+                                    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+
+                                    const dateRange = `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
+
                                     return (
                                         <MenuItem key={i} value={displayWeek}>
-                                            Week {displayWeek} {i === 0 ? '(Current)' : `(${i} weeks ago)`}
+                                            {dateRange} {i === 0 ? '(Current)' : ''}
                                         </MenuItem>
                                     );
                                 })}
@@ -276,7 +288,7 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     </Grid>
 
                     {/* Student Name */}
-                    <Grid item xs={12}>
+                    <Grid item xs={12} md={6}>
                         <TextField
                             fullWidth
                             label="Student Name"
@@ -286,8 +298,20 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         />
                     </Grid>
 
+                    {/* Student Phone */}
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            label="Student Phone Number"
+                            value={formData.studentPhone}
+                            onChange={(e) => handleChange('studentPhone', e.target.value)}
+                            placeholder="+1234567890"
+                            helperText="Optional"
+                        />
+                    </Grid>
+
                     {/* Lead Stage */}
-                    <Grid item xs={12}>
+                    <Grid item xs={12} md={6}>
                         <FormControl fullWidth>
                             <InputLabel>Lead Stage</InputLabel>
                             <Select
@@ -302,29 +326,34 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 ))}
                             </Select>
                         </FormControl>
-                        {formData.leadStage === 'Admission' && (
-                            <Typography variant="caption" color="success.main" sx={{ mt: 0.5, display: 'block' }}>
-                                ✓ Lead will be automatically closed when stage is Admission
-                            </Typography>
-                        )}
                     </Grid>
 
-                    {/* Commitment */}
+                    {/* Commitment Description */}
                     <Grid item xs={12}>
                         <TextField
                             fullWidth
                             label="Commitment Made"
                             value={formData.commitmentMade}
                             onChange={(e) => handleChange('commitmentMade', e.target.value)}
-                            multiline
-                            rows={2}
                             required
-                            placeholder="e.g., Follow up with student, Schedule meeting, Submit documents..."
+                            multiline
+                            rows={3}
+                            placeholder="Describe the commitment in detail..."
                         />
                     </Grid>
 
-                    {/* Meetings Done */}
+                    {/* ===== CONVERSION & FOLLOW-UP ===== */}
                     <Grid item xs={12}>
+                        <Box sx={{ mb: 2, mt: 2 }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
+                                📊 Conversion Probability & Follow-up
+                            </Typography>
+                            <Divider />
+                        </Box>
+                    </Grid>
+
+                    {/* Meetings Done */}
+                    <Grid item xs={12} md={6}>
                         <TextField
                             fullWidth
                             label="Meetings Done"
@@ -338,14 +367,19 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         />
                     </Grid>
 
-                    {/* ===== PROBABILITY & FOLLOW-UP ===== */}
-                    <Grid item xs={12}>
-                        <Box sx={{ mb: 2, mt: 3 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5, color: 'primary.main' }}>
-                                📊 Conversion Probability & Follow-up
-                            </Typography>
-                            <Divider />
-                        </Box>
+                    {/* Follow-up Date */}
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            type="date"
+                            label="Follow-up Date"
+                            value={formData.followUpDate}
+                            onChange={(e) => handleChange('followUpDate', e.target.value)}
+                            InputLabelProps={{
+                                shrink: true,
+                            }}
+                            helperText="When should you follow up with this lead?"
+                        />
                     </Grid>
 
                     {/* Conversion Probability Slider */}
@@ -383,21 +417,6 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 What's the likelihood this lead will convert?
                             </Typography>
                         </Box>
-                    </Grid>
-
-                    {/* Follow-up Date */}
-                    <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            label="Follow-up Date"
-                            type="date"
-                            value={formData.followUpDate}
-                            onChange={(e) => handleChange('followUpDate', e.target.value)}
-                            InputLabelProps={{
-                                shrink: true,
-                            }}
-                            helperText="When should you follow up with this lead?"
-                        />
                     </Grid>
 
                     {/* Admission Closed */}

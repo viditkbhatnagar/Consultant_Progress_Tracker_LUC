@@ -1,250 +1,173 @@
-# Deployment Guide - Render
+# Team Progress Tracker - Single Service Deployment
 
-This guide will walk you through deploying the Team Progress Tracker application on Render.
+Deploy both frontend and backend as a single service on Render.
 
-## Prerequisites
+## 🚀 Quick Start - Local Development
 
-- ✅ GitHub repository with your code (already done)
-- ✅ MongoDB Atlas account with database set up
-- ✅ Render account (free tier works fine)
+```bash
+# Install all dependencies (root, server, client)
+npm run install:all
 
----
+# Run both frontend and backend together
+npm run dev
 
-## Part 1: Deploy Backend (Node.js API)
+# Or run separately:
+npm run dev:server  # Backend only
+npm run dev:client  # Frontend only
+```
 
-### Step 1: Create Web Service on Render
+## 📦 Deployment on Render
 
-1. Go to [render.com](https://render.com) and sign in
-2. Click **"New +"** → **"Web Service"**
-3. Connect your GitHub repository: `viditkbhatnagar/Consultant_Progress_Tracker_LUC`
-4. Click **"Connect"** next to your repository
+### Prerequisites
+- GitHub repository connected
+- MongoDB Atlas database
+- Render account
 
-### Step 2: Configure Backend Service
+### Step 1: Create Web Service
 
-Fill in the following settings:
+1. Go to [render.com](https://render.com) → **New +** → **Web Service**
+2. Connect repository: `viditkbhatnagar/Consultant_Progress_Tracker_LUC`
+3. Configure service:
 
-| Field | Value |
-|-------|-------|
-| **Name** | `team-progress-tracker-api` (or your choice) |
-| **Region** | Choose closest to you |
+| Setting | Value |
+|---------|-------|
+| **Name** | `team-progress-tracker` |
+| **Region** | Choose closest |
 | **Branch** | `main` |
-| **Root Directory** | `server` |
+| **Root Directory** | *(leave empty)* |
 | **Runtime** | `Node` |
-| **Build Command** | `npm install` |
+| **Build Command** | `npm run install:all && npm run build` |
 | **Start Command** | `npm start` |
 | **Instance Type** | `Free` |
 
-### Step 3: Add Environment Variables
+### Step 2: Environment Variables
 
-Click **"Advanced"** and add these environment variables:
+Click **Advanced** and add:
 
-| Key | Value | Notes |
-|-----|-------|-------|
-| `NODE_ENV` | `production` | |
-| `PORT` | `5001` | Or leave blank (Render auto-assigns) |
-| `MONGODB_URI` | `your_mongodb_atlas_connection_string` | From MongoDB Atlas |
-| `JWT_SECRET` | Generate a random string | Use: `openssl rand -base64 32` |
-| `JWT_EXPIRE` | `30d` | Token expiration |
-| `FRONTEND_URL` | `https://your-frontend-url.onrender.com` | Add after frontend deployment |
-
-**Getting MongoDB URI:**
-- Go to MongoDB Atlas → Clusters → Connect
-- Choose "Connect your application"
-- Copy the connection string
-- Replace `<password>` with your database password
-- Replace `<dbname>` with `team_progress_tracker`
-
-Example: `mongodb+srv://username:password@cluster.mongodb.net/team_progress_tracker?retryWrites=true&w=majority`
-
-### Step 4: Deploy Backend
-
-1. Click **"Create Web Service"**
-2. Wait for deployment (5-10 minutes)
-3. Once deployed, copy your backend URL (e.g., `https://team-progress-tracker-api.onrender.com`)
-
----
-
-## Part 2: Deploy Frontend (React App)
-
-### Step 1: Update Frontend API URL
-
-Before deploying frontend, update the API URL in your code:
-
-1. Open `client/src/utils/constants.js`
-2. Update `API_BASE_URL` to point to your deployed backend:
-
-```javascript
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 
-  'https://team-progress-tracker-api.onrender.com/api'; // Replace with your backend URL
+```
+NODE_ENV=production
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/team_progress_tracker
+JWT_SECRET=<generate with: openssl rand -base64 32>
+JWT_EXPIRE=30d
+PORT=10000
 ```
 
-3. Commit and push changes:
-```bash
-git add client/src/utils/constants.js
-git commit -m "Update API URL for production"
-git push origin main
-```
+**MongoDB URI Setup:**
+1. MongoDB Atlas → Connect → Connect your application
+2. Copy connection string
+3. Replace `<password>` and database name
 
-### Step 2: Create Frontend Web Service
+### Step 3: Deploy
 
-1. On Render, click **"New +"** → **"Web Service"**
-2. Select the same repository
-3. Click **"Connect"**
+1. Click **Create Web Service**
+2. Wait 10-15 minutes for deployment
+3. Your app will be live at: `https://team-progress-tracker.onrender.com`
 
-### Step 3: Configure Frontend Service
+## 🔧 How It Works
 
-| Field | Value |
-|-------|-------|
-| **Name** | `team-progress-tracker-app` |
-| **Region** | Same as backend |
-| **Branch** | `main` |
-| **Root Directory** | `client` |
-| **Runtime** | `Node` |
-| **Build Command** | `npm install && npm run build` |
-| **Start Command** | `npx serve -s build -l 3000` |
-| **Instance Type** | `Free` |
+### Development Mode
+- `npm run dev` starts both services concurrently:
+  - Backend: `http://localhost:5001`
+  - Frontend: `http://localhost:3002`
+- Frontend proxies API requests to backend
 
-### Step 4: Add Frontend Environment Variables
+### Production Mode
+- Backend serves built React app as static files
+- Single URL for everything
+- API routes at `/api/*`
+- React app handles all other routes
 
-Click **"Advanced"** and add:
-
-| Key | Value |
-|-----|-------|
-| `REACT_APP_API_URL` | `https://team-progress-tracker-api.onrender.com/api` |
-| `NODE_ENV` | `production` |
-
-### Step 5: Deploy Frontend
-
-1. Click **"Create Web Service"**
-2. Wait for deployment (5-10 minutes)
-3. Once deployed, copy your frontend URL (e.g., `https://team-progress-tracker-app.onrender.com`)
-
----
-
-## Part 3: Update CORS Settings
-
-### Update Backend Environment Variable
-
-1. Go to your **backend service** on Render
-2. Go to **"Environment"** tab
-3. Update or add `FRONTEND_URL` with your actual frontend URL:
-   - `https://team-progress-tracker-app.onrender.com`
-4. Click **"Save Changes"**
-5. The backend will automatically redeploy
-
----
-
-## Part 4: Seed Database (Optional)
-
-If you want to populate the database with initial data:
-
-### Option 1: Run Seed Script Locally
+## 📝 Available Scripts
 
 ```bash
-cd server
-node scripts/seedDatabase.js
+npm run dev          # Run both frontend & backend
+npm run install:all  # Install all dependencies
+npm run build        # Build frontend for production
+npm start            # Start production server
+npm run seed         # Populate database with test data
 ```
 
-### Option 2: Add as One-Time Job on Render
+## 🎯 Post-Deployment
 
-1. In backend service, go to **"Shell"** tab
-2. Run:
+### 1. Seed Database (Optional)
 ```bash
-node scripts/seedDatabase.js
+# In Render Shell or locally:
+npm run seed
 ```
 
----
+### 2. Test Deployment
+- Visit your Render URL
+- Login with credentials from `LOGIN_CREDENTIALS.md`
 
-## Part 5: Test Your Deployment
+### 3. Monitor
+- Check logs in Render dashboard
+- Set up error tracking if needed
 
-1. **Visit your frontend URL**: `https://team-progress-tracker-app.onrender.com`
-2. **Test login** with credentials from `LOGIN_CREDENTIALS.md`
-3. **Check all features** work correctly
+## ⚠️ Important Notes
 
----
-
-## Common Issues & Fixes
-
-### ❌ CORS Errors
-
-**Fix:** Ensure `FRONTEND_URL` environment variable is set correctly in backend
-
-### ❌ API Connection Failed
-
-**Fix:** 
-- Check `REACT_APP_API_URL` in frontend environment variables
-- Verify backend is running (check Render logs)
-
-### ❌ Database Connection Failed
-
-**Fix:**
-- Verify MongoDB Atlas connection string is correct
-- Ensure MongoDB Atlas allows connections from anywhere (0.0.0.0/0) for Render IPs
-
-### ❌ Build Failures
-
-**Fix:**
-- Check Render logs for specific errors
-- Ensure `package.json` has all dependencies
-- Verify build commands are correct
-
----
-
-## Free Tier Limitations
-
-⚠️ **Render Free Tier:**
-- Services spin down after 15 minutes of inactivity
-- First request after sleep takes ~30-60 seconds
+### Free Tier Limitations
+- Service spins down after 15 min inactivity
+- ~30-60 sec cold start on first request
 - 750 hours/month free
 
-💡 **Tip:** For production, consider upgrading to paid tier ($7/month per service)
+### API URL Configuration
+Frontend automatically uses relative paths (`/api`) in production, so no URL configuration needed!
+
+### Database Backups
+Set up MongoDB Atlas automated backups for production data.
+
+## 🐛 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **Build fails** | Check build logs, verify all dependencies in package.json |
+| **Database connection fails** | Verify MONGODB_URI, check MongoDB Atlas network access (allow 0.0.0.0/0) |
+| **404 on routes** | Ensure React routing is properly configured in server.js |
+| **Slow cold starts** | Expected on free tier, upgrade to paid tier ($7/mo) for instant starts |
+
+## 🔗 Useful Commands
+
+```bash
+# Check if concurrently is installed
+npm list concurrently
+
+# Test production build locally
+npm run build
+cd server
+NODE_ENV=production npm start
+# Visit http://localhost:5001
+```
+
+## 📚 Architecture
+
+```
+Root/
+├── package.json          # Monorepo orchestration
+├── client/               # React frontend
+│   ├── package.json
+│   ├── public/
+│   └── src/
+└── server/               # Express backend  
+    ├── package.json
+    ├── models/
+    ├── routes/
+    └── server.js         # Serves React build in production
+```
+
+## ✅ Deployment Checklist
+
+- [ ] MongoDB Atlas database created
+- [ ] Environment variables configured
+- [ ] JWT_SECRET generated
+- [ ] Build command tested locally
+- [ ] Render service created
+- [ ] Deployment successful
+- [ ] Test login functionality
+- [ ] Database seeded (optional)
+- [ ] Monitor logs for errors
 
 ---
 
-## Environment Variables Summary
+**Your App URL:** `https://your-app-name.onrender.com`
 
-### Backend
-```
-NODE_ENV=production
-MONGODB_URI=mongodb+srv://...
-JWT_SECRET=your_random_secret
-JWT_EXPIRE=30d
-FRONTEND_URL=https://your-frontend.onrender.com
-```
-
-### Frontend
-```
-REACT_APP_API_URL=https://your-backend.onrender.com/api
-NODE_ENV=production
-```
-
----
-
-## Next Steps
-
-✅ Deployment complete!
-
-**Recommended actions:**
-1. Set up custom domain (optional)
-2. Monitor application health on Render dashboard
-3. Set up error tracking (Sentry, LogRocket, etc.)
-4. Configure MongoDB backups
-5. Share application URL with your team
-
----
-
-## Support
-
-If you encounter issues:
-- Check Render logs: Service → Logs tab
-- Verify environment variables
-- Test API endpoints directly: `https://your-backend.onrender.com/api/health`
-- Review MongoDB Atlas network access settings
-
----
-
-**Your Application URLs:**
-- **Frontend:** Will be `https://team-progress-tracker-app.onrender.com` (or your chosen name)
-- **Backend API:** Will be `https://team-progress-tracker-api.onrender.com` (or your chosen name)
-
-🎉 **Happy Deploying!**
+🎉 **Single Service = Simpler Deployment!**

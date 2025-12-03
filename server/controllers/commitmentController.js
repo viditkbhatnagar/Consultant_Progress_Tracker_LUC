@@ -153,11 +153,19 @@ exports.updateCommitment = async (req, res, next) => {
     }
 };
 
-// @desc    Delete commitment (soft delete)
+// @desc    Delete commitment
 // @route   DELETE /api/commitments/:id
-// @access  Private
+// @access  Private (Admin only)
 exports.deleteCommitment = async (req, res, next) => {
     try {
+        // Only admin can delete
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to delete commitments. Only admins can delete.',
+            });
+        }
+
         const commitment = await Commitment.findById(req.params.id);
 
         if (!commitment) {
@@ -167,29 +175,12 @@ exports.deleteCommitment = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'consultant' && commitment.consultant.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to delete this commitment',
-            });
-        }
-
-        if (req.user.role === 'team_lead' && commitment.teamLead.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to delete this commitment',
-            });
-        }
-
-        // Soft delete
-        commitment.isActive = false;
-        await commitment.save();
+        await commitment.deleteOne();
 
         res.status(200).json({
             success: true,
-            data: {},
             message: 'Commitment deleted successfully',
+            data: {}
         });
     } catch (error) {
         next(error);

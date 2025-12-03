@@ -37,7 +37,8 @@ import {
     Logout as LogoutIcon,
     Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
-    TrendingUp as TrendingUpIcon,
+    Close as CloseIcon,
+    AddCircleOutline as AddCircleIcon,
     Person as PersonIcon,
     Add as AddIcon,
     Visibility as VisibilityIcon,
@@ -79,7 +80,7 @@ const TeamLeadDashboard = () => {
     const [consultants, setConsultants] = useState([]);
     const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
     const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
-    const [filters, setFilters] = useState({ search: '', stage: '', status: '' });
+    const [filters, setFilters] = useState({ search: '', stage: '', status: '', consultant: '' });
 
     // Date range state
     const [dateRange, setDateRange] = useState({
@@ -183,6 +184,10 @@ const TeamLeadDashboard = () => {
 
         if (filters.status) {
             filtered = filtered.filter(c => c.status === filters.status);
+        }
+
+        if (filters.consultant) {
+            filtered = filtered.filter(c => c.consultantName === filters.consultant);
         }
 
         setFilteredCommitments(filtered);
@@ -555,7 +560,7 @@ const TeamLeadDashboard = () => {
                                                             title="Deactivate consultant"
                                                             disabled={consultant.isActive === false}
                                                         >
-                                                            <CheckCircleIcon fontSize="small" />
+                                                            <CloseIcon fontSize="small" />
                                                         </IconButton>
                                                     </TableCell>
                                                 </TableRow>
@@ -658,6 +663,7 @@ const TeamLeadDashboard = () => {
                                 onFilterChange={handleFilterChange}
                                 leadStages={LEAD_STAGES_LIST}
                                 statuses={STATUS_LIST}
+                                consultants={consultants}
                             />
 
                             {loading ? (

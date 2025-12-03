@@ -34,6 +34,7 @@ import {
     TrendingUp as TrendingUpIcon,
     Comment as CommentIcon,
     Edit as EditIcon,
+    Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -69,7 +70,7 @@ const AdminDashboard = () => {
     const [tabValue, setTabValue] = useState(0);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
-    const [filters, setFilters] = useState({ search: '', stage: '', status: '' });
+    const [filters, setFilters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
 
     // Date range state
     const [dateRange, setDateRange] = useState({
@@ -214,6 +215,14 @@ const AdminDashboard = () => {
             filtered = filtered.filter(c => c.status === filters.status);
         }
 
+        if (filters.teamLead) {
+            filtered = filtered.filter(c => c.teamLead?._id === filters.teamLead || c.teamLead === filters.teamLead);
+        }
+
+        if (filters.consultant) {
+            filtered = filtered.filter(c => c.consultantName === filters.consultant);
+        }
+
         setFilteredCommitments(filtered);
     }, [commitments, filters]);
 
@@ -288,6 +297,31 @@ const AdminDashboard = () => {
             await loadCommitments();
         } catch (err) {
             setError('Failed to save admin comment');
+        }
+    };
+
+    const handleDeleteCommitment = async (commitmentId) => {
+        if (!window.confirm('Are you sure you want to delete this commitment? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/commitments/${commitmentId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || 'Failed to delete commitment');
+            }
+
+            // Reload commitments after successful delete
+            await loadCommitments();
+        } catch (err) {
+            setError(err.message || 'Failed to delete commitment');
         }
     };
 
@@ -713,6 +747,8 @@ const AdminDashboard = () => {
                                 onFilterChange={handleFilterChange}
                                 leadStages={LEAD_STAGES_LIST}
                                 statuses={STATUS_LIST}
+                                teamLeads={teamLeads}
+                                consultants={consultants}
                             />
 
                             {loading ? (
@@ -844,8 +880,17 @@ const AdminDashboard = () => {
                                                                 size="small"
                                                                 onClick={() => handleOpenAdminComment(commitment)}
                                                                 color="primary"
+                                                                title="Edit Admin Comment"
                                                             >
                                                                 <EditIcon />
+                                                            </IconButton>
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => handleDeleteCommitment(commitment._id)}
+                                                                color="error"
+                                                                title="Delete Commitment"
+                                                            >
+                                                                <DeleteIcon />
                                                             </IconButton>
                                                         </TableCell>
                                                     </TableRow>
