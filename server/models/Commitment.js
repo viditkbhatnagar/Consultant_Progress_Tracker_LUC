@@ -50,12 +50,15 @@ const CommitmentSchema = new mongoose.Schema(
         studentPhone: {
             type: String,
             trim: true,
+            default: '',
             validate: {
                 validator: function (v) {
-                    // Optional field - only validate if provided
-                    return !v || /^[\d\s\-+()]+$/.test(v);
+                    // Allow empty string (optional field)
+                    if (!v || v.trim() === '') return true;
+                    // If provided, validate basic phone format (digits, spaces, +, -, ())
+                    return /^[\d\s\-\+\(\)]+$/.test(v);
                 },
-                message: 'Please provide a valid phone number'
+                message: 'Please provide a valid phone number (digits, spaces, +, -, () only)'
             }
         },
         commitmentMade: {
