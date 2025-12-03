@@ -64,7 +64,7 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
 
     return (
         <Box sx={{ mb: 3 }}>
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
                 {/* Search - Full Width */}
                 <Grid item xs={12}>
                     <TextField
@@ -80,19 +80,29 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                                 </InputAdornment>
                             ),
                         }}
-                        sx={{ minHeight: '56px' }}
+                        sx={{
+                            minHeight: '56px',
+                            '& .MuiInputBase-root': {
+                                fontSize: '1rem',
+                            }
+                        }}
                     />
                 </Grid>
 
-                {/* Lead Stage */}
-                <Grid item xs={12} sm={6} md={4} lg={3}>
+                {/* Filters Row - Much Wider */}
+                <Grid item xs={12} sm={6} md={3}>
                     <FormControl fullWidth size="medium">
-                        <InputLabel sx={{ fontSize: '1rem' }}>Lead Stage</InputLabel>
+                        <InputLabel sx={{ fontSize: '1rem', whiteSpace: 'nowrap' }}>Lead Stage</InputLabel>
                         <Select
                             value={selectedStage}
                             label="Lead Stage"
                             onChange={handleStageChange}
-                            sx={{ minHeight: '56px' }}
+                            sx={{
+                                minHeight: '56px',
+                                '& .MuiSelect-select': {
+                                    fontSize: '1rem',
+                                }
+                            }}
                         >
                             <MenuItem value="">All Stages</MenuItem>
                             {leadStages.map((stage) => (
@@ -105,14 +115,19 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                 </Grid>
 
                 {/* Status */}
-                <Grid item xs={12} sm={6} md={4} lg={3}>
+                <Grid item xs={12} sm={6} md={3}>
                     <FormControl fullWidth size="medium">
-                        <InputLabel sx={{ fontSize: '1rem' }}>Status</InputLabel>
+                        <InputLabel sx={{ fontSize: '1rem', whiteSpace: 'nowrap' }}>Status</InputLabel>
                         <Select
                             value={selectedStatus}
                             label="Status"
                             onChange={handleStatusChange}
-                            sx={{ minHeight: '56px' }}
+                            sx={{
+                                minHeight: '56px',
+                                '& .MuiSelect-select': {
+                                    fontSize: '1rem',
+                                }
+                            }}
                         >
                             <MenuItem value="">All Statuses</MenuItem>
                             {statuses.map((status) => (
@@ -126,14 +141,19 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
 
                 {/* Team Lead */}
                 {teamLeads && teamLeads.length > 0 && (
-                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <FormControl fullWidth size="medium">
-                            <InputLabel sx={{ fontSize: '1rem' }}>Team Lead</InputLabel>
+                            <InputLabel sx={{ fontSize: '1rem', whiteSpace: 'nowrap' }}>Team Lead</InputLabel>
                             <Select
                                 value={selectedTeamLead}
                                 label="Team Lead"
                                 onChange={handleTeamLeadChange}
-                                sx={{ minHeight: '56px' }}
+                                sx={{
+                                    minHeight: '56px',
+                                    '& .MuiSelect-select': {
+                                        fontSize: '1rem',
+                                    }
+                                }}
                             >
                                 <MenuItem value="">All Teams</MenuItem>
                                 {teamLeads.map((tl) => (
@@ -148,14 +168,19 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
 
                 {/* Consultant */}
                 {consultants && consultants.length > 0 && (
-                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <FormControl fullWidth size="medium">
-                            <InputLabel sx={{ fontSize: '1rem' }}>Consultant</InputLabel>
+                            <InputLabel sx={{ fontSize: '1rem', whiteSpace: 'nowrap' }}>Consultant</InputLabel>
                             <Select
                                 value={selectedConsultant}
                                 label="Consultant"
                                 onChange={handleConsultantChange}
-                                sx={{ minHeight: '56px' }}
+                                sx={{
+                                    minHeight: '56px',
+                                    '& .MuiSelect-select': {
+                                        fontSize: '1rem',
+                                    }
+                                }}
                             >
                                 <MenuItem value="">All Consultants</MenuItem>
                                 {consultants.map((consultant) => (
@@ -170,14 +195,19 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
 
                 {/* Clear Filters Button */}
                 {hasActiveFilters && (
-                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                    <Grid item xs={12} sm={6} md={3}>
                         <Button
                             variant="outlined"
                             color="primary"
                             fullWidth
                             onClick={handleClearFilters}
                             size="large"
-                            sx={{ height: '56px', fontSize: '1rem' }}
+                            sx={{
+                                height: '56px',
+                                fontSize: '1rem',
+                                whiteSpace: 'nowrap',
+                                fontWeight: 500,
+                            }}
                         >
                             Clear All Filters
                         </Button>
