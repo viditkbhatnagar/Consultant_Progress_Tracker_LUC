@@ -104,6 +104,24 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     }, [commitment, open]);
 
     const handleChange = (field, value) => {
+        // Special handling for admission closed checkbox
+        if (field === 'admissionClosed' && value === true && !formData.admissionClosed) {
+            // Show confirmation dialog
+            const confirmed = window.confirm(
+                '⚠️ WARNING: Closing Admission\n\n' +
+                'This action CANNOT be undone!\n\n' +
+                'Once you close this admission:\n' +
+                '• The closing date will be permanently recorded\n' +
+                '• You will NOT be able to reopen it\n' +
+                '• This marks the final status of this lead\n\n' +
+                'Are you sure you want to close this admission?'
+            );
+
+            if (!confirmed) {
+                return; // User cancelled, don't change the checkbox
+            }
+        }
+
         let updates = { [field]: value };
 
         // Auto-close when leadStage is set to "Admission"

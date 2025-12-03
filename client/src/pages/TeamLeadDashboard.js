@@ -696,6 +696,7 @@ const TeamLeadDashboard = () => {
                                                 <TableCell align="center">Achievement</TableCell>
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
+                                                <TableCell align="center">Closed Date</TableCell>
                                                 <TableCell align="center">TL Comments</TableCell>
                                                 <TableCell align="center">Admin Comments</TableCell>
                                                 <TableCell align="center">Actions</TableCell>
@@ -795,6 +796,19 @@ const TeamLeadDashboard = () => {
                                                                     size="small"
                                                                     variant="outlined"
                                                                 />
+                                                            )}
+                                                        </TableCell>
+
+                                                        {/* Admission Closed Date */}
+                                                        <TableCell align="center">
+                                                            {commitment.admissionClosedDate ? (
+                                                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                                                                    {format(new Date(commitment.admissionClosedDate), 'MMM d, yyyy')}
+                                                                </Typography>
+                                                            ) : (
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    -
+                                                                </Typography>
                                                             )}
                                                         </TableCell>
 

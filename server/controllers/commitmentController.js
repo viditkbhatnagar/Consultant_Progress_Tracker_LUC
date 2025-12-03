@@ -99,6 +99,11 @@ exports.createCommitment = async (req, res, next) => {
             req.body.lastUpdatedBy = req.user.id;
         }
 
+        // Auto-set admission closed date if admission is being closed
+        if (req.body.admissionClosed === true) {
+            req.body.admissionClosedDate = new Date();
+        }
+
         const commitment = await Commitment.create(req.body);
 
         res.status(201).json({
@@ -135,6 +140,19 @@ exports.updateCommitment = async (req, res, next) => {
             }
         }
         // Admin can update anything (no check needed)
+
+        // Auto-set admission closed date when closing admission (only if not already closed)
+        if (req.body.admissionClosed === true && !commitment.admissionClosed) {
+            req.body.admissionClosedDate = new Date();
+        }
+
+        // Prevent reopening once closed
+        if (commitment.admissionClosed === true && req.body.admissionClosed === false) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot reopen a closed admission - this action is irreversible',
+            });
+        }
 
         // Update last modified info
         req.body.lastUpdatedBy = req.user.id;

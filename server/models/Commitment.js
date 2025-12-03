@@ -155,6 +155,10 @@ const CommitmentSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        admissionClosedDate: {
+            type: Date,
+            default: null,
+        },
         closedDate: {
             type: Date,
         },

@@ -781,7 +781,7 @@ const AdminDashboard = () => {
                                                 <TableCell align="center">Achievement</TableCell>
                                                 <TableCell align="center">Meetings</TableCell>
                                                 <TableCell>Status</TableCell>
-                                                <TableCell align="center">Admin Comments</TableCell>
+                                                <TableCell align="center">Closed Date</TableCell>
                                                 <TableCell align="center">Actions</TableCell>
                                             </TableRow>
                                         </TableHead>
