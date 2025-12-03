@@ -32,13 +32,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Serve static files from React app in production
+// Serve static files from React build in production
 if (process.env.NODE_ENV === 'production') {
-    // Set static folder
     app.use(express.static(path.join(__dirname, '../client/build')));
 
-    // Handle React routing, return all requests to React app
-    app.get('*', (req, res) => {
+    // All other GET requests not handled by API routes serve the React app
+    app.get(/^(?!\/api).*/, (req, res) => {
         res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
     });
 }
