@@ -849,20 +849,26 @@ const AdminDashboard = () => {
                                                         <TableCell align="center">
                                                             {commitment.meetingsDone || 0}
                                                         </TableCell>
+
+                                                        {/* Status */}
                                                         <TableCell>
                                                             {commitment.admissionClosed ? (
-                                                                <Chip
-                                                                    label="Closed"
-                                                                    color="success"
-                                                                    size="small"
-                                                                    icon={<CheckCircleIcon />}
-                                                                />
+                                                                <Chip label="Admitted & Closed" color="success" size="small" />
                                                             ) : (
-                                                                <Chip
-                                                                    label={commitment.status}
-                                                                    size="small"
-                                                                    variant="outlined"
-                                                                />
+                                                                <Chip label={commitment.status} size="small" variant="outlined" />
+                                                            )}
+                                                        </TableCell>
+
+                                                        {/* Admission Closed Date */}
+                                                        <TableCell align="center">
+                                                            {commitment.admissionClosedDate ? (
+                                                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                                                                    {format(new Date(commitment.admissionClosedDate), 'MMM d, yyyy')}
+                                                                </Typography>
+                                                            ) : (
+                                                                <Typography variant="body2" color="text.secondary">
+                                                                    -
+                                                                </Typography>
                                                             )}
                                                         </TableCell>
                                                         <TableCell align="center">
