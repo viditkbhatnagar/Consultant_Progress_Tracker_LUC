@@ -38,8 +38,12 @@ export const DAYS_OF_WEEK = [
     'Sunday',
 ];
 
-// API Base URL
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+// API Configuration
+// In production (Render), use relative path since backend serves frontend
+// In development, use localhost with port 5001
+export const API_BASE_URL = process.env.NODE_ENV === 'production'
+    ? '/api'  // Relative path - same server serves both API and frontend
+    : 'http://localhost:5001/api';  // Development - separate servers
 
 // Achievement percentage color coding
 export const getAchievementColor = (percentage) => {
