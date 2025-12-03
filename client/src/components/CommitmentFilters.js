@@ -7,7 +7,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    Chip,
+    Button,
     Grid,
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
@@ -64,11 +64,13 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
 
     return (
         <Box sx={{ mb: 3 }}>
-            <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6} md={3} lg={2.5}>
+            <Grid container spacing={3}>
+                {/* Search - Full Width */}
+                <Grid item xs={12}>
                     <TextField
                         fullWidth
-                        placeholder="Search commitments..."
+                        size="medium"
+                        placeholder="Search by student name, commitment, consultant, or team..."
                         value={searchTerm}
                         onChange={handleSearchChange}
                         InputProps={{
@@ -78,16 +80,19 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                                 </InputAdornment>
                             ),
                         }}
+                        sx={{ minHeight: '56px' }}
                     />
                 </Grid>
 
-                <Grid item xs={12} sm={6} md={2.5} lg={2}>
-                    <FormControl fullWidth>
-                        <InputLabel>Lead Stage</InputLabel>
+                {/* Lead Stage */}
+                <Grid item xs={12} sm={6} md={4} lg={3}>
+                    <FormControl fullWidth size="medium">
+                        <InputLabel sx={{ fontSize: '1rem' }}>Lead Stage</InputLabel>
                         <Select
                             value={selectedStage}
                             label="Lead Stage"
                             onChange={handleStageChange}
+                            sx={{ minHeight: '56px' }}
                         >
                             <MenuItem value="">All Stages</MenuItem>
                             {leadStages.map((stage) => (
@@ -99,13 +104,15 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                     </FormControl>
                 </Grid>
 
-                <Grid item xs={12} sm={6} md={2.5} lg={2}>
-                    <FormControl fullWidth>
-                        <InputLabel>Status</InputLabel>
+                {/* Status */}
+                <Grid item xs={12} sm={6} md={4} lg={3}>
+                    <FormControl fullWidth size="medium">
+                        <InputLabel sx={{ fontSize: '1rem' }}>Status</InputLabel>
                         <Select
                             value={selectedStatus}
                             label="Status"
                             onChange={handleStatusChange}
+                            sx={{ minHeight: '56px' }}
                         >
                             <MenuItem value="">All Statuses</MenuItem>
                             {statuses.map((status) => (
@@ -117,14 +124,16 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                     </FormControl>
                 </Grid>
 
+                {/* Team Lead */}
                 {teamLeads && teamLeads.length > 0 && (
-                    <Grid item xs={12} sm={6} md={2.5} lg={2}>
-                        <FormControl fullWidth>
-                            <InputLabel>Team Lead</InputLabel>
+                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                        <FormControl fullWidth size="medium">
+                            <InputLabel sx={{ fontSize: '1rem' }}>Team Lead</InputLabel>
                             <Select
                                 value={selectedTeamLead}
                                 label="Team Lead"
                                 onChange={handleTeamLeadChange}
+                                sx={{ minHeight: '56px' }}
                             >
                                 <MenuItem value="">All Teams</MenuItem>
                                 {teamLeads.map((tl) => (
@@ -137,14 +146,16 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                     </Grid>
                 )}
 
+                {/* Consultant */}
                 {consultants && consultants.length > 0 && (
-                    <Grid item xs={12} sm={6} md={2.5} lg={2}>
-                        <FormControl fullWidth>
-                            <InputLabel>Consultant</InputLabel>
+                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                        <FormControl fullWidth size="medium">
+                            <InputLabel sx={{ fontSize: '1rem' }}>Consultant</InputLabel>
                             <Select
                                 value={selectedConsultant}
                                 label="Consultant"
                                 onChange={handleConsultantChange}
+                                sx={{ minHeight: '56px' }}
                             >
                                 <MenuItem value="">All Consultants</MenuItem>
                                 {consultants.map((consultant) => (
@@ -157,17 +168,21 @@ const CommitmentFilters = ({ onFilterChange, leadStages, statuses, consultants, 
                     </Grid>
                 )}
 
-                <Grid item xs={12} sm={6} md={1.5} lg={1.5}>
-                    {hasActiveFilters && (
-                        <Chip
-                            label="Clear"
-                            onClick={handleClearFilters}
-                            onDelete={handleClearFilters}
-                            color="primary"
+                {/* Clear Filters Button */}
+                {hasActiveFilters && (
+                    <Grid item xs={12} sm={6} md={4} lg={3}>
+                        <Button
                             variant="outlined"
-                        />
-                    )}
-                </Grid>
+                            color="primary"
+                            fullWidth
+                            onClick={handleClearFilters}
+                            size="large"
+                            sx={{ height: '56px', fontSize: '1rem' }}
+                        >
+                            Clear All Filters
+                        </Button>
+                    </Grid>
+                )}
             </Grid>
         </Box>
     );
