@@ -44,6 +44,9 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         dayOfWeek: format(new Date(), 'EEEE'),
         conversionProbability: 50, // Default to 50%
         followUpDate: '',
+        expectedConversionDate: '',
+        expectedConversionDay: '',
+        admissionClosedDate: '',
     });
     const [saving, setSaving] = useState(false);
     const [validationError, setValidationError] = useState('');
@@ -76,7 +79,18 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 selectedDate: commitmentDate,
                 dayOfWeek: dayName,
                 conversionProbability: commitment.conversionProbability || 50,
-                followUpDate: commitment.followUpDate || '',
+                followUpDate: commitment.followUpDate
+                    ? format(new Date(commitment.followUpDate), 'yyyy-MM-dd')
+                    : '',
+                expectedConversionDate: commitment.expectedConversionDate
+                    ? format(new Date(commitment.expectedConversionDate), 'yyyy-MM-dd')
+                    : '',
+                expectedConversionDay: commitment.expectedConversionDate
+                    ? format(new Date(commitment.expectedConversionDate), 'EEEE')
+                    : '',
+                admissionClosedDate: commitment.admissionClosedDate
+                    ? format(new Date(commitment.admissionClosedDate), 'yyyy-MM-dd')
+                    : '',
             });
         } else {
             // Creating new commitment - use defaults
@@ -98,6 +112,9 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 dayOfWeek: format(new Date(), 'EEEE'),
                 conversionProbability: 50,
                 followUpDate: '',
+                expectedConversionDate: '',
+                expectedConversionDay: '',
+                admissionClosedDate: '',
             });
         }
         setValidationError('');
@@ -168,6 +185,16 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             weekStartDate: format(weekStart, 'yyyy-MM-dd'),
             weekEndDate: format(weekEnd, 'yyyy-MM-dd'),
             year: formData.year || new Date().getFullYear(),
+            // Handle date fields: convert empty string to undefined for proper MongoDB handling
+            followUpDate: formData.followUpDate && formData.followUpDate.trim() !== ''
+                ? formData.followUpDate
+                : undefined,
+            expectedConversionDate: formData.expectedConversionDate && formData.expectedConversionDate.trim() !== ''
+                ? formData.expectedConversionDate
+                : undefined,
+            admissionClosedDate: formData.admissionClosedDate && formData.admissionClosedDate.trim() !== ''
+                ? formData.admissionClosedDate
+                : undefined,
         };
 
         setSaving(true);
@@ -400,6 +427,44 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         />
                     </Grid>
 
+                    {/* Expected Conversion Date */}
+                    <Grid item xs={12} md={6}>
+                        <TextField
+                            fullWidth
+                            type="date"
+                            label="Expected Conversion Date"
+                            value={formData.expectedConversionDate}
+                            onChange={(e) => {
+                                const selectedDate = e.target.value;
+                                const dayName = selectedDate ? format(new Date(selectedDate), 'EEEE') : '';
+                                setFormData(prev => ({
+                                    ...prev,
+                                    expectedConversionDate: selectedDate,
+                                    expectedConversionDay: dayName,
+                                }));
+                            }}
+                            InputLabelProps={{
+                                shrink: true,
+                            }}
+                            helperText="When do you expect the admission to be confirmed?"
+                        />
+                    </Grid>
+
+                    {/* Expected Conversion Day Display */}
+                    {formData.expectedConversionDate && (
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth
+                                label="Expected Conversion Day"
+                                value={formData.expectedConversionDay}
+                                InputProps={{
+                                    readOnly: true,
+                                }}
+                                helperText="Automatically detected from the date"
+                            />
+                        </Grid>
+                    )}
+
                     {/* Conversion Probability Slider */}
                     <Grid item xs={12}>
                         <Box sx={{ px: 2 }}>
@@ -443,7 +508,19 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             control={
                                 <Checkbox
                                     checked={formData.admissionClosed}
-                                    onChange={(e) => handleChange('admissionClosed', e.target.checked)}
+                                    onChange={(e) => {
+                                        const isChecked = e.target.checked;
+                                        // If checking for the first time and no date set, default to today
+                                        if (isChecked && !formData.admissionClosedDate) {
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                admissionClosed: isChecked,
+                                                admissionClosedDate: format(new Date(), 'yyyy-MM-dd'),
+                                            }));
+                                        } else {
+                                            handleChange('admissionClosed', isChecked);
+                                        }
+                                    }}
                                     disabled={formData.leadStage === 'Admission'} // Auto-set when Admission
                                     color="success"
                                 />
@@ -455,6 +532,24 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             }
                         />
                     </Grid>
+
+                    {/* Admission Closed Date - Show when checkbox is checked */}
+                    {formData.admissionClosed && (
+                        <Grid item xs={12} md={6}>
+                            <TextField
+                                fullWidth
+                                type="date"
+                                label="Admission Closed Date"
+                                value={formData.admissionClosedDate}
+                                onChange={(e) => handleChange('admissionClosedDate', e.target.value)}
+                                InputLabelProps={{
+                                    shrink: true,
+                                }}
+                                helperText="When was the admission actually closed?"
+                                required
+                            />
+                        </Grid>
+                    )}
                 </Grid>
 
                 <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>

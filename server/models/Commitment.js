@@ -134,6 +134,9 @@ const CommitmentSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        expectedConversionDate: {
+            type: Date,
+        },
 
         // Management oversight
         commitmentVsAchieved: {

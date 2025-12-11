@@ -183,6 +183,8 @@ const ConsultantDetailDialog = ({ open, onClose, consultant, performanceData, lo
                                             <TableCell align="center">Probability</TableCell>
                                             <TableCell align="center">Achievement</TableCell>
                                             <TableCell align="center">Meetings</TableCell>
+                                            <TableCell align="center">Follow-up Date</TableCell>
+                                            <TableCell align="center">Expected Conversion</TableCell>
                                             <TableCell>Status</TableCell>
                                         </TableRow>
                                     </TableHead>
@@ -246,6 +248,29 @@ const ConsultantDetailDialog = ({ open, onClose, consultant, performanceData, lo
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell align="center">{commitment.meetingsDone || 0}</TableCell>
+
+                                                    {/* Follow-up Date */}
+                                                    <TableCell align="center">
+                                                        {commitment.followUpDate ? (
+                                                            <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
+                                                                {new Date(commitment.followUpDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                                                            </Typography>
+                                                        ) : (
+                                                            <Typography variant="body2" color="text.secondary">--</Typography>
+                                                        )}
+                                                    </TableCell>
+
+                                                    {/* Expected Conversion Date */}
+                                                    <TableCell align="center">
+                                                        {commitment.expectedConversionDate ? (
+                                                            <Typography variant="body2" sx={{ fontWeight: 500, color: 'warning.main' }}>
+                                                                {new Date(commitment.expectedConversionDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                                                            </Typography>
+                                                        ) : (
+                                                            <Typography variant="body2" color="text.secondary">--</Typography>
+                                                        )}
+                                                    </TableCell>
+
                                                     <TableCell>
                                                         {commitment.admissionClosed ? (
                                                             <Chip label="Closed" color="success" size="small" />
