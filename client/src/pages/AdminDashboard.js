@@ -23,6 +23,7 @@ import {
     MenuItem,
     CardActionArea,
     Avatar,
+    Tooltip as MuiTooltip,
 } from '@mui/material';
 import {
     Logout as LogoutIcon,
@@ -33,6 +34,7 @@ import {
     Comment as CommentIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
+    Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -824,6 +826,8 @@ const AdminDashboard = () => {
                                                     <TableCell align="center">Follow-up Date</TableCell>
                                                     <TableCell>Status</TableCell>
                                                     <TableCell align="center">Closed Date</TableCell>
+                                                    <TableCell align="center">TL Comments</TableCell>
+                                                    <TableCell align="center">Admin Comments</TableCell>
                                                     <TableCell align="center">Actions</TableCell>
                                                 </TableRow>
                                             </TableHead>
@@ -924,32 +928,80 @@ const AdminDashboard = () => {
                                                                     </Typography>
                                                                 )}
                                                             </TableCell>
+
+                                                            {/* TL Comments - Read Only for Admin */}
                                                             <TableCell align="center">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleOpenAdminComment(commitment)}
-                                                                    color={commitment.adminComment ? 'primary' : 'default'}
-                                                                    title={commitment.adminComment ? 'View/Edit Admin Comment' : 'Add Admin Comment'}
-                                                                >
-                                                                    {commitment.adminComment ? <CommentIcon /> : <EditIcon />}
-                                                                </IconButton>
+                                                                {commitment.correctiveActionByTL ? (
+                                                                    <MuiTooltip
+                                                                        title={
+                                                                            <Box sx={{ p: 1 }}>
+                                                                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                                    Team Lead Comment:
+                                                                                </Typography>
+                                                                                <Typography variant="body2">
+                                                                                    {commitment.correctiveActionByTL}
+                                                                                </Typography>
+                                                                            </Box>
+                                                                        }
+                                                                        arrow
+                                                                        placement="left"
+                                                                    >
+                                                                        <IconButton size="small" color="primary" disabled>
+                                                                            <VisibilityIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </MuiTooltip>
+                                                                ) : (
+                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
+                                                                )}
                                                             </TableCell>
+
+                                                            {/* Admin Comments - Editable */}
+                                                            <TableCell align="center">
+                                                                {commitment.adminComment ? (
+                                                                    <MuiTooltip
+                                                                        title={
+                                                                            <Box sx={{ p: 1 }}>
+                                                                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                                    Admin Comment:
+                                                                                </Typography>
+                                                                                <Typography variant="body2">
+                                                                                    {commitment.adminComment}
+                                                                                </Typography>
+                                                                            </Box>
+                                                                        }
+                                                                        arrow
+                                                                        placement="left"
+                                                                    >
+                                                                        <IconButton
+                                                                            size="small"
+                                                                            color="primary"
+                                                                            onClick={() => handleOpenAdminComment(commitment)}
+                                                                            title="View/Edit Admin Comment"
+                                                                        >
+                                                                            <VisibilityIcon fontSize="small" />
+                                                                        </IconButton>
+                                                                    </MuiTooltip>
+                                                                ) : (
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="action"
+                                                                        onClick={() => handleOpenAdminComment(commitment)}
+                                                                        title="Add Admin Comment"
+                                                                    >
+                                                                        <CommentIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                )}
+                                                            </TableCell>
+
+                                                            {/* Actions */}
                                                             <TableCell align="center">
                                                                 <IconButton
                                                                     size="small"
-                                                                    onClick={() => handleOpenAdminComment(commitment)}
                                                                     color="primary"
-                                                                    title="Edit Admin Comment"
+                                                                    onClick={() => handleOpenAdminComment(commitment)}
+                                                                    title="Edit/Add Admin Comment"
                                                                 >
-                                                                    <EditIcon />
-                                                                </IconButton>
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleDeleteCommitment(commitment._id)}
-                                                                    color="error"
-                                                                    title="Delete Commitment"
-                                                                >
-                                                                    <DeleteIcon />
+                                                                    <EditIcon fontSize="small" />
                                                                 </IconButton>
                                                             </TableCell>
                                                         </TableRow>
