@@ -187,7 +187,10 @@ const TeamLeadDashboard = () => {
         }
 
         if (filters.consultant) {
-            filtered = filtered.filter(c => c.consultantName === filters.consultant);
+            filtered = filtered.filter(c => {
+                const consultantName = c.consultantName || c.consultant?.name || '';
+                return consultantName.trim() === filters.consultant.trim();
+            });
         }
 
         setFilteredCommitments(filtered);
@@ -306,7 +309,7 @@ const TeamLeadDashboard = () => {
     };
 
     // Display commitments
-    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status
+    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant
         ? filteredCommitments
         : commitments;
 
@@ -778,7 +781,6 @@ const TeamLeadDashboard = () => {
                                                     <TableCell align="center">Achievement</TableCell>
                                                     <TableCell align="center">Meetings</TableCell>
                                                     <TableCell align="center">Follow-up Date</TableCell>
-                                                    <TableCell align="center">Expected Conversion</TableCell>
                                                     <TableCell>Status</TableCell>
                                                     <TableCell align="center">Closed Date</TableCell>
                                                     <TableCell align="center">TL Comments</TableCell>
@@ -870,17 +872,6 @@ const TeamLeadDashboard = () => {
                                                                 {commitment.followUpDate ? (
                                                                     <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
                                                                         {format(new Date(commitment.followUpDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Expected Conversion Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.expectedConversionDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'warning.main' }}>
-                                                                        {format(new Date(commitment.expectedConversionDate), 'MMM d, yyyy')}
                                                                     </Typography>
                                                                 ) : (
                                                                     <Typography variant="body2" color="text.secondary">--</Typography>
@@ -1049,6 +1040,13 @@ const TeamLeadDashboard = () => {
                 consultant={selectedConsultant}
                 performanceData={consultantPerformance}
                 loading={performanceLoading}
+                onEditCommitment={handleEditCommitment}
+                onOpenTLComment={(commitment) => {
+                    setSelectedCommitment(commitment);
+                    setCorrectiveAction(commitment.correctiveActionByTL || '');
+                    setCorrectiveDialogOpen(true);
+                }}
+                userRole="team_lead"
             />
 
             {/* Add/Edit Commitment Dialog */}

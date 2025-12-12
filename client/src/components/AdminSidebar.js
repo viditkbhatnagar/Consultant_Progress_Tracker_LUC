@@ -59,6 +59,25 @@ const AdminSidebar = ({ onExport, onLogout }) => {
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
 
+    // Personalize quote with user name for admin
+    const getPersonalizedQuote = (quote) => {
+        // Use "Bhanu" for display even if database has "Admin"
+        const displayName = user?.name === 'Admin' ? 'Bhanu' : (user?.name?.split(' ')[0] || 'Leader');
+        
+        // Add personalization for admin
+        const personalizations = [
+            `${quote} ${displayName}, lead with excellence!`,
+            `${displayName}, ${quote.toLowerCase()}`,
+            `${quote} - You're making a difference, ${displayName}!`,
+            `${displayName}: ${quote}`,
+            `${quote} Keep inspiring, ${displayName}!`,
+        ];
+        
+        // Randomly pick a personalization style
+        const style = currentQuoteIndex % personalizations.length;
+        return personalizations[style];
+    };
+
     // Rotate quotes every 10 seconds
     useEffect(() => {
         const interval = setInterval(() => {
@@ -224,24 +243,28 @@ const AdminSidebar = ({ onExport, onLogout }) => {
                 <Box
                     sx={{
                         mb: 2,
-                        p: 2,
-                        backgroundColor: 'rgba(160, 210, 235, 0.2)',
+                        p: 3,
+                        minHeight: '120px',
+                        backgroundColor: 'rgba(160, 210, 235, 0.3)',
                         borderRadius: 2,
-                        borderLeft: '3px solid #A0D2EB',
+                        borderLeft: '4px solid #A0D2EB',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                        <QuoteIcon sx={{ fontSize: 16, color: '#2C3E50', opacity: 0.6, mt: 0.5 }} />
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, width: '100%' }}>
+                        <QuoteIcon sx={{ fontSize: 20, color: '#2C3E50', opacity: 0.7, mt: 0.5, flexShrink: 0 }} />
                         <Typography
-                            variant="caption"
                             sx={{
                                 color: '#2C3E50',
-                                fontSize: '0.75rem',
-                                lineHeight: 1.4,
+                                fontSize: '0.9rem',
+                                lineHeight: 1.5,
                                 fontStyle: 'italic',
+                                fontWeight: 700,
                             }}
                         >
-                            {MOTIVATIONAL_QUOTES[currentQuoteIndex]}
+                            {getPersonalizedQuote(MOTIVATIONAL_QUOTES[currentQuoteIndex])}
                         </Typography>
                     </Box>
                 </Box>

@@ -427,44 +427,6 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         />
                     </Grid>
 
-                    {/* Expected Conversion Date */}
-                    <Grid item xs={12} md={6}>
-                        <TextField
-                            fullWidth
-                            type="date"
-                            label="Expected Conversion Date"
-                            value={formData.expectedConversionDate}
-                            onChange={(e) => {
-                                const selectedDate = e.target.value;
-                                const dayName = selectedDate ? format(new Date(selectedDate), 'EEEE') : '';
-                                setFormData(prev => ({
-                                    ...prev,
-                                    expectedConversionDate: selectedDate,
-                                    expectedConversionDay: dayName,
-                                }));
-                            }}
-                            InputLabelProps={{
-                                shrink: true,
-                            }}
-                            helperText="When do you expect the admission to be confirmed?"
-                        />
-                    </Grid>
-
-                    {/* Expected Conversion Day Display */}
-                    {formData.expectedConversionDate && (
-                        <Grid item xs={12} md={6}>
-                            <TextField
-                                fullWidth
-                                label="Expected Conversion Day"
-                                value={formData.expectedConversionDay}
-                                InputProps={{
-                                    readOnly: true,
-                                }}
-                                helperText="Automatically detected from the date"
-                            />
-                        </Grid>
-                    )}
-
                     {/* Conversion Probability Slider */}
                     <Grid item xs={12}>
                         <Box sx={{ px: 2 }}>

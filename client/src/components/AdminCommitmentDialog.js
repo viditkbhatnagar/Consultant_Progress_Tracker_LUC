@@ -14,8 +14,15 @@ import {
 import { AdminPanelSettings as AdminIcon, SupervisorAccount as TLIcon } from '@mui/icons-material';
 
 const AdminCommitmentDialog = ({ open, onClose, commitment, onSave }) => {
-    const [adminComment, setAdminComment] = useState(commitment?.adminComment || '');
+    const [adminComment, setAdminComment] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // Reset admin comment when commitment changes
+    React.useEffect(() => {
+        if (commitment) {
+            setAdminComment(commitment.adminComment || '');
+        }
+    }, [commitment]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -27,6 +34,11 @@ const AdminCommitmentDialog = ({ open, onClose, commitment, onSave }) => {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleClose = () => {
+        setAdminComment('');
+        onClose();
     };
 
     if (!commitment) return null;
@@ -112,7 +124,7 @@ const AdminCommitmentDialog = ({ open, onClose, commitment, onSave }) => {
                 </Box>
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose} disabled={saving}>
+                <Button onClick={handleClose} disabled={saving}>
                     Cancel
                 </Button>
                 <Button

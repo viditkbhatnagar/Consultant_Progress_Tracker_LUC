@@ -19,12 +19,22 @@ import {
     Chip,
     Avatar,
     CardActionArea,
+    IconButton,
+    Tooltip as MuiTooltip,
 } from '@mui/material';
+import {
+    Groups as GroupsIcon,
+    TrendingUp as TrendingUpIcon,
+    CheckCircle as CheckCircleIcon,
+    Edit as EditIcon,
+    Visibility as VisibilityIcon,
+    Comment as CommentIcon,
+} from '@mui/icons-material';
+import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getLeadStageColor, getAchievementColor } from '../utils/constants';
-import { Groups as GroupsIcon, TrendingUp as TrendingUpIcon } from '@mui/icons-material';
 
-const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick }) => {
+const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick, onEditCommitment, onOpenAdminComment }) => {
     if (!team) return null;
 
     // Calculate team stats
@@ -78,6 +88,199 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                 </Box>
             </DialogTitle>
             <DialogContent dividers>
+                {/* Recent Commitments Table - Moved to Top */}
+                <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                    All Team Commitments
+                </Typography>
+                <TableContainer sx={{ mb: 4 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Week</TableCell>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Day</TableCell>
+                                <TableCell>Time</TableCell>
+                                <TableCell>Consultant</TableCell>
+                                <TableCell>Student</TableCell>
+                                <TableCell>Description</TableCell>
+                                <TableCell>Lead Stage</TableCell>
+                                <TableCell align="center">Probability</TableCell>
+                                <TableCell align="center">Achievement</TableCell>
+                                <TableCell align="center">Meetings</TableCell>
+                                <TableCell align="center">Follow-up Date</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell align="center">Closed Date</TableCell>
+                                <TableCell align="center">TL Comments</TableCell>
+                                <TableCell align="center">Admin Comments</TableCell>
+                                <TableCell align="center">Actions</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {commitments.map((commitment) => {
+                                const commitmentDate = new Date(commitment.weekStartDate);
+                                const dayOfWeek = commitmentDate.toLocaleDateString('en-US', { weekday: 'long' });
+                                const dateFormatted = commitmentDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+                                const timeFormatted = commitment.createdAt
+                                    ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                                    : '--:--';
+                                const achievement = commitment.admissionClosed ? 100 : 0;
+
+                                return (
+                                    <TableRow key={commitment._id} hover>
+                                        <TableCell>W{commitment.weekNumber}</TableCell>
+                                        <TableCell>{dateFormatted}</TableCell>
+                                        <TableCell>{dayOfWeek}</TableCell>
+                                        <TableCell>{timeFormatted}</TableCell>
+                                        <TableCell>{commitment.consultantName}</TableCell>
+                                        <TableCell>{commitment.studentName || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                                                {commitment.commitmentMade}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={commitment.leadStage}
+                                                size="small"
+                                                sx={{
+                                                    backgroundColor: getLeadStageColor(commitment.leadStage),
+                                                    color: 'white',
+                                                    fontSize: '0.75rem',
+                                                }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color:
+                                                        (commitment.conversionProbability || 0) >= 70 ? '#4caf50' :
+                                                            (commitment.conversionProbability || 0) >= 40 ? '#ff9800' : '#f44336',
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                {commitment.conversionProbability || 0}%
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Typography
+                                                variant="body2"
+                                                sx={{
+                                                    color: achievement === 100 ? '#4caf50' : 'text.secondary',
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                {achievement}%
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell align="center">{commitment.meetingsDone || 0}</TableCell>
+                                        <TableCell align="center">
+                                            {commitment.followUpDate ? (
+                                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
+                                                    {format(new Date(commitment.followUpDate), 'MMM d, yyyy')}
+                                                </Typography>
+                                            ) : (
+                                                <Typography variant="body2" color="text.secondary">--</Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {commitment.admissionClosed ? (
+                                                <Chip
+                                                    label="Admitted & Closed"
+                                                    color="success"
+                                                    size="small"
+                                                    icon={<CheckCircleIcon />}
+                                                />
+                                            ) : (
+                                                <Chip label={commitment.status} size="small" variant="outlined" />
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {commitment.admissionClosedDate ? (
+                                                <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
+                                                    {format(new Date(commitment.admissionClosedDate), 'MMM d, yyyy')}
+                                                </Typography>
+                                            ) : (
+                                                <Typography variant="body2" color="text.secondary">-</Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {commitment.correctiveActionByTL ? (
+                                                <MuiTooltip
+                                                    title={
+                                                        <Box sx={{ p: 1 }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                Team Lead Comment:
+                                                            </Typography>
+                                                            <Typography variant="body2">
+                                                                {commitment.correctiveActionByTL}
+                                                            </Typography>
+                                                        </Box>
+                                                    }
+                                                    arrow
+                                                    placement="left"
+                                                >
+                                                    <IconButton size="small" color="primary">
+                                                        <VisibilityIcon fontSize="small" />
+                                                    </IconButton>
+                                                </MuiTooltip>
+                                            ) : (
+                                                <Typography variant="body2" color="text.secondary">--</Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            {commitment.adminComment ? (
+                                                <MuiTooltip
+                                                    title={
+                                                        <Box sx={{ p: 1 }}>
+                                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                Admin Comment:
+                                                            </Typography>
+                                                            <Typography variant="body2">
+                                                                {commitment.adminComment}
+                                                            </Typography>
+                                                        </Box>
+                                                    }
+                                                    arrow
+                                                    placement="left"
+                                                >
+                                                    <IconButton
+                                                        size="small"
+                                                        color="primary"
+                                                        onClick={() => onEditCommitment && onEditCommitment(commitment)}
+                                                        title="View/Edit Admin Comment"
+                                                    >
+                                                        <VisibilityIcon fontSize="small" />
+                                                    </IconButton>
+                                                </MuiTooltip>
+                                            ) : (
+                                                <IconButton
+                                                    size="small"
+                                                    color="action"
+                                                    onClick={() => onEditCommitment && onEditCommitment(commitment)}
+                                                    title="Add Admin Comment"
+                                                >
+                                                    <CommentIcon fontSize="small" />
+                                                </IconButton>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <IconButton
+                                                size="small"
+                                                color="primary"
+                                                onClick={() => onEditCommitment && onEditCommitment(commitment)}
+                                                title="Edit/Add Admin Comment"
+                                            >
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+
                 {/* Team Summary Stats */}
                 <Grid container spacing={2} sx={{ mb: 4 }}>
                     <Grid item xs={6} sm={3}>
@@ -219,98 +422,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick 
                     ))}
                 </Grid>
 
-                {/* Recent Commitments Table */}
-                <Typography variant="h6" gutterBottom>
-                    Recent Commitments
-                </Typography>
-                <TableContainer>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Week</TableCell>
-                                <TableCell>Date</TableCell>
-                                <TableCell>Day</TableCell>
-                                <TableCell>Time</TableCell>
-                                <TableCell>Consultant</TableCell>
-                                <TableCell>Student</TableCell>
-                                <TableCell>Description</TableCell>
-                                <TableCell>Lead Stage</TableCell>
-                                <TableCell align="center">Probability</TableCell>
-                                <TableCell align="center">Achievement</TableCell>
-                                <TableCell>Status</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {commitments.slice(0, 10).map((commitment) => {
-                                const commitmentDate = new Date(commitment.weekStartDate);
-                                const dayOfWeek = commitmentDate.toLocaleDateString('en-US', { weekday: 'long' });
-                                const dateFormatted = commitmentDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-                                const timeFormatted = commitment.createdAt
-                                    ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                                    : '--:--';
-                                const achievement = commitment.admissionClosed ? 100 : 0;
 
-                                return (
-                                    <TableRow key={commitment._id} hover>
-                                        <TableCell>W{commitment.weekNumber}</TableCell>
-                                        <TableCell>{dateFormatted}</TableCell>
-                                        <TableCell>{dayOfWeek}</TableCell>
-                                        <TableCell>{timeFormatted}</TableCell>
-                                        <TableCell>{commitment.consultantName}</TableCell>
-                                        <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-                                        <TableCell>
-                                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                                {commitment.commitmentMade}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={commitment.leadStage}
-                                                size="small"
-                                                sx={{
-                                                    backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                    color: 'white',
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            />
-                                        </TableCell>
-                                        <TableCell align="center">
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color:
-                                                        (commitment.conversionProbability || 0) >= 70 ? '#4caf50' :
-                                                            (commitment.conversionProbability || 0) >= 40 ? '#ff9800' : '#f44336',
-                                                    fontWeight: 600
-                                                }}
-                                            >
-                                                {commitment.conversionProbability || 0}%
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell align="center">
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: achievement === 100 ? '#4caf50' : 'text.secondary',
-                                                    fontWeight: 600
-                                                }}
-                                            >
-                                                {achievement}%
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            {commitment.admissionClosed ? (
-                                                <Chip label="Closed" color="success" size="small" />
-                                            ) : (
-                                                <Chip label={commitment.status} size="small" variant="outlined" />
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Close</Button>

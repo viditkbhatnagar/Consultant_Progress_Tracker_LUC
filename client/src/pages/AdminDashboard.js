@@ -219,7 +219,10 @@ const AdminDashboard = () => {
         }
 
         if (filters.consultant) {
-            filtered = filtered.filter(c => c.consultantName === filters.consultant);
+            filtered = filtered.filter(c => {
+                const consultantName = c.consultantName || c.consultant?.name || '';
+                return consultantName.trim() === filters.consultant.trim();
+            });
         }
 
         setFilteredCommitments(filtered);
@@ -407,7 +410,7 @@ const AdminDashboard = () => {
     };
 
     // Display commitments
-    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status
+    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant || filters.teamLead
         ? filteredCommitments
         : commitments;
 
@@ -819,7 +822,6 @@ const AdminDashboard = () => {
                                                     <TableCell align="center">Achievement</TableCell>
                                                     <TableCell align="center">Meetings</TableCell>
                                                     <TableCell align="center">Follow-up Date</TableCell>
-                                                    <TableCell align="center">Expected Conversion</TableCell>
                                                     <TableCell>Status</TableCell>
                                                     <TableCell align="center">Closed Date</TableCell>
                                                     <TableCell align="center">Actions</TableCell>
@@ -895,17 +897,6 @@ const AdminDashboard = () => {
                                                                 {commitment.followUpDate ? (
                                                                     <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
                                                                         {format(new Date(commitment.followUpDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Expected Conversion Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.expectedConversionDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'warning.main' }}>
-                                                                        {format(new Date(commitment.expectedConversionDate), 'MMM d, yyyy')}
                                                                     </Typography>
                                                                 ) : (
                                                                     <Typography variant="body2" color="text.secondary">--</Typography>
@@ -1151,6 +1142,8 @@ const AdminDashboard = () => {
                     team={selectedTeam}
                     commitments={teamCommitments}
                     onConsultantClick={handleConsultantClick}
+                    onEditCommitment={handleOpenAdminComment}
+                    onOpenAdminComment={handleOpenAdminComment}
                 />
 
                 {/* Consultant Detail Dialog */}
@@ -1164,6 +1157,12 @@ const AdminDashboard = () => {
                     consultant={selectedConsultant}
                     performanceData={consultantPerformance}
                     loading={performanceLoading}
+                    onEditCommitment={handleOpenAdminComment}
+                    onOpenTLComment={(commitment) => {
+                        // Admin can view TL comments but opens admin comment dialog
+                        handleOpenAdminComment(commitment);
+                    }}
+                    userRole="admin"
                 />
 
                 {/* Admin Comment Dialog */}
