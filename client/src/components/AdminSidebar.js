@@ -19,6 +19,7 @@ import {
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 
@@ -55,8 +56,6 @@ const MOTIVATIONAL_QUOTES = [
     "Make each day your masterpiece.",
     "The difference between ordinary and extraordinary is that little extra.",
 ];
-
-import { useNavigate } from 'react-router-dom';
 
 const AdminSidebar = ({ onExport, onLogout }) => {
     const navigate = useNavigate();
