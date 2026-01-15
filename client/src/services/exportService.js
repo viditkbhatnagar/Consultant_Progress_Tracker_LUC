@@ -120,10 +120,34 @@ export const exportToCSV = (data, filename = 'export') => {
     saveAs(blob, `${filename}_${format(new Date(), 'yyyy-MM-dd')}.csv`);
 };
 
+// Generic export to Excel
+export const exportToExcel = (data, filename = 'export') => {
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+
+    // Auto-size columns based on content
+    const colWidths = Object.keys(data[0] || {}).map(key => ({
+        wch: Math.max(
+            key.length,
+            ...data.map(row => String(row[key] || '').length)
+        ) + 2
+    }));
+    worksheet['!cols'] = colWidths;
+
+    // Generate Excel file
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    saveAs(blob, `${filename}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+};
+
 const exportService = {
     exportCommitmentsToExcel,
     exportSummaryToExcel,
     exportToCSV,
+    exportToExcel,
 };
 
 export default exportService;

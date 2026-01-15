@@ -7,6 +7,7 @@ import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import TeamLeadDashboard from './pages/TeamLeadDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import StudentDatabasePage from './pages/StudentDatabasePage';
 import theme from './theme';
 
 // Home redirect component
@@ -53,6 +54,16 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin']}>
                   <AdminDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Student Database - accessible by both admin and team_lead */}
+            <Route
+              path="/student-database"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <StudentDatabasePage />
                 </PrivateRoute>
               }
             />

@@ -17,6 +17,7 @@ import {
     Logout as LogoutIcon,
     Notifications as NotificationsIcon,
     FormatQuote as QuoteIcon,
+    School as SchoolIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -55,7 +56,10 @@ const MOTIVATIONAL_QUOTES = [
     "The difference between ordinary and extraordinary is that little extra.",
 ];
 
+import { useNavigate } from 'react-router-dom';
+
 const AdminSidebar = ({ onExport, onLogout }) => {
+    const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
 
@@ -203,6 +207,29 @@ const AdminSidebar = ({ onExport, onLogout }) => {
                         </ListItemIcon>
                         <ListItemText
                             primary="Dashboard"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={() => navigate('/student-database')}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <SchoolIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Student Database"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,
