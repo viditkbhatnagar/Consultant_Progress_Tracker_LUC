@@ -405,7 +405,7 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>University</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }} align="right">Course Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Source</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Campaign</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Campaign</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Enquiry Date</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Closing Date</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 100 }} align="center">Conv. Time</TableCell>
@@ -414,11 +414,11 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Residence</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 100 }}>Area</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Nationality</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Company</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 140 }}>Designation</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Company</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 180 }}>Designation</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 80 }} align="center">Exp</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Industry</TableCell>
-                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Dept</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Dept</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 100, position: 'sticky', right: 0 }} align="center">Actions</TableCell>
                                         </TableRow>
                                     </TableHead>
@@ -432,7 +432,7 @@ const StudentTable = ({
                                                     '&:hover': { backgroundColor: '#e3f2fd' }
                                                 }}
                                             >
-                                                <TableCell sx={{ fontWeight: 500 }}>{student.sno}</TableCell>
+                                                <TableCell sx={{ fontWeight: 500 }}>{index + 1}</TableCell>
                                                 <TableCell>{student.month}</TableCell>
                                                 <TableCell sx={{ fontWeight: 500 }}>{student.studentName}</TableCell>
                                                 <TableCell>
@@ -468,7 +468,7 @@ const StudentTable = ({
                                                 </TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.campaignName}>
-                                                        <Typography noWrap sx={{ maxWidth: 130 }}>
+                                                        <Typography noWrap sx={{ maxWidth: 180 }}>
                                                             {student.campaignName}
                                                         </Typography>
                                                     </Tooltip>
@@ -497,14 +497,14 @@ const StudentTable = ({
                                                 <TableCell>{student.nationality}</TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.companyName}>
-                                                        <Typography noWrap sx={{ maxWidth: 130 }}>
+                                                        <Typography noWrap sx={{ maxWidth: 180 }}>
                                                             {student.companyName}
                                                         </Typography>
                                                     </Tooltip>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.designation}>
-                                                        <Typography noWrap sx={{ maxWidth: 120 }}>
+                                                        <Typography noWrap sx={{ maxWidth: 160 }}>
                                                             {student.designation}
                                                         </Typography>
                                                     </Tooltip>
@@ -519,7 +519,7 @@ const StudentTable = ({
                                                 </TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.deptType}>
-                                                        <Typography noWrap sx={{ maxWidth: 100 }}>
+                                                        <Typography noWrap sx={{ maxWidth: 130 }}>
                                                             {student.deptType}
                                                         </Typography>
                                                     </Tooltip>
