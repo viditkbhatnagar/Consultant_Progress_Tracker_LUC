@@ -225,8 +225,27 @@ const StudentFormDialog = ({
         }
     }, [formData.university]);
 
+    // Fields that should be auto-capitalized
+    const textFieldsToCapitalize = [
+        'studentName',
+        'nationality',
+        'residence',
+        'area',
+        'campaignName',
+        'companyName',
+        'designation',
+        'industryType',
+        'deptType',
+    ];
+
     const handleChange = (field) => (event) => {
-        const value = event.target.value;
+        let value = event.target.value;
+        
+        // Auto-capitalize text fields
+        if (textFieldsToCapitalize.includes(field)) {
+            value = value.toUpperCase();
+        }
+        
         setFormData(prev => ({ ...prev, [field]: value }));
 
         if (field === 'consultantName') {
