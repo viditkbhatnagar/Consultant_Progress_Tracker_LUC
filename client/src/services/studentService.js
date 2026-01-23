@@ -6,15 +6,16 @@ const API_URL = `${API_BASE_URL}/students`;
 // Get all students with optional filters
 const getStudents = async (filters = {}) => {
     const params = new URLSearchParams();
-    
+
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
     if (filters.consultant) params.append('consultant', filters.consultant);
     if (filters.university) params.append('university', filters.university);
-    
+    if (filters.team) params.append('team', filters.team);
+
     const queryString = params.toString();
     const url = queryString ? `${API_URL}?${queryString}` : API_URL;
-    
+
     const response = await axios.get(url);
     return response.data;
 };
