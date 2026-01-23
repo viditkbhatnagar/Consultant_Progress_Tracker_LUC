@@ -66,6 +66,7 @@ const StudentTable = ({
         endDate: endOfMonth(new Date()),
         consultant: '',
         university: '',
+        team: '',
         search: '',
     });
     const [showFilters, setShowFilters] = useState(true);
@@ -79,6 +80,7 @@ const StudentTable = ({
                 endDate: filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : undefined,
                 consultant: filters.consultant || undefined,
                 university: filters.university || undefined,
+                team: filters.team || undefined,
             });
             setStudents(response.data || []);
             setError('');
@@ -87,7 +89,7 @@ const StudentTable = ({
         } finally {
             setLoading(false);
         }
-    }, [filters.startDate, filters.endDate, filters.consultant, filters.university]);
+    }, [filters.startDate, filters.endDate, filters.consultant, filters.university, filters.team]);
 
     useEffect(() => {
         loadStudents();
@@ -121,6 +123,7 @@ const StudentTable = ({
             endDate: endOfMonth(new Date()),
             consultant: '',
             university: '',
+            team: '',
             search: '',
         });
     };
@@ -315,6 +318,25 @@ const StudentTable = ({
                                         </option>
                                     ))}
                                 </TextField>
+                                {currentUserRole === 'admin' && (
+                                    <TextField
+                                        select
+                                        label="Team"
+                                        value={filters.team}
+                                        onChange={handleFilterChange('team')}
+                                        size="small"
+                                        sx={{ minWidth: 180 }}
+                                        InputLabelProps={{ shrink: true }}
+                                        SelectProps={{ native: true }}
+                                    >
+                                        <option value="">All Teams</option>
+                                        {teamLeads.map(tl => (
+                                            <option key={tl._id} value={tl.teamName}>
+                                                {tl.teamName}
+                                            </option>
+                                        ))}
+                                    </TextField>
+                                )}
                                 <TextField
                                     select
                                     label="University"

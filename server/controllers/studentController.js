@@ -8,7 +8,7 @@ const User = require('../models/User');
 exports.getStudents = async (req, res, next) => {
     try {
         let query;
-        const { startDate, endDate, consultant, university } = req.query;
+        const { startDate, endDate, consultant, university, team } = req.query;
 
         // Build filter based on role
         let filter = {};
@@ -35,6 +35,11 @@ exports.getStudents = async (req, res, next) => {
         // University filter
         if (university) {
             filter.university = university;
+        }
+
+        // Team filter (for admin only)
+        if (team && req.user.role === 'admin') {
+            filter.teamName = team;
         }
 
         query = Student.find(filter)
