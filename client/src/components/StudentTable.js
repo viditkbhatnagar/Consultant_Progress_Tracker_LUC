@@ -171,6 +171,7 @@ const StudentTable = ({
             'Program': student.program,
             'University': student.university,
             'Course Fee (AED)': student.courseFee,
+            'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
@@ -181,6 +182,7 @@ const StudentTable = ({
             'Residence': student.residence,
             'Area': student.area,
             'Nationality': student.nationality,
+            'Region/Country': student.region,
             'Company Name': student.companyName,
             'Designation': student.designation,
             'Experience (Years)': student.experience,
@@ -201,6 +203,7 @@ const StudentTable = ({
             'Program': student.program,
             'University': student.university,
             'Course Fee (AED)': student.courseFee,
+            'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
@@ -211,6 +214,7 @@ const StudentTable = ({
             'Residence': student.residence,
             'Area': student.area,
             'Nationality': student.nationality,
+            'Region/Country': student.region,
             'Company Name': student.companyName,
             'Designation': student.designation,
             'Experience (Years)': student.experience,
@@ -426,6 +430,7 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Program</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>University</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }} align="right">Course Fee</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 130 }} align="right">Admission Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Source</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Campaign</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Enquiry Date</TableCell>
@@ -436,6 +441,7 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Residence</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 100 }}>Area</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Nationality</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Region/Country</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Company</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 180 }}>Designation</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 80 }} align="center">Exp</TableCell>
@@ -485,6 +491,9 @@ const StudentTable = ({
                                                 <TableCell align="right" sx={{ fontWeight: 600, color: '#2e7d32' }}>
                                                     AED {student.courseFee?.toLocaleString()}
                                                 </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 600, color: '#1565c0' }}>
+                                                    AED {student.admissionFeePaid?.toLocaleString() || 0}
+                                                </TableCell>
                                                 <TableCell>
                                                     <Chip label={student.source} size="small" />
                                                 </TableCell>
@@ -517,6 +526,7 @@ const StudentTable = ({
                                                 <TableCell>{student.residence}</TableCell>
                                                 <TableCell>{student.area}</TableCell>
                                                 <TableCell>{student.nationality}</TableCell>
+                                                <TableCell>{student.region}</TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.companyName}>
                                                         <Typography noWrap sx={{ maxWidth: 180 }}>

@@ -12,6 +12,7 @@ import {
     InputAdornment,
     CircularProgress,
     Divider,
+    Autocomplete,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -27,14 +28,36 @@ const UNIVERSITIES = [
     'OTHM',
 ];
 
-// Programs by university
+// Common programs available across all universities
+const COMMON_PROGRAMS = [
+    'MBA',
+    'BBA',
+    'BSc',
+    'DBA',
+    'OTHM L7 + MBA',
+    'OTHM + BBA',
+    'OTHM + BSC',
+    'MBA Premium',
+    'BSc Premium',
+    'BBA Premium',
+    'DBA Premium',
+    'OTHM Diploma Extended L5',
+    'OTHM Diploma Level 3',
+    'OTHM Diploma Level 4',
+    'OTHM Diploma Level 5',
+    'OTHM Diploma Level 6',
+    'OTHM Diploma Level 7',
+    'IoSCM',
+    'UniFash',
+    'AGI Standalone Certificate',
+    'AGI Standalone Manager',
+];
+
+// Programs by university (includes common programs + university-specific ones)
 const PROGRAMS_BY_UNIVERSITY = {
     'Swiss School of Management (SSM)': [
-        'MBA',
-        'DBA',
-        'BBA',
+        ...COMMON_PROGRAMS,
         'Ext L5 + BBA',
-        'OTHM L7 + MBA',
         'OTHM L7+SSM MBA',
         'MBA General',
         'MBA Others',
@@ -51,8 +74,7 @@ const PROGRAMS_BY_UNIVERSITY = {
         'Other',
     ],
     'Knights College': [
-        'MBA',
-        'BSC',
+        ...COMMON_PROGRAMS,
         'MBA + Premium',
         'OTHM+BSC',
         'MBA OTHM Level 7',
@@ -63,10 +85,11 @@ const PROGRAMS_BY_UNIVERSITY = {
         'Other',
     ],
     'Malaysia University of Science & Technology (MUST)': [
-        'MBA',
+        ...COMMON_PROGRAMS,
         'Other',
     ],
     'AGI – American Global Institute (Certifications)': [
+        ...COMMON_PROGRAMS,
         'Pathway Program Certification',
         'Standalone – Professional Certification',
         'Standalone – Manager Certification',
@@ -78,18 +101,16 @@ const PROGRAMS_BY_UNIVERSITY = {
         'Other',
     ],
     'CMBS': [
-        'MBA',
+        ...COMMON_PROGRAMS,
         'BSC',
-        'BSc',
         'B.Sc',
-        'BBA',
         'Ext L5 + BBA',
         'Ext L5 + B.Sc',
         'Ext lev 5+ Bsc',
-        'OTHM L7 + MBA',
         'Other',
     ],
     'OTHM': [
+        ...COMMON_PROGRAMS,
         'Level 4 & 5',
         'Level 6',
         'Level 7',
@@ -122,6 +143,34 @@ const SOURCES = [
 // Gender options
 const GENDERS = ['Male', 'Female'];
 
+// Countries list
+const COUNTRIES = [
+    'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia',
+    'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium',
+    'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei',
+    'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde',
+    'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica',
+    'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+    'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia',
+    'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada',
+    'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India',
+    'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory Coast', 'Jamaica', 'Japan', 'Jordan',
+    'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho',
+    'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar', 'Malawi', 'Malaysia',
+    'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia',
+    'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru',
+    'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia',
+    'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru',
+    'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis',
+    'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe',
+    'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia',
+    'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka',
+    'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand',
+    'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+    'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan',
+    'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe',
+];
+
 const StudentFormDialog = ({
     open,
     onClose,
@@ -138,6 +187,7 @@ const StudentFormDialog = ({
         university: '',
         program: '',
         courseFee: '',
+        admissionFeePaid: '',
         source: '',
         campaignName: '',
         enquiryDate: null,
@@ -147,6 +197,7 @@ const StudentFormDialog = ({
         residence: '',
         area: '',
         nationality: '',
+        region: '',
         companyName: '',
         designation: '',
         experience: '',
@@ -167,6 +218,7 @@ const StudentFormDialog = ({
                 university: student.university || '',
                 program: student.program || '',
                 courseFee: student.courseFee || '',
+                admissionFeePaid: student.admissionFeePaid || '',
                 source: student.source || '',
                 campaignName: student.campaignName || '',
                 enquiryDate: student.enquiryDate ? new Date(student.enquiryDate) : null,
@@ -176,6 +228,7 @@ const StudentFormDialog = ({
                 residence: student.residence || '',
                 area: student.area || '',
                 nationality: student.nationality || '',
+                region: student.region || '',
                 companyName: student.companyName || '',
                 designation: student.designation || '',
                 experience: student.experience || '',
@@ -193,6 +246,7 @@ const StudentFormDialog = ({
                 university: '',
                 program: '',
                 courseFee: '',
+                admissionFeePaid: '',
                 source: '',
                 campaignName: '',
                 enquiryDate: null,
@@ -202,6 +256,7 @@ const StudentFormDialog = ({
                 residence: '',
                 area: '',
                 nationality: '',
+                region: '',
                 companyName: '',
                 designation: '',
                 experience: '',
@@ -279,7 +334,7 @@ const StudentFormDialog = ({
         const requiredFields = [
             'studentName', 'gender', 'university', 'program', 'courseFee',
             'source', 'campaignName', 'enquiryDate', 'closingDate', 'consultantName',
-            'residence', 'area', 'nationality', 'companyName', 'designation',
+            'residence', 'area', 'nationality', 'region', 'companyName', 'designation',
             'experience', 'industryType', 'deptType'
         ];
 
@@ -310,6 +365,7 @@ const StudentFormDialog = ({
             await onSave({
                 ...formData,
                 courseFee: Number(formData.courseFee),
+                admissionFeePaid: Number(formData.admissionFeePaid) || 0,
                 experience: Number(formData.experience),
             });
             onClose();
@@ -400,6 +456,28 @@ const StudentFormDialog = ({
                                 required
                                 placeholder="e.g., UAE, India"
                             />
+                            <Autocomplete
+                                sx={fieldStyle}
+                                options={COUNTRIES}
+                                value={formData.region || null}
+                                onChange={(event, newValue) => {
+                                    setFormData(prev => ({ ...prev, region: newValue || '' }));
+                                }}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        label="Region/Country"
+                                        required
+                                        placeholder="Search country..."
+                                    />
+                                )}
+                                isOptionEqualToValue={(option, value) => option === value}
+                                autoHighlight
+                                openOnFocus
+                            />
+                        </Box>
+
+                        <Box sx={rowStyle}>
                             <TextField
                                 sx={fieldStyle}
                                 label="Residence"
@@ -459,18 +537,31 @@ const StudentFormDialog = ({
                             ))}
                         </TextField>
 
-                        <TextField
-                            sx={{ width: '50%', minWidth: 200 }}
-                            label="Course Fee"
-                            type="number"
-                            value={formData.courseFee}
-                            onChange={handleChange('courseFee')}
-                            required
-                            placeholder="Enter amount"
-                            InputProps={{
-                                startAdornment: <InputAdornment position="start">AED</InputAdornment>,
-                            }}
-                        />
+                        <Box sx={rowStyle}>
+                            <TextField
+                                sx={fieldStyle}
+                                label="Course Fee"
+                                type="number"
+                                value={formData.courseFee}
+                                onChange={handleChange('courseFee')}
+                                required
+                                placeholder="Enter amount"
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">AED</InputAdornment>,
+                                }}
+                            />
+                            <TextField
+                                sx={fieldStyle}
+                                label="Admission Fee Paid"
+                                type="number"
+                                value={formData.admissionFeePaid}
+                                onChange={handleChange('admissionFeePaid')}
+                                placeholder="Enter amount paid"
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">AED</InputAdornment>,
+                                }}
+                            />
+                        </Box>
                     </Box>
 
                     {/* Section 3: Lead Source & Campaign */}
