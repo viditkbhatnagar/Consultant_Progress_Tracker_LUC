@@ -43,6 +43,11 @@ const StudentSchema = new mongoose.Schema({
         required: [true, 'Please enter course fee'],
         min: 0,
     },
+    admissionFeePaid: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
     source: {
         type: String,
         enum: [
@@ -121,6 +126,11 @@ const StudentSchema = new mongoose.Schema({
     nationality: {
         type: String,
         required: [true, 'Please enter nationality'],
+        trim: true,
+    },
+    region: {
+        type: String,
+        default: '',
         trim: true,
     },
     companyName: {
