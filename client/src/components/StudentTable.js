@@ -168,11 +168,14 @@ const StudentTable = ({
             'Month': student.month,
             'Student Name': student.studentName,
             'Gender': student.gender,
+            'Phone': student.phone,
+            'Email': student.email,
             'Program': student.program,
             'University': student.university,
             'Course Fee (AED)': student.courseFee,
             'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
+            'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
             'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'yyyy-MM-dd') : '',
@@ -200,11 +203,14 @@ const StudentTable = ({
             'Month': student.month,
             'Student Name': student.studentName,
             'Gender': student.gender,
+            'Phone': student.phone,
+            'Email': student.email,
             'Program': student.program,
             'University': student.university,
             'Course Fee (AED)': student.courseFee,
             'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
+            'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
             'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'yyyy-MM-dd') : '',
@@ -427,11 +433,14 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 100 }}>Month</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 180 }}>Student Name</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 80 }}>Gender</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 140 }}>Phone</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Email</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Program</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>University</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }} align="right">Course Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 130 }} align="right">Admission Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Source</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Referred By</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Campaign</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Enquiry Date</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Closing Date</TableCell>
@@ -462,14 +471,22 @@ const StudentTable = ({
                                             >
                                                 <TableCell sx={{ fontWeight: 500 }}>{index + 1}</TableCell>
                                                 <TableCell>{student.month}</TableCell>
-                                                <TableCell sx={{ fontWeight: 500 }}>{student.studentName}</TableCell>
+                                                <TableCell sx={{ fontWeight: 600, fontFamily: '"Georgia", "Times New Roman", serif', fontSize: '0.95rem' }}>{student.studentName}</TableCell>
                                                 <TableCell>
-                                                    <Chip 
-                                                        label={student.gender} 
-                                                        size="small" 
+                                                    <Chip
+                                                        label={student.gender}
+                                                        size="small"
                                                         color={student.gender === 'Male' ? 'primary' : 'secondary'}
                                                         variant="outlined"
                                                     />
+                                                </TableCell>
+                                                <TableCell>{student.phone}</TableCell>
+                                                <TableCell>
+                                                    <Tooltip title={student.email || ''}>
+                                                        <Typography noWrap sx={{ maxWidth: 180 }}>
+                                                            {student.email}
+                                                        </Typography>
+                                                    </Tooltip>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.program}>
@@ -497,6 +514,7 @@ const StudentTable = ({
                                                 <TableCell>
                                                     <Chip label={student.source} size="small" />
                                                 </TableCell>
+                                                <TableCell>{student.referredBy || '-'}</TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.campaignName}>
                                                         <Typography noWrap sx={{ maxWidth: 180 }}>

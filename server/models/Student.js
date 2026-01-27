@@ -21,6 +21,17 @@ const StudentSchema = new mongoose.Schema({
         enum: ['Male', 'Female'],
         required: [true, 'Please select gender'],
     },
+    phone: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    email: {
+        type: String,
+        default: '',
+        trim: true,
+        lowercase: true,
+    },
     program: {
         type: String,
         required: [true, 'Please select program'],
@@ -66,6 +77,11 @@ const StudentSchema = new mongoose.Schema({
             'Open Day',
         ],
         required: [true, 'Please select source'],
+    },
+    referredBy: {
+        type: String,
+        default: '',
+        trim: true,
     },
     campaignName: {
         type: String,
