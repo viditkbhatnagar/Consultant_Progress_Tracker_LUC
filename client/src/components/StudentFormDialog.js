@@ -143,6 +143,80 @@ const SOURCES = [
 // Gender options
 const GENDERS = ['Male', 'Female'];
 
+// Country codes with names for searchable dropdown
+const COUNTRY_CODES = [
+    { code: '+971', country: 'UAE', label: '+971 (UAE)' },
+    { code: '+966', country: 'Saudi Arabia', label: '+966 (Saudi Arabia)' },
+    { code: '+974', country: 'Qatar', label: '+974 (Qatar)' },
+    { code: '+965', country: 'Kuwait', label: '+965 (Kuwait)' },
+    { code: '+973', country: 'Bahrain', label: '+973 (Bahrain)' },
+    { code: '+968', country: 'Oman', label: '+968 (Oman)' },
+    { code: '+91', country: 'India', label: '+91 (India)' },
+    { code: '+92', country: 'Pakistan', label: '+92 (Pakistan)' },
+    { code: '+63', country: 'Philippines', label: '+63 (Philippines)' },
+    { code: '+20', country: 'Egypt', label: '+20 (Egypt)' },
+    { code: '+962', country: 'Jordan', label: '+962 (Jordan)' },
+    { code: '+961', country: 'Lebanon', label: '+961 (Lebanon)' },
+    { code: '+964', country: 'Iraq', label: '+964 (Iraq)' },
+    { code: '+98', country: 'Iran', label: '+98 (Iran)' },
+    { code: '+90', country: 'Turkey', label: '+90 (Turkey)' },
+    { code: '+44', country: 'UK', label: '+44 (UK)' },
+    { code: '+1', country: 'USA/Canada', label: '+1 (USA/Canada)' },
+    { code: '+61', country: 'Australia', label: '+61 (Australia)' },
+    { code: '+49', country: 'Germany', label: '+49 (Germany)' },
+    { code: '+33', country: 'France', label: '+33 (France)' },
+    { code: '+39', country: 'Italy', label: '+39 (Italy)' },
+    { code: '+34', country: 'Spain', label: '+34 (Spain)' },
+    { code: '+31', country: 'Netherlands', label: '+31 (Netherlands)' },
+    { code: '+32', country: 'Belgium', label: '+32 (Belgium)' },
+    { code: '+41', country: 'Switzerland', label: '+41 (Switzerland)' },
+    { code: '+43', country: 'Austria', label: '+43 (Austria)' },
+    { code: '+46', country: 'Sweden', label: '+46 (Sweden)' },
+    { code: '+47', country: 'Norway', label: '+47 (Norway)' },
+    { code: '+45', country: 'Denmark', label: '+45 (Denmark)' },
+    { code: '+358', country: 'Finland', label: '+358 (Finland)' },
+    { code: '+48', country: 'Poland', label: '+48 (Poland)' },
+    { code: '+7', country: 'Russia', label: '+7 (Russia)' },
+    { code: '+86', country: 'China', label: '+86 (China)' },
+    { code: '+81', country: 'Japan', label: '+81 (Japan)' },
+    { code: '+82', country: 'South Korea', label: '+82 (South Korea)' },
+    { code: '+65', country: 'Singapore', label: '+65 (Singapore)' },
+    { code: '+60', country: 'Malaysia', label: '+60 (Malaysia)' },
+    { code: '+62', country: 'Indonesia', label: '+62 (Indonesia)' },
+    { code: '+66', country: 'Thailand', label: '+66 (Thailand)' },
+    { code: '+84', country: 'Vietnam', label: '+84 (Vietnam)' },
+    { code: '+94', country: 'Sri Lanka', label: '+94 (Sri Lanka)' },
+    { code: '+880', country: 'Bangladesh', label: '+880 (Bangladesh)' },
+    { code: '+977', country: 'Nepal', label: '+977 (Nepal)' },
+    { code: '+27', country: 'South Africa', label: '+27 (South Africa)' },
+    { code: '+234', country: 'Nigeria', label: '+234 (Nigeria)' },
+    { code: '+254', country: 'Kenya', label: '+254 (Kenya)' },
+    { code: '+255', country: 'Tanzania', label: '+255 (Tanzania)' },
+    { code: '+256', country: 'Uganda', label: '+256 (Uganda)' },
+    { code: '+251', country: 'Ethiopia', label: '+251 (Ethiopia)' },
+    { code: '+212', country: 'Morocco', label: '+212 (Morocco)' },
+    { code: '+213', country: 'Algeria', label: '+213 (Algeria)' },
+    { code: '+216', country: 'Tunisia', label: '+216 (Tunisia)' },
+    { code: '+55', country: 'Brazil', label: '+55 (Brazil)' },
+    { code: '+52', country: 'Mexico', label: '+52 (Mexico)' },
+    { code: '+54', country: 'Argentina', label: '+54 (Argentina)' },
+    { code: '+57', country: 'Colombia', label: '+57 (Colombia)' },
+    { code: '+56', country: 'Chile', label: '+56 (Chile)' },
+    { code: '+51', country: 'Peru', label: '+51 (Peru)' },
+    { code: '+64', country: 'New Zealand', label: '+64 (New Zealand)' },
+    { code: '+353', country: 'Ireland', label: '+353 (Ireland)' },
+    { code: '+351', country: 'Portugal', label: '+351 (Portugal)' },
+    { code: '+30', country: 'Greece', label: '+30 (Greece)' },
+    { code: '+36', country: 'Hungary', label: '+36 (Hungary)' },
+    { code: '+420', country: 'Czech Republic', label: '+420 (Czech Republic)' },
+    { code: '+40', country: 'Romania', label: '+40 (Romania)' },
+    { code: '+380', country: 'Ukraine', label: '+380 (Ukraine)' },
+    { code: '+375', country: 'Belarus', label: '+375 (Belarus)' },
+    { code: '+370', country: 'Lithuania', label: '+370 (Lithuania)' },
+    { code: '+371', country: 'Latvia', label: '+371 (Latvia)' },
+    { code: '+372', country: 'Estonia', label: '+372 (Estonia)' },
+];
+
 // Countries list
 const COUNTRIES = [
     'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia',
@@ -184,11 +258,14 @@ const StudentFormDialog = ({
     const [formData, setFormData] = useState({
         studentName: '',
         gender: '',
+        phone: '',
+        email: '',
         university: '',
         program: '',
         courseFee: '',
         admissionFeePaid: '',
         source: '',
+        referredBy: '',
         campaignName: '',
         enquiryDate: null,
         closingDate: null,
@@ -215,11 +292,14 @@ const StudentFormDialog = ({
             setFormData({
                 studentName: student.studentName || '',
                 gender: student.gender || '',
+                phone: student.phone || '',
+                email: student.email || '',
                 university: student.university || '',
                 program: student.program || '',
                 courseFee: student.courseFee || '',
                 admissionFeePaid: student.admissionFeePaid || '',
                 source: student.source || '',
+                referredBy: student.referredBy || '',
                 campaignName: student.campaignName || '',
                 enquiryDate: student.enquiryDate ? new Date(student.enquiryDate) : null,
                 closingDate: student.closingDate ? new Date(student.closingDate) : null,
@@ -243,11 +323,14 @@ const StudentFormDialog = ({
             setFormData({
                 studentName: '',
                 gender: '',
+                phone: '',
+                email: '',
                 university: '',
                 program: '',
                 courseFee: '',
                 admissionFeePaid: '',
                 source: '',
+                referredBy: '',
                 campaignName: '',
                 enquiryDate: null,
                 closingDate: null,
@@ -286,6 +369,7 @@ const StudentFormDialog = ({
         'nationality',
         'residence',
         'area',
+        'referredBy',
         'campaignName',
         'companyName',
         'designation',
@@ -332,7 +416,7 @@ const StudentFormDialog = ({
 
     const validateForm = () => {
         const requiredFields = [
-            'studentName', 'gender', 'university', 'program', 'courseFee',
+            'studentName', 'gender', 'phone', 'email', 'university', 'program', 'courseFee',
             'source', 'campaignName', 'enquiryDate', 'closingDate', 'consultantName',
             'residence', 'area', 'nationality', 'region', 'companyName', 'designation',
             'experience', 'industryType', 'deptType'
@@ -445,6 +529,66 @@ const StudentFormDialog = ({
                                     <option key={g} value={g}>{g}</option>
                                 ))}
                             </TextField>
+                        </Box>
+
+                        <Box sx={rowStyle}>
+                            <Box sx={{ display: 'flex', gap: 1, flex: 1, minWidth: 200 }}>
+                                <Autocomplete
+                                    sx={{ width: 180 }}
+                                    options={COUNTRY_CODES}
+                                    getOptionLabel={(option) => option.label || ''}
+                                    value={COUNTRY_CODES.find(c => formData.phone?.startsWith(c.code)) || COUNTRY_CODES[0]}
+                                    onChange={(event, newValue) => {
+                                        const currentNumber = formData.phone?.replace(/^\+\d+\s*/, '') || '';
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            phone: newValue ? `${newValue.code} ${currentNumber}` : currentNumber
+                                        }));
+                                    }}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Code"
+                                            required
+                                            placeholder="Search..."
+                                        />
+                                    )}
+                                    isOptionEqualToValue={(option, value) => option.code === value?.code}
+                                    autoHighlight
+                                    openOnFocus
+                                    filterOptions={(options, { inputValue }) => {
+                                        const filterValue = inputValue.toLowerCase();
+                                        return options.filter(
+                                            option =>
+                                                option.code.includes(filterValue) ||
+                                                option.country.toLowerCase().includes(filterValue)
+                                        );
+                                    }}
+                                />
+                                <TextField
+                                    sx={{ flex: 1 }}
+                                    label="Phone Number"
+                                    value={formData.phone?.replace(/^\+\d+\s*/, '') || ''}
+                                    onChange={(e) => {
+                                        const countryCode = COUNTRY_CODES.find(c => formData.phone?.startsWith(c.code))?.code || '+971';
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            phone: `${countryCode} ${e.target.value}`
+                                        }));
+                                    }}
+                                    required
+                                    placeholder="50 123 4567"
+                                />
+                            </Box>
+                            <TextField
+                                sx={fieldStyle}
+                                label="Email"
+                                type="email"
+                                value={formData.email}
+                                onChange={handleChange('email')}
+                                required
+                                placeholder="e.g., student@example.com"
+                            />
                         </Box>
 
                         <Box sx={rowStyle}>
@@ -570,7 +714,7 @@ const StudentFormDialog = ({
                             Lead Source & Campaign
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
-                        
+
                         <Box sx={rowStyle}>
                             <TextField
                                 sx={fieldStyle}
@@ -589,13 +733,20 @@ const StudentFormDialog = ({
                             </TextField>
                             <TextField
                                 sx={fieldStyle}
-                                label="Campaign Name"
-                                value={formData.campaignName}
-                                onChange={handleChange('campaignName')}
-                                required
-                                placeholder="Enter campaign name"
+                                label="Referred By"
+                                value={formData.referredBy}
+                                onChange={handleChange('referredBy')}
+                                placeholder="Enter referrer name"
                             />
                         </Box>
+                        <TextField
+                            sx={fullWidthStyle}
+                            label="Campaign Name"
+                            value={formData.campaignName}
+                            onChange={handleChange('campaignName')}
+                            required
+                            placeholder="Enter campaign name"
+                        />
                     </Box>
 
                     {/* Section 4: Dates & Conversion */}
