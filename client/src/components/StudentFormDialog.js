@@ -807,7 +807,33 @@ const StudentFormDialog = ({
                                 select
                                 label="Consultant"
                                 value={formData.consultantName}
-                                onChange={handleChange('consultantName')}
+                                onChange={(e) => {
+                                    const selectedName = e.target.value;
+                                    const selectedConsultant = consultants.find(c => c.name === selectedName);
+                                    const selectedTeamLead = teamLeads?.find(tl => tl.name === selectedName);
+
+                                    if (selectedTeamLead) {
+                                        // If a team lead is selected, auto-fill teamLeadId, consultant stays null
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            consultantName: selectedName,
+                                            consultantId: '', // TL is not a consultant, so no consultantId
+                                            teamLeadId: selectedTeamLead._id,
+                                        }));
+                                    } else if (selectedConsultant) {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            consultantName: selectedName,
+                                            consultantId: selectedConsultant._id,
+                                        }));
+                                    } else {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            consultantName: selectedName,
+                                            consultantId: '',
+                                        }));
+                                    }
+                                }}
                                 required
                                 InputLabelProps={{ shrink: true }}
                                 SelectProps={{ native: true }}
@@ -816,8 +842,14 @@ const StudentFormDialog = ({
                                 {consultants.map(c => (
                                     <option key={c._id || c.name} value={c.name}>{c.name}</option>
                                 ))}
+                                {teamLeads?.length > 0 && (
+                                    <option disabled>── Team Leads ──</option>
+                                )}
+                                {teamLeads?.map(tl => (
+                                    <option key={`tl-${tl._id}`} value={tl.name}>{tl.name} (TL)</option>
+                                ))}
                             </TextField>
-                            
+
                             {currentUserRole === 'admin' && (
                                 <TextField
                                     sx={fieldStyle}

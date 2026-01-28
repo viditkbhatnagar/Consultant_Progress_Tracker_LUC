@@ -34,9 +34,10 @@ const StudentDatabasePage = () => {
         }
     }, []);
 
-    // Load team leads (only for admin)
+    // Load team leads
     const loadTeamLeads = useCallback(async () => {
         if (user?.role === 'admin') {
+            // Admin can see all team leads
             try {
                 const data = await getUsers();
                 const users = data.data || data || [];
@@ -44,8 +45,16 @@ const StudentDatabasePage = () => {
             } catch (err) {
                 console.error('Failed to load team leads:', err);
             }
+        } else if (user?.role === 'team_lead') {
+            // Team lead can see themselves as an option
+            setTeamLeads([{
+                _id: user._id,
+                name: user.name,
+                teamName: user.teamName,
+                role: 'team_lead'
+            }]);
         }
-    }, [user?.role]);
+    }, [user]);
 
     useEffect(() => {
         loadConsultants();
