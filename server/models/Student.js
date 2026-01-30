@@ -218,5 +218,8 @@ StudentSchema.statics.getNextSno = async function (teamLeadId) {
 StudentSchema.index({ teamLead: 1, closingDate: -1 });
 StudentSchema.index({ consultantName: 1 });
 StudentSchema.index({ closingDate: -1 });
+StudentSchema.index({ month: 1 });
+StudentSchema.index({ source: 1 });
+StudentSchema.index({ program: 1 });
 
 module.exports = mongoose.model('Student', StudentSchema);

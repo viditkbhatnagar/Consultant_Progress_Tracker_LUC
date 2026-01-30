@@ -20,6 +20,8 @@ import {
     Menu,
     Tooltip,
     Paper,
+    Autocomplete,
+    Checkbox,
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -47,6 +49,60 @@ const UNIVERSITIES = [
     'OTHM',
 ];
 
+const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+const SOURCES = [
+    'Google Ads', 'Facebook', 'Tik Tok', 'Call-In', 'Old Crm',
+    'Linkedin', 'Whatsapp', 'Alumni', 'Seo', 'B2C', 'Open Day',
+    'Instagram', 'Reference',
+];
+
+const COMMON_PROGRAMS = [
+    'MBA', 'BBA', 'BSc', 'DBA', 'OTHM L7 + MBA', 'OTHM + BBA',
+    'OTHM + BSC', 'MBA Premium', 'BSc Premium', 'BBA Premium',
+    'DBA Premium', 'OTHM Diploma Extended L5', 'OTHM Diploma Level 3',
+    'OTHM Diploma Level 4', 'OTHM Diploma Level 5', 'OTHM Diploma Level 6',
+    'OTHM Diploma Level 7', 'IoSCM', 'UniFash',
+    'AGI Standalone Certificate', 'AGI Standalone Manager',
+];
+
+const PROGRAMS_BY_UNIVERSITY = {
+    'Swiss School of Management (SSM)': [
+        ...COMMON_PROGRAMS, 'Ext L5 + BBA', 'OTHM L7+SSM MBA', 'MBA General',
+        'MBA Others', 'Top-up MBA Standalone', 'BBA Level 4 & 5',
+        'BBA Extended Level 5', 'Top-up BBA Standalone', 'Level 3 Diploma',
+        'Level 4 Diploma', 'Level 5 Diploma', 'Level 5 Extended Diploma',
+        'Level 6 Diploma', 'Level 7 Diploma', 'Other',
+    ],
+    'Knights College': [
+        ...COMMON_PROGRAMS, 'MBA + Premium', 'OTHM+BSC', 'MBA OTHM Level 7',
+        'Top-up MBA Standalone', 'BSc OTHM Level 4 & 5',
+        'BSc OTHM Extended Level 5', 'BSc Top-up Standalone', 'Other',
+    ],
+    'Malaysia University of Science & Technology (MUST)': [
+        ...COMMON_PROGRAMS, 'Other',
+    ],
+    'AGI – American Global Institute (Certifications)': [
+        ...COMMON_PROGRAMS, 'Pathway Program Certification',
+        'Standalone – Professional Certification',
+        'Standalone – Manager Certification', 'SSM MBA Plus Certification',
+        'SSM BBA Plus Certification', 'CMBS MBA Plus Certification',
+        'CMBS BSc Plus Certification', 'MUST MBA Plus Certification', 'Other',
+    ],
+    'CMBS': [
+        ...COMMON_PROGRAMS, 'BSC', 'B.Sc', 'Ext L5 + BBA',
+        'Ext L5 + B.Sc', 'Ext lev 5+ Bsc', 'Other',
+    ],
+    'OTHM': [
+        ...COMMON_PROGRAMS, 'Level 4 & 5', 'Level 6', 'Level 7',
+        'Level 3 Diploma', 'Level 4 Diploma', 'Level 5 Diploma',
+        'Level 6 Diploma', 'Level 7 Diploma', 'Other',
+    ],
+};
+
 const StudentTable = ({
     consultants,
     teamLeads,
@@ -67,6 +123,11 @@ const StudentTable = ({
         consultant: '',
         university: '',
         team: '',
+        month: [],
+        program: '',
+        source: '',
+        conversionOperator: '',
+        conversionDays: '',
         search: '',
     });
     const [showFilters, setShowFilters] = useState(true);
@@ -81,6 +142,11 @@ const StudentTable = ({
                 consultant: filters.consultant || undefined,
                 university: filters.university || undefined,
                 team: filters.team || undefined,
+                month: filters.month.length > 0 ? filters.month : undefined,
+                program: filters.program || undefined,
+                source: filters.source || undefined,
+                conversionOperator: filters.conversionOperator || undefined,
+                conversionDays: filters.conversionDays || undefined,
             });
             setStudents(response.data || []);
             setError('');
@@ -89,7 +155,7 @@ const StudentTable = ({
         } finally {
             setLoading(false);
         }
-    }, [filters.startDate, filters.endDate, filters.consultant, filters.university, filters.team]);
+    }, [filters.startDate, filters.endDate, filters.consultant, filters.university, filters.team, filters.month, filters.program, filters.source, filters.conversionOperator, filters.conversionDays]);
 
     useEffect(() => {
         loadStudents();
@@ -124,8 +190,25 @@ const StudentTable = ({
             consultant: '',
             university: '',
             team: '',
+            month: [],
+            program: '',
+            source: '',
+            conversionOperator: '',
+            conversionDays: '',
             search: '',
         });
+    };
+
+    // Get available programs based on selected university filter
+    const getFilterPrograms = () => {
+        if (filters.university) {
+            return PROGRAMS_BY_UNIVERSITY[filters.university] || [];
+        }
+        const allPrograms = new Set();
+        Object.values(PROGRAMS_BY_UNIVERSITY).forEach(programs => {
+            programs.forEach(p => allPrograms.add(p));
+        });
+        return [...allPrograms].sort();
     };
 
     // CRUD operations
@@ -351,7 +434,20 @@ const StudentTable = ({
                                     select
                                     label="University"
                                     value={filters.university}
-                                    onChange={handleFilterChange('university')}
+                                    onChange={(e) => {
+                                        const newUniversity = e.target.value;
+                                        setFilters(prev => {
+                                            const updated = { ...prev, university: newUniversity };
+                                            // Reset program if not available in new university
+                                            if (newUniversity && prev.program) {
+                                                const available = PROGRAMS_BY_UNIVERSITY[newUniversity] || [];
+                                                if (!available.includes(prev.program)) {
+                                                    updated.program = '';
+                                                }
+                                            }
+                                            return updated;
+                                        });
+                                    }}
                                     size="small"
                                     sx={{ minWidth: 200 }}
                                     InputLabelProps={{ shrink: true }}
@@ -364,6 +460,85 @@ const StudentTable = ({
                                         </option>
                                     ))}
                                 </TextField>
+                                <Autocomplete
+                                    multiple
+                                    size="small"
+                                    options={MONTHS}
+                                    value={filters.month}
+                                    onChange={(e, value) => setFilters(prev => ({ ...prev, month: value }))}
+                                    disableCloseOnSelect
+                                    renderOption={(props, option, { selected }) => (
+                                        <li {...props}>
+                                            <Checkbox size="small" checked={selected} sx={{ mr: 1 }} />
+                                            {option}
+                                        </li>
+                                    )}
+                                    renderInput={(params) => (
+                                        <TextField {...params} label="Month" placeholder={filters.month.length === 0 ? 'All Months' : ''} InputLabelProps={{ shrink: true }} />
+                                    )}
+                                    sx={{ minWidth: 250 }}
+                                />
+                                <TextField
+                                    select
+                                    label="Program"
+                                    value={filters.program}
+                                    onChange={handleFilterChange('program')}
+                                    size="small"
+                                    sx={{ minWidth: 200 }}
+                                    InputLabelProps={{ shrink: true }}
+                                    SelectProps={{ native: true }}
+                                >
+                                    <option value="">All Programs</option>
+                                    {getFilterPrograms().map(prog => (
+                                        <option key={prog} value={prog}>
+                                            {prog}
+                                        </option>
+                                    ))}
+                                </TextField>
+                                <TextField
+                                    select
+                                    label="Source"
+                                    value={filters.source}
+                                    onChange={handleFilterChange('source')}
+                                    size="small"
+                                    sx={{ minWidth: 160 }}
+                                    InputLabelProps={{ shrink: true }}
+                                    SelectProps={{ native: true }}
+                                >
+                                    <option value="">All Sources</option>
+                                    {SOURCES.map(src => (
+                                        <option key={src} value={src}>
+                                            {src}
+                                        </option>
+                                    ))}
+                                </TextField>
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                                    <TextField
+                                        select
+                                        label="Conv. Time"
+                                        value={filters.conversionOperator}
+                                        onChange={handleFilterChange('conversionOperator')}
+                                        size="small"
+                                        sx={{ minWidth: 140 }}
+                                        InputLabelProps={{ shrink: true }}
+                                        SelectProps={{ native: true }}
+                                    >
+                                        <option value="">Any</option>
+                                        <option value="gt">Greater than</option>
+                                        <option value="lt">Less than</option>
+                                    </TextField>
+                                    <TextField
+                                        size="small"
+                                        label="Days"
+                                        type="number"
+                                        value={filters.conversionDays}
+                                        onChange={handleFilterChange('conversionDays')}
+                                        sx={{ width: 90 }}
+                                        InputLabelProps={{ shrink: true }}
+                                        inputProps={{ min: 0 }}
+                                        disabled={!filters.conversionOperator}
+                                    />
+                                </Box>
                                 <TextField
                                     size="small"
                                     label="Search"

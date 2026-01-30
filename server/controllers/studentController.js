@@ -8,7 +8,7 @@ const User = require('../models/User');
 exports.getStudents = async (req, res, next) => {
     try {
         let query;
-        const { startDate, endDate, consultant, university, team } = req.query;
+        const { startDate, endDate, consultant, university, team, month, program, source, conversionOperator, conversionDays } = req.query;
 
         // Build filter based on role
         let filter = {};
@@ -40,6 +40,30 @@ exports.getStudents = async (req, res, next) => {
         // Team filter (for admin only)
         if (team && req.user.role === 'admin') {
             filter.teamName = team;
+        }
+
+        // Month filter (supports multiple months, comma-separated)
+        if (month) {
+            const months = month.split(',');
+            filter.month = { $in: months };
+        }
+
+        // Program filter
+        if (program) {
+            filter.program = program;
+        }
+
+        // Source filter
+        if (source) {
+            filter.source = source;
+        }
+
+        // Conversion time filter (greater than / less than X days)
+        if (conversionOperator && conversionDays) {
+            const days = Number(conversionDays);
+            if (!isNaN(days)) {
+                filter.conversionTime = conversionOperator === 'gt' ? { $gt: days } : { $lt: days };
+            }
         }
 
         query = Student.find(filter)
