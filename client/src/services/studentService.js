@@ -12,6 +12,13 @@ const getStudents = async (filters = {}) => {
     if (filters.consultant) params.append('consultant', filters.consultant);
     if (filters.university) params.append('university', filters.university);
     if (filters.team) params.append('team', filters.team);
+    if (filters.month && filters.month.length > 0) params.append('month', filters.month.join(','));
+    if (filters.program) params.append('program', filters.program);
+    if (filters.source) params.append('source', filters.source);
+    if (filters.conversionOperator && filters.conversionDays) {
+        params.append('conversionOperator', filters.conversionOperator);
+        params.append('conversionDays', filters.conversionDays);
+    }
 
     const queryString = params.toString();
     const url = queryString ? `${API_URL}?${queryString}` : API_URL;
