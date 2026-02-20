@@ -4,6 +4,7 @@ const {
     getUser,
     updateUser,
     deleteUser,
+    permanentDeleteUser,
     getConsultantsByTeamLead,
 } = require('../controllers/userController');
 
@@ -19,13 +20,17 @@ router
     .get(authorize('admin', 'team_lead'), getUsers);
 
 router
+    .route('/team/:teamLeadId')
+    .get(authorize('admin', 'team_lead'), getConsultantsByTeamLead);
+
+router
     .route('/:id')
     .get(getUser)
     .put(updateUser)
     .delete(authorize('admin'), deleteUser);
 
 router
-    .route('/team/:teamLeadId')
-    .get(authorize('admin', 'team_lead'), getConsultantsByTeamLead);
+    .route('/:id/permanent')
+    .delete(authorize('admin'), permanentDeleteUser);
 
 module.exports = router;

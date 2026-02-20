@@ -156,6 +156,40 @@ exports.deleteUser = async (req, res, next) => {
     }
 };
 
+// @desc    Permanently delete user
+// @route   DELETE /api/users/:id/permanent
+// @access  Private/Admin
+exports.permanentDeleteUser = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+            });
+        }
+
+        // Prevent deleting admin accounts
+        if (user.role === 'admin') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot delete admin accounts',
+            });
+        }
+
+        await User.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            success: true,
+            data: {},
+            message: 'User permanently deleted',
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get consultants by team lead
 // @route   GET /api/users/team/:teamLeadId
 // @access  Private/Admin/TeamLead

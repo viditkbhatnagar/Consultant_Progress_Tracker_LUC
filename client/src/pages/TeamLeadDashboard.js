@@ -52,7 +52,6 @@ import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
-import ActivityHeatmap from '../components/ActivityHeatmap';
 import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import Sidebar, { DRAWER_WIDTH } from '../components/Sidebar';
@@ -563,10 +562,6 @@ const TeamLeadDashboard = () => {
                                             </CardContent>
                                         </Card>
                                     </Box>
-                                </Box>
-                                {/* Heatmap - Full Width */}
-                                <Box sx={{ width: '100%' }}>
-                                    <ActivityHeatmap commitments={commitments} month={new Date()} />
                                 </Box>
                             </Box>
                         </Box>

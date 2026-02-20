@@ -144,6 +144,8 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         // Auto-close when leadStage is set to "Admission"
         if (field === 'leadStage' && value === 'Admission') {
             updates.admissionClosed = true;
+            updates.status = 'achieved';
+            updates.achievementPercentage = 100;
         }
 
         setFormData(prev => ({

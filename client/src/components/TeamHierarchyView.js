@@ -113,12 +113,9 @@ const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick, adminUser })
                                             fontWeight: 600,
                                         }}
                                     />
-                                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                                    <Box sx={{ mt: 2 }}>
                                         <Typography variant="body2">
                                             {team.consultants.length} Consultants
-                                        </Typography>
-                                        <Typography variant="body2">
-                                            {team.totalCommitments || 0} Commitments
                                         </Typography>
                                     </Box>
                                 </Paper>
@@ -171,12 +168,6 @@ const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick, adminUser })
                                                                         Consultant
                                                                     </Typography>
                                                                 </Box>
-                                                                <Chip
-                                                                    label={`${consultant.commitmentCount || 0} commits`}
-                                                                    size="small"
-                                                                    color="primary"
-                                                                    variant="outlined"
-                                                                />
                                                             </Box>
                                                         </Paper>
                                                     </Box>

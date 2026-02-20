@@ -83,6 +83,16 @@ const StudentSchema = new mongoose.Schema({
         default: '',
         trim: true,
     },
+    openDay: {
+        type: String,
+        default: '',
+        trim: true,
+    },
+    openDayLocation: {
+        type: String,
+        default: '',
+        trim: true,
+    },
     campaignName: {
         type: String,
         required: [true, 'Please enter campaign name'],

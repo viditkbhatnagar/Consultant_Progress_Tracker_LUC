@@ -183,3 +183,29 @@ exports.deleteConsultant = async (req, res, next) => {
         next(error);
     }
 };
+
+// @desc    Permanently delete consultant
+// @route   DELETE /api/consultants/:id/permanent
+// @access  Private (Admin only)
+exports.permanentDeleteConsultant = async (req, res, next) => {
+    try {
+        const consultant = await Consultant.findById(req.params.id);
+
+        if (!consultant) {
+            return res.status(404).json({
+                success: false,
+                message: 'Consultant not found',
+            });
+        }
+
+        await Consultant.findByIdAndDelete(req.params.id);
+
+        res.status(200).json({
+            success: true,
+            data: {},
+            message: 'Consultant permanently deleted',
+        });
+    } catch (error) {
+        next(error);
+    }
+};

@@ -258,6 +258,8 @@ const StudentTable = ({
             'Course Fee (AED)': student.courseFee,
             'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
+            'Open Day': student.openDay || '',
+            'Open Day Location': student.openDayLocation || '',
             'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
@@ -293,6 +295,8 @@ const StudentTable = ({
             'Course Fee (AED)': student.courseFee,
             'Admission Fee Paid (AED)': student.admissionFeePaid || 0,
             'Source': student.source,
+            'Open Day': student.openDay || '',
+            'Open Day Location': student.openDayLocation || '',
             'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
             'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
@@ -615,6 +619,8 @@ const StudentTable = ({
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }} align="right">Course Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 130 }} align="right">Admission Fee</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Source</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Open Day</TableCell>
+                                            <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Open Day Location</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 150 }}>Referred By</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 200 }}>Campaign</TableCell>
                                             <TableCell sx={{ fontWeight: 700, backgroundColor: '#1976d2', color: 'white', whiteSpace: 'nowrap', minWidth: 120 }}>Enquiry Date</TableCell>
@@ -673,7 +679,7 @@ const StudentTable = ({
                                                 <TableCell>
                                                     <Tooltip title={student.university}>
                                                         <Chip
-                                                            label={student.university?.split('(')[0]?.trim() || student.university?.split(' ')[0]}
+                                                            label={student.university?.match(/\(([^)]+)\)/)?.[1] || student.university?.split(' ')[0]}
                                                             size="small"
                                                             variant="outlined"
                                                             color="info"
@@ -689,6 +695,8 @@ const StudentTable = ({
                                                 <TableCell>
                                                     <Chip label={student.source} size="small" />
                                                 </TableCell>
+                                                <TableCell>{student.openDay || '-'}</TableCell>
+                                                <TableCell>{student.openDayLocation || '-'}</TableCell>
                                                 <TableCell>{student.referredBy || '-'}</TableCell>
                                                 <TableCell>
                                                     <Tooltip title={student.campaignName}>
