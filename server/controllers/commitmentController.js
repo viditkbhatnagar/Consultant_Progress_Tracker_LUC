@@ -99,9 +99,11 @@ exports.createCommitment = async (req, res, next) => {
             req.body.lastUpdatedBy = req.user.id;
         }
 
-        // Auto-set admission closed date if admission is being closed
+        // Auto-set fields when admission is being closed
         if (req.body.admissionClosed === true) {
             req.body.admissionClosedDate = new Date();
+            req.body.status = 'achieved';
+            req.body.achievementPercentage = 100;
         }
 
         const commitment = await Commitment.create(req.body);
@@ -141,9 +143,11 @@ exports.updateCommitment = async (req, res, next) => {
         }
         // Admin can update anything (no check needed)
 
-        // Auto-set admission closed date when closing admission (only if not already closed)
+        // Auto-set fields when closing admission (only if not already closed)
         if (req.body.admissionClosed === true && !commitment.admissionClosed) {
             req.body.admissionClosedDate = new Date();
+            req.body.status = 'achieved';
+            req.body.achievementPercentage = 100;
         }
 
         // Prevent reopening once closed

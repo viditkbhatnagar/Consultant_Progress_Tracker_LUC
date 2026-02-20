@@ -49,7 +49,6 @@ import DateRangeSelector from '../components/DateRangeSelector';
 import TeamDetailDialog from '../components/TeamDetailDialog';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamHierarchyView from '../components/TeamHierarchyView';
-import ActivityHeatmap from '../components/ActivityHeatmap';
 import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
 import UserManagementDialog from '../components/UserManagementDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
@@ -411,6 +410,48 @@ const AdminDashboard = () => {
         }
     };
 
+    const handlePermanentDeleteUser = async (userId) => {
+        if (window.confirm('Are you sure you want to PERMANENTLY DELETE this user? This action cannot be undone.')) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/users/${userId}/permanent`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    window.alert(data.message || 'Failed to delete user');
+                    return;
+                }
+                await loadUsers();
+            } catch (err) {
+                window.alert('Failed to delete user');
+            }
+        }
+    };
+
+    const handlePermanentDeleteConsultant = async (consultantId) => {
+        if (window.confirm('Are you sure you want to PERMANENTLY DELETE this consultant? This action cannot be undone.')) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/consultants/${consultantId}/permanent`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    window.alert(data.message || 'Failed to delete consultant');
+                    return;
+                }
+                await loadConsultants();
+            } catch (err) {
+                window.alert('Failed to delete consultant');
+            }
+        }
+    };
+
     // Display commitments
     const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant || filters.teamLead
         ? filteredCommitments
@@ -457,6 +498,20 @@ const AdminDashboard = () => {
 
     // Calculate total consultants from teams
     const totalConsultants = teams.reduce((sum, team) => sum + team.consultants.length, 0);
+
+    // Build hierarchy from users + consultants (independent of date filters)
+    const hierarchyTeams = teamLeads.map(tl => {
+        const teamConsultants = consultants
+            .filter(c => c.teamLead?._id === tl._id || c.teamName === tl.teamName)
+            .filter(c => c.isActive !== false)
+            .map(c => ({ _id: c._id, name: c.name }));
+        return {
+            teamName: tl.teamName,
+            teamLead: tl,
+            consultants: teamConsultants,
+            totalCommitments: 0,
+        };
+    });
 
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#A0D2EB' }}>
@@ -671,10 +726,6 @@ const AdminDashboard = () => {
                                             </CardContent>
                                         </Card>
                                     </Box>
-                                </Box>
-                                {/* Heatmap - Full Width */}
-                                <Box sx={{ width: '100%' }}>
-                                    <ActivityHeatmap commitments={commitments} month={new Date()} />
                                 </Box>
                             </Box>
                         </Box>
@@ -1018,7 +1069,7 @@ const AdminDashboard = () => {
                     {tabValue === 2 && (
                         // Organization Hierarchy Tab
                         <TeamHierarchyView
-                            teams={teams}
+                            teams={hierarchyTeams}
                             adminUser={user}
                             onTeamClick={handleTeamClick}
                             onConsultantClick={handleConsultantClick}
@@ -1090,12 +1141,22 @@ const AdminDashboard = () => {
                                                         {user.role !== 'admin' && (
                                                             <IconButton
                                                                 size="small"
-                                                                color="error"
+                                                                color="warning"
                                                                 onClick={() => handleDeactivateUser(user._id)}
                                                                 title="Deactivate user"
                                                                 disabled={user.isActive === false}
                                                             >
                                                                 <CheckCircleIcon />
+                                                            </IconButton>
+                                                        )}
+                                                        {user.role !== 'admin' && (
+                                                            <IconButton
+                                                                size="small"
+                                                                color="error"
+                                                                onClick={() => handlePermanentDeleteUser(user._id)}
+                                                                title="Permanently delete user"
+                                                            >
+                                                                <DeleteIcon />
                                                             </IconButton>
                                                         )}
                                                     </TableCell>
@@ -1165,12 +1226,20 @@ const AdminDashboard = () => {
                                                         </IconButton>
                                                         <IconButton
                                                             size="small"
-                                                            color="error"
+                                                            color="warning"
                                                             onClick={() => handleDeactivateConsultant(consultant._id)}
                                                             title="Deactivate consultant"
                                                             disabled={consultant.isActive === false}
                                                         >
                                                             <CheckCircleIcon />
+                                                        </IconButton>
+                                                        <IconButton
+                                                            size="small"
+                                                            color="error"
+                                                            onClick={() => handlePermanentDeleteConsultant(consultant._id)}
+                                                            title="Permanently delete consultant"
+                                                        >
+                                                            <DeleteIcon />
                                                         </IconButton>
                                                     </TableCell>
                                                 </TableRow>
@@ -1252,6 +1321,7 @@ const AdminDashboard = () => {
                     currentUserRole={user?.role}
                     currentUserTeamName={user?.teamName}
                 />
+
             </Box>
         </Box >
     );

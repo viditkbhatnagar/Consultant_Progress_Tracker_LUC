@@ -4,6 +4,7 @@ const {
     createConsultant,
     updateConsultant,
     deleteConsultant,
+    permanentDeleteConsultant,
 } = require('../controllers/consultantController');
 
 const router = express.Router();
@@ -22,5 +23,9 @@ router
     .route('/:id')
     .put(authorize('admin', 'team_lead'), updateConsultant)
     .delete(authorize('admin', 'team_lead'), deleteConsultant);
+
+router
+    .route('/:id/permanent')
+    .delete(authorize('admin'), permanentDeleteConsultant);
 
 module.exports = router;

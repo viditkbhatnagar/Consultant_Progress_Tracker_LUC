@@ -266,6 +266,8 @@ const StudentFormDialog = ({
         admissionFeePaid: '',
         source: '',
         referredBy: '',
+        openDay: '',
+        openDayLocation: '',
         campaignName: '',
         enquiryDate: null,
         closingDate: null,
@@ -300,6 +302,8 @@ const StudentFormDialog = ({
                 admissionFeePaid: student.admissionFeePaid || '',
                 source: student.source || '',
                 referredBy: student.referredBy || '',
+                openDay: student.openDay || '',
+                openDayLocation: student.openDayLocation || '',
                 campaignName: student.campaignName || '',
                 enquiryDate: student.enquiryDate ? new Date(student.enquiryDate) : null,
                 closingDate: student.closingDate ? new Date(student.closingDate) : null,
@@ -331,6 +335,8 @@ const StudentFormDialog = ({
                 admissionFeePaid: '',
                 source: '',
                 referredBy: '',
+                openDay: '',
+                openDayLocation: '',
                 campaignName: '',
                 enquiryDate: null,
                 closingDate: null,
@@ -370,6 +376,8 @@ const StudentFormDialog = ({
         'residence',
         'area',
         'referredBy',
+        'openDay',
+        'openDayLocation',
         'campaignName',
         'companyName',
         'designation',
@@ -737,6 +745,22 @@ const StudentFormDialog = ({
                                 value={formData.referredBy}
                                 onChange={handleChange('referredBy')}
                                 placeholder="Enter referrer name"
+                            />
+                        </Box>
+                        <Box sx={rowStyle}>
+                            <TextField
+                                sx={fieldStyle}
+                                label="Open Day"
+                                value={formData.openDay}
+                                onChange={handleChange('openDay')}
+                                placeholder="e.g., Open Day Feb 2026"
+                            />
+                            <TextField
+                                sx={fieldStyle}
+                                label="Open Day Location"
+                                value={formData.openDayLocation}
+                                onChange={handleChange('openDayLocation')}
+                                placeholder="e.g., Dubai Mall"
                             />
                         </Box>
                         <TextField
