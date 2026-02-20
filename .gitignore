@@ -45,6 +45,9 @@ Thumbs.db
 # CSV data (optional - uncomment if you don't want to commit CSV files)
 # server/data/*.csv
 
+# Database backups
+db_backup_*/
+
 # Build artifacts
 *.tgz
 *.zip
