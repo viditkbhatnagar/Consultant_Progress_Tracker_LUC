@@ -21,6 +21,7 @@ import {
     Notifications as NotificationsIcon,
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
+    AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -60,7 +61,7 @@ const MOTIVATIONAL_QUOTES = [
     "The difference between ordinary and extraordinary is that little extra.",
 ];
 
-const Sidebar = ({ onAddCommitment, onExport, onLogout }) => {
+const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
@@ -192,6 +193,7 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout }) => {
             <List sx={{ flex: 1, px: 1.5, py: 2 }}>
                 <ListItem disablePadding sx={{ mb: 1 }}>
                     <ListItemButton
+                        onClick={onDashboard}
                         sx={{
                             borderRadius: 2,
                             '&:hover': {
@@ -201,13 +203,40 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout }) => {
                                 backgroundColor: '#A0D2EB',
                             },
                         }}
-                        selected
+                        selected={!aiAnalysisActive}
                     >
                         <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
                             <DashboardIcon />
                         </ListItemIcon>
                         <ListItemText
                             primary="Dashboard"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={onAIAnalysis}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                            '&.Mui-selected': {
+                                backgroundColor: '#A0D2EB',
+                            },
+                        }}
+                        selected={aiAnalysisActive}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <AutoAwesomeIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="AI Analysis"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,
