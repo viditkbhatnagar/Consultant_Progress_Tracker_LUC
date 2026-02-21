@@ -18,6 +18,8 @@ import {
     Notifications as NotificationsIcon,
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
+    AutoAwesome as AutoAwesomeIcon,
+    AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -57,7 +59,7 @@ const MOTIVATIONAL_QUOTES = [
     "The difference between ordinary and extraordinary is that little extra.",
 ];
 
-const AdminSidebar = ({ onExport, onLogout }) => {
+const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, onAPICosts, apiCostsActive }) => {
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
@@ -190,6 +192,7 @@ const AdminSidebar = ({ onExport, onLogout }) => {
             <List sx={{ flex: 1, px: 1.5, py: 2 }}>
                 <ListItem disablePadding sx={{ mb: 1 }}>
                     <ListItemButton
+                        onClick={onDashboard}
                         sx={{
                             borderRadius: 2,
                             '&:hover': {
@@ -199,13 +202,67 @@ const AdminSidebar = ({ onExport, onLogout }) => {
                                 backgroundColor: '#A0D2EB',
                             },
                         }}
-                        selected
+                        selected={!aiAnalysisActive && !apiCostsActive}
                     >
                         <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
                             <DashboardIcon />
                         </ListItemIcon>
                         <ListItemText
                             primary="Dashboard"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={onAIAnalysis}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                            '&.Mui-selected': {
+                                backgroundColor: '#A0D2EB',
+                            },
+                        }}
+                        selected={aiAnalysisActive}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <AutoAwesomeIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="AI Analysis"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={onAPICosts}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                            '&.Mui-selected': {
+                                backgroundColor: '#A0D2EB',
+                            },
+                        }}
+                        selected={apiCostsActive}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <MoneyIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="API Costs"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,

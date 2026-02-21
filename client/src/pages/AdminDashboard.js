@@ -35,6 +35,7 @@ import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     Visibility as VisibilityIcon,
+    AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -53,6 +54,8 @@ import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
 import UserManagementDialog from '../components/UserManagementDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import AdminSidebar, { DRAWER_WIDTH } from '../components/AdminSidebar';
+import AISummaryCard from '../components/AISummaryCard';
+import APICostPanel from '../components/APICostPanel';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -519,6 +522,11 @@ const AdminDashboard = () => {
             <AdminSidebar
                 onExport={setExportMenuAnchor}
                 onLogout={handleLogout}
+                onAIAnalysis={() => setTabValue(4)}
+                onAPICosts={() => setTabValue(5)}
+                onDashboard={() => setTabValue(0)}
+                aiAnalysisActive={tabValue === 4}
+                apiCostsActive={tabValue === 5}
             />
 
             {/* Main Content */}
@@ -553,12 +561,14 @@ const AdminDashboard = () => {
                         </Typography>
                     </Box>
 
-                    {/* Date Range Selector */}
-                    <Card elevation={2} sx={{ mb: 3 }}>
-                        <CardContent>
-                            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-                        </CardContent>
-                    </Card>
+                    {/* Date Range Selector - hidden on AI Analysis and API Costs tabs */}
+                    {tabValue <= 3 && (
+                        <Card elevation={2} sx={{ mb: 3 }}>
+                            <CardContent>
+                                <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {error && (
                         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -566,7 +576,8 @@ const AdminDashboard = () => {
                         </Alert>
                     )}
 
-                    {/* Organization Metrics */}
+                    {/* Organization Metrics - hidden on AI Analysis and API Costs tabs */}
+                    {tabValue <= 3 && (
                     <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
                         <Card
                             elevation={0}
@@ -657,9 +668,10 @@ const AdminDashboard = () => {
                             </CardContent>
                         </Card>
                     </Box>
+                    )}
 
-                    {/* Analytics Charts and Heatmap */}
-                    {commitments.length > 0 && (
+                    {/* Analytics Charts and Heatmap - hidden on AI Analysis and API Costs tabs */}
+                    {tabValue <= 3 && commitments.length > 0 && (
                         <Box sx={{ mb: 4 }}>
                             <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
                                 Organization Analytics
@@ -738,6 +750,8 @@ const AdminDashboard = () => {
                             <Tab label="All Commitments" />
                             <Tab label="Organization Hierarchy" />
                             <Tab label="User Management" />
+                            <Tab label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
+                            <Tab label="API Costs" />
                         </Tabs>
                     </Box>
 
@@ -1249,6 +1263,16 @@ const AdminDashboard = () => {
                                 </TableContainer>
                             </CardContent>
                         </Card>
+                    )}
+
+                    {/* AI Analysis Tab */}
+                    {tabValue === 4 && (
+                        <AISummaryCard />
+                    )}
+
+                    {/* API Costs Tab */}
+                    {tabValue === 5 && (
+                        <APICostPanel />
                     )}
                 </Container>
 

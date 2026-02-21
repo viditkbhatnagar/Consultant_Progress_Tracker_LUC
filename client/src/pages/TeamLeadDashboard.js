@@ -42,6 +42,7 @@ import {
     Add as AddIcon,
     Visibility as VisibilityIcon,
     Comment as CommentIcon,
+    AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +56,7 @@ import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import Sidebar, { DRAWER_WIDTH } from '../components/Sidebar';
+import AISummaryCard from '../components/AISummaryCard';
 import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -360,6 +362,9 @@ const TeamLeadDashboard = () => {
                 onAddCommitment={handleAddCommitment}
                 onExport={setExportMenuAnchor}
                 onLogout={handleLogout}
+                onAIAnalysis={() => setTabValue(2)}
+                onDashboard={() => setTabValue(0)}
+                aiAnalysisActive={tabValue === 2}
             />
 
             {/* Main Content */}
@@ -572,6 +577,7 @@ const TeamLeadDashboard = () => {
                         <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
                             <Tab label="Team Overview" />
                             <Tab label="All Commitments" />
+                            <Tab label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
                         </Tabs>
                     </Box>
 
@@ -983,6 +989,11 @@ const TeamLeadDashboard = () => {
                                 )}
                             </CardContent>
                         </Card>
+                    )}
+
+                    {/* AI Analysis Tab */}
+                    {tabValue === 2 && (
+                        <AISummaryCard />
                     )}
 
                 </Container>
