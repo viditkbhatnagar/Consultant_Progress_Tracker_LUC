@@ -54,7 +54,7 @@ export const getAchievementColor = (percentage) => {
 
 // Arrays for filters
 export const LEAD_STAGES_LIST = LEAD_STAGES.map(stage => stage.value);
-export const STATUS_LIST = ['pending', 'in_progress', 'achieved', 'not_achieved'];
+export const STATUS_LIST = ['pending', 'in_progress', 'achieved', 'missed'];
 
 // Get lead stage color
 export const getLeadStageColor = (stage) => {

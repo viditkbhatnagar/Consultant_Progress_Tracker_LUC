@@ -124,8 +124,8 @@ const ConsultantDetailDialog = ({
                                                 const timeFormatted = commitment.createdAt
                                                     ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                                                     : '--:--';
-                                                // Simplified achievement: 100% if closed, 0% otherwise
-                                                const achievement = commitment.admissionClosed ? 100 : 0;
+                                                // Calculate achievement: 100% if achieved or admission closed, else 0%
+                                                const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
 
                                                 return (
                                                     <TableRow key={commitment._id}>

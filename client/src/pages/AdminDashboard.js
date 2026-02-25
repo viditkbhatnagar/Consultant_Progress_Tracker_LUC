@@ -205,7 +205,7 @@ const AdminDashboard = () => {
             filtered = filtered.filter(c =>
                 c.studentName?.toLowerCase().includes(searchLower) ||
                 c.commitmentMade?.toLowerCase().includes(searchLower) ||
-                c.consultant?.name?.toLowerCase().includes(searchLower) ||
+                c.consultantName?.toLowerCase().includes(searchLower) ||
                 c.teamName?.toLowerCase().includes(searchLower)
             );
         }
@@ -224,7 +224,7 @@ const AdminDashboard = () => {
 
         if (filters.consultant) {
             filtered = filtered.filter(c => {
-                const consultantName = c.consultantName || c.consultant?.name || '';
+                const consultantName = c.consultantName || '';
                 return consultantName.trim() === filters.consultant.trim();
             });
         }
@@ -242,7 +242,7 @@ const AdminDashboard = () => {
 
     const handleTeamClick = (team) => {
         setSelectedTeam(team);
-        const teamComms = commitments.filter(c => c.teamName === team.teamName);
+        const teamComms = displayCommitments.filter(c => c.teamName === team.teamName);
         setTeamCommitments(teamComms);
         setTeamDetailOpen(true);
     };
@@ -268,14 +268,14 @@ const AdminDashboard = () => {
 
     const handleExportExcel = () => {
         const periodLabel = dateRange.viewType.replace('-', '_');
-        exportService.exportCommitmentsToExcel(commitments, `organization_commitments_${periodLabel}`);
+        exportService.exportCommitmentsToExcel(displayCommitments, `organization_commitments_${periodLabel}`);
         setExportMenuAnchor(null);
     };
 
     const handleExportCSV = () => {
-        const csvData = commitments.map(c => ({
+        const csvData = displayCommitments.map(c => ({
             Team: c.teamName,
-            Consultant: c.consultant?.name || 'N/A',
+            Consultant: c.consultantName || 'N/A',
             Student: c.studentName || 'N/A',
             Commitment: c.commitmentMade,
             'Lead Stage': c.leadStage,
@@ -467,8 +467,8 @@ const AdminDashboard = () => {
     const teamLeads = users.filter(u => u.role === 'team_lead');
 
     const teams = teamLeads.map(tl => {
-        // Get all commitments for this team
-        const teamComms = commitments.filter(c => c.teamName === tl.teamName);
+        // Get all commitments for this team (from displayed/filtered commitments)
+        const teamComms = displayCommitments.filter(c => c.teamName === tl.teamName);
 
         // Get unique consultant names from commitments
         const consultantNames = [...new Set(teamComms.map(c => c.consultantName))];
@@ -495,11 +495,11 @@ const AdminDashboard = () => {
         };
     });
 
-    // Organization metrics
-    const totalCommitments = commitments.length;
-    const totalAchieved = commitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
-    const totalMeetings = commitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
-    const totalClosed = commitments.filter(c => c.admissionClosed).length;
+    // Organization metrics (from displayed/filtered commitments)
+    const totalCommitments = displayCommitments.length;
+    const totalAchieved = displayCommitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
+    const totalMeetings = displayCommitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
+    const totalClosed = displayCommitments.filter(c => c.admissionClosed).length;
     const orgAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
     // Calculate total consultants from teams
@@ -683,7 +683,7 @@ const AdminDashboard = () => {
                                 {/* Charts Row */}
                                 <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                                     <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <LeadStageChart commitments={commitments} />
+                                        <LeadStageChart commitments={displayCommitments} />
                                     </Box>
                                     <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
                                         <Card elevation={0} sx={{ height: '100%', backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
@@ -908,8 +908,8 @@ const AdminDashboard = () => {
                                                     const timeFormatted = commitment.createdAt
                                                         ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                                                         : '--:--';
-                                                    // Simplified achievement: 100% if closed, 0% otherwise
-                                                    const achievement = commitment.admissionClosed ? 100 : 0;
+                                                    // Calculate achievement: 100% if achieved or admission closed, else 0%
+                                                    const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
 
                                                     return (
                                                         <TableRow key={commitment._id} hover>
