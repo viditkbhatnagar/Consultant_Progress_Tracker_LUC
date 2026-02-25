@@ -16,8 +16,7 @@ const getClient = () => {
 // Aggregate organization-wide data for admin analysis
 const aggregateAdminData = async (startDate, endDate) => {
     const dateFilter = {
-        weekStartDate: { $gte: new Date(startDate) },
-        weekEndDate: { $lte: new Date(endDate) },
+        weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
     };
 
     const commitments = await Commitment.find(dateFilter)
@@ -128,8 +127,7 @@ const aggregateAdminData = async (startDate, endDate) => {
 const aggregateTeamLeadData = async (teamLeadId, startDate, endDate) => {
     const dateFilter = {
         teamLead: teamLeadId,
-        weekStartDate: { $gte: new Date(startDate) },
-        weekEndDate: { $lte: new Date(endDate) },
+        weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
     };
 
     const commitments = await Commitment.find(dateFilter).lean();

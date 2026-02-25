@@ -175,7 +175,7 @@ const TeamLeadDashboard = () => {
             filtered = filtered.filter(c =>
                 c.studentName?.toLowerCase().includes(searchLower) ||
                 c.commitmentMade?.toLowerCase().includes(searchLower) ||
-                c.consultant?.name?.toLowerCase().includes(searchLower)
+                c.consultantName?.toLowerCase().includes(searchLower)
             );
         }
 
@@ -189,7 +189,7 @@ const TeamLeadDashboard = () => {
 
         if (filters.consultant) {
             filtered = filtered.filter(c => {
-                const consultantName = c.consultantName || c.consultant?.name || '';
+                const consultantName = c.consultantName || '';
                 return consultantName.trim() === filters.consultant.trim();
             });
         }
@@ -242,12 +242,12 @@ const TeamLeadDashboard = () => {
 
     const handleExportExcel = () => {
         const periodLabel = dateRange.viewType.replace('-', '_');
-        exportService.exportCommitmentsToExcel(commitments, `team_commitments_${periodLabel}`);
+        exportService.exportCommitmentsToExcel(displayCommitments, `team_commitments_${periodLabel}`);
         setExportMenuAnchor(null);
     };
 
     const handleExportCSV = () => {
-        const csvData = commitments.map(c => ({
+        const csvData = displayCommitments.map(c => ({
             Consultant: c.consultantName || 'N/A',
             Student: c.studentName || 'N/A',
             Commitment: c.commitmentMade,
@@ -320,8 +320,8 @@ const TeamLeadDashboard = () => {
         ? filteredCommitments
         : commitments;
 
-    // Calculate consultant stats
-    const consultantStats = commitments.reduce((acc, commitment) => {
+    // Calculate consultant stats from displayed (filtered) commitments
+    const consultantStats = displayCommitments.reduce((acc, commitment) => {
         const consultantName = commitment.consultantName || 'Unknown';
 
         if (!acc[consultantName]) {
@@ -354,11 +354,11 @@ const TeamLeadDashboard = () => {
     }));
 
 
-    // Overall team metrics
-    const totalCommitments = commitments.length;
-    const totalAchieved = commitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
-    const totalMeetings = commitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
-    const totalClosed = commitments.filter(c => c.admissionClosed).length;
+    // Overall team metrics (from displayed/filtered commitments)
+    const totalCommitments = displayCommitments.length;
+    const totalAchieved = displayCommitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
+    const totalMeetings = displayCommitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
+    const totalClosed = displayCommitments.filter(c => c.admissionClosed).length;
     const teamAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
     return (
@@ -520,7 +520,7 @@ const TeamLeadDashboard = () => {
                                 {/* Charts Row */}
                                 <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                                     <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <LeadStageChart commitments={commitments} />
+                                        <LeadStageChart commitments={displayCommitments} />
                                     </Box>
                                     <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
                                         <Card elevation={0} sx={{ height: '100%', backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
@@ -797,8 +797,8 @@ const TeamLeadDashboard = () => {
                                             </TableHead>
                                             <TableBody>
                                                 {displayCommitments.map((commitment) => {
-                                                    // Calculate simple achievement: 100% if admission closed, else 0%
-                                                    const achievement = commitment.admissionClosed ? 100 : 0;
+                                                    // Calculate achievement: 100% if achieved or admission closed, else 0%
+                                                    const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
                                                     const commitmentDate = new Date(commitment.weekStartDate);
                                                     const dayOfWeek = format(commitmentDate, 'EEEE');
                                                     const dateFormatted = format(commitmentDate, 'MMM dd, yyyy');

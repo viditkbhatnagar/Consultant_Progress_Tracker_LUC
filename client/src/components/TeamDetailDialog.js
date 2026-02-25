@@ -123,7 +123,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick,
                                 const timeFormatted = commitment.createdAt
                                     ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                                     : '--:--';
-                                const achievement = commitment.admissionClosed ? 100 : 0;
+                                const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
 
                                 return (
                                     <TableRow key={commitment._id} hover>

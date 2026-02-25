@@ -63,7 +63,7 @@ const AdminCommitmentDialog = ({ open, onClose, commitment, onSave }) => {
                     </Typography>
                     <Box sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 1 }}>
                         <Typography variant="body2"><strong>Team:</strong> {commitment.teamName}</Typography>
-                        <Typography variant="body2"><strong>Consultant:</strong> {commitment.consultant?.name}</Typography>
+                        <Typography variant="body2"><strong>Consultant:</strong> {commitment.consultantName || 'N/A'}</Typography>
                         <Typography variant="body2"><strong>Student:</strong> {commitment.studentName || 'N/A'}</Typography>
                         <Typography variant="body2"><strong>Commitment:</strong> {commitment.commitmentMade}</Typography>
                         <Typography variant="body2">

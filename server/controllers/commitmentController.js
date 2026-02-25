@@ -234,6 +234,7 @@ exports.closeAdmission = async (req, res, next) => {
         const { closedDate, closedAmount } = req.body;
 
         commitment.admissionClosed = true;
+        commitment.admissionClosedDate = new Date();
         commitment.closedDate = closedDate || new Date();
         commitment.closedAmount = closedAmount;
         commitment.status = 'achieved';
