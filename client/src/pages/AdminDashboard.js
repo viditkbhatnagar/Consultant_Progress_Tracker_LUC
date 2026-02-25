@@ -254,7 +254,10 @@ const AdminDashboard = () => {
 
         try {
             const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
-            const data = await commitmentService.getConsultantPerformance(consultantName, 3);
+            const data = await commitmentService.getConsultantPerformance(consultantName, {
+                startDate: dateRange.startDate,
+                endDate: dateRange.endDate,
+            });
             setConsultantPerformance(data);
         } catch (err) {
             setError('Failed to load consultant performance');

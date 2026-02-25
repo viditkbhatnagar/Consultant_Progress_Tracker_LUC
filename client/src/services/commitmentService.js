@@ -103,10 +103,17 @@ const getCommitmentsByDateRange = async (startDate, endDate, consultantId = null
 };
 
 // Get consultant performance details
-const getConsultantPerformance = async (consultantId, months = 3) => {
+const getConsultantPerformance = async (consultantId, { months = 3, startDate, endDate } = {}) => {
+    const params = {};
+    if (startDate && endDate) {
+        params.startDate = startDate;
+        params.endDate = endDate;
+    } else {
+        params.months = months;
+    }
     const response = await axios.get(
         `${API_URL}/consultant/${consultantId}/performance`,
-        { params: { months } }
+        { params }
     );
     return response.data;
 };

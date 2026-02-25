@@ -213,7 +213,10 @@ const TeamLeadDashboard = () => {
         try {
             // Use consultant name instead of ID
             const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
-            const data = await commitmentService.getConsultantPerformance(consultantName, 3);
+            const data = await commitmentService.getConsultantPerformance(consultantName, {
+                startDate: dateRange.startDate,
+                endDate: dateRange.endDate,
+            });
             setConsultantPerformance(data);
         } catch (err) {
             setError('Failed to load consultant performance');
@@ -287,7 +290,10 @@ const TeamLeadDashboard = () => {
                 setPerformanceLoading(true);
                 try {
                     const consultantName = typeof selectedConsultant === 'string' ? selectedConsultant : selectedConsultant.name;
-                    const data = await commitmentService.getConsultantPerformance(consultantName, 3);
+                    const data = await commitmentService.getConsultantPerformance(consultantName, {
+                startDate: dateRange.startDate,
+                endDate: dateRange.endDate,
+            });
                     setConsultantPerformance(data);
                 } catch (err) {
                     console.error('Failed to refresh consultant performance:', err);

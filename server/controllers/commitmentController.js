@@ -336,8 +336,7 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
         }
 
         let query = {
-            weekStartDate: { $gte: new Date(startDate) },
-            weekEndDate: { $lte: new Date(endDate) },
+            weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
         };
 
         // Role-based filtering (only team_lead and admin)
@@ -366,16 +365,22 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
 exports.getConsultantPerformance = async (req, res, next) => {
     try {
         const { consultantName } = req.params;
-        const { months = 3 } = req.query; // Default to last 3 months
+        const { months = 3, startDate: startParam, endDate: endParam } = req.query;
 
-        // Calculate date range
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setMonth(startDate.getMonth() - parseInt(months));
+        // Use explicit date range when provided, otherwise fall back to months-based calculation
+        let startDate, endDate;
+        if (startParam && endParam) {
+            startDate = new Date(startParam);
+            endDate = new Date(endParam);
+        } else {
+            endDate = new Date();
+            startDate = new Date();
+            startDate.setMonth(startDate.getMonth() - parseInt(months));
+        }
 
         let query = {
             consultantName: consultantName,
-            weekStartDate: { $gte: startDate }, // Only check start date to include current week
+            weekStartDate: { $gte: startDate, $lte: endDate },
         };
 
         // Team lead can only view their team members
