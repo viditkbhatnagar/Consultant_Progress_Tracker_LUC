@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import TeamLeadDashboard from './pages/TeamLeadDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDatabasePage from './pages/StudentDatabasePage';
+import HourlyTrackerPage from './pages/HourlyTrackerPage';
 import theme from './theme';
 
 // Home redirect component
@@ -64,6 +65,16 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <StudentDatabasePage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Hourly Tracker - accessible by both admin and team_lead */}
+            <Route
+              path="/hourly-tracker"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <HourlyTrackerPage />
                 </PrivateRoute>
               }
             />
