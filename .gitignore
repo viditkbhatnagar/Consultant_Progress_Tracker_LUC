@@ -53,3 +53,9 @@ db_backup_*/
 *.zip
 .env
 .env.local
+
+# Claude Code
+CLAUDE.md
+
+# Prototype files
+consultant-tracker-v2.html

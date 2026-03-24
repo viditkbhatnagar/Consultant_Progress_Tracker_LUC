@@ -20,6 +20,7 @@ import {
     School as SchoolIcon,
     AutoAwesome as AutoAwesomeIcon,
     AttachMoney as MoneyIcon,
+    AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -286,6 +287,29 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                         </ListItemIcon>
                         <ListItemText
                             primary="Student Database"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={() => navigate('/hourly-tracker')}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <AccessTimeIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Hourly Tracker"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,

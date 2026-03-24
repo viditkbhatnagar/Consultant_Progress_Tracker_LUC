@@ -25,6 +25,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/consultants', require('./routes/consultants'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/hourly', require('./routes/hourly'));
 
 // Health check
 app.get('/api/health', (req, res) => {

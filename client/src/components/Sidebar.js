@@ -22,6 +22,7 @@ import {
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
     AutoAwesome as AutoAwesomeIcon,
+    AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -283,6 +284,29 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboar
                         </ListItemIcon>
                         <ListItemText
                             primary="Student Database"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={() => navigate('/hourly-tracker')}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <AccessTimeIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Hourly Tracker"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,
