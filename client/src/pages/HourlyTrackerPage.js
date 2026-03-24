@@ -9,6 +9,9 @@ import {
     Snackbar,
     TextField,
     Tooltip,
+    MenuItem,
+    Select,
+    FormControl,
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -17,11 +20,13 @@ import {
     Add as AddIcon,
     Delete as DeleteIcon,
     PersonAdd as PersonAddIcon,
+    Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import hourlyService from '../services/hourlyService';
 import consultantService from '../services/consultantService';
+import userService from '../services/userService';
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const SLOTS = [
@@ -42,15 +47,20 @@ const AM_SLOTS = SLOTS.slice(0, 4);
 const PM_SLOTS = SLOTS.slice(5);
 
 const ACTIVITY_TYPES = [
-    { id: 'call', icon: '📞', lbl: 'Call', hasCount: true, hasDur: false, color: '#2563eb', bg: '#eff6ff', unit: 'calls' },
-    { id: 'followup', icon: '↩️', lbl: 'Follow-up', hasCount: true, hasDur: false, color: '#0891b2', bg: '#ecfeff', unit: 'follow-ups' },
-    { id: 'noshow', icon: '⚙️', lbl: 'Operations', hasCount: true, hasDur: false, color: '#dc2626', bg: '#fef2f2', unit: 'operations' },
+    { id: 'call', icon: '📞', lbl: 'Call', hasCount: true, hasDur: false, color: '#2563eb', bg: '#eff6ff', unit: 'calls', multiWith: 'followup' },
+    { id: 'followup', icon: '↩️', lbl: 'Follow-up', hasCount: true, hasDur: false, color: '#0891b2', bg: '#ecfeff', unit: 'follow-ups', multiWith: 'call' },
+    { id: 'noshow', icon: '⚙️', lbl: 'Operations', hasCount: false, hasDur: false, color: '#dc2626', bg: '#fef2f2', noteRequired: true },
     { id: 'drip', icon: '📧', lbl: 'Drip', hasCount: false, hasDur: false, color: '#d97706', bg: '#fffbeb' },
     { id: 'meeting', icon: '🤝', lbl: 'Offline Meeting', hasCount: false, hasDur: true, color: '#16a34a', bg: '#f0fdf4' },
     { id: 'zoom', icon: '💻', lbl: 'Zoom', hasCount: false, hasDur: true, color: '#4f46e5', bg: '#eef2ff' },
     { id: 'outmeet', icon: '🚗', lbl: 'Out Meeting', hasCount: false, hasDur: true, color: '#7c3aed', bg: '#f5f3ff' },
     { id: 'teammeet', icon: '👥', lbl: 'Team Meeting', hasCount: false, hasDur: true, color: '#be185d', bg: '#fdf2f8' },
 ];
+
+// Display info for combined type (not shown in picker grid)
+const COMBINED_TYPES = {
+    call_followup: { icon: '📞↩️', lbl: 'Call+F/Up', color: '#2563eb', bg: '#eff6ff' },
+};
 
 const DURATIONS = [
     { v: 30, lbl: '30 min', sub: 'Half hour' },
@@ -114,7 +124,7 @@ const HourlyTrackerPage = () => {
     // Picker state
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState(null);
-    const [pickerType, setPickerType] = useState(null);
+    const [pickerTypes, setPickerTypes] = useState([]);
     const [pickerDur, setPickerDur] = useState(60);
     const [pickerCount, setPickerCount] = useState(1);
     const [pickerNote, setPickerNote] = useState('');
@@ -127,7 +137,12 @@ const HourlyTrackerPage = () => {
     const isAdmin = user?.role === 'admin';
     const [manageOpen, setManageOpen] = useState(false);
     const [newConsultantName, setNewConsultantName] = useState('');
-    const [newConsultantTeam, setNewConsultantTeam] = useState('');
+    const [selectedTeamLead, setSelectedTeamLead] = useState('');
+    const [teamLeads, setTeamLeads] = useState([]);
+
+    // Ops note viewer
+    const [opsNoteOpen, setOpsNoteOpen] = useState(false);
+    const [opsNoteContent, setOpsNoteContent] = useState({ name: '', notes: [] });
 
     // Toast
     const [toast, setToast] = useState({ open: false, msg: '' });
@@ -188,9 +203,21 @@ const HourlyTrackerPage = () => {
         }
     }, []);
 
+    const loadTeamLeads = useCallback(async () => {
+        if (!isAdmin) return;
+        try {
+            const res = await userService.getUsers();
+            const leads = (res.data || []).filter((u) => u.role === 'team_lead' && u.isActive);
+            setTeamLeads(leads);
+        } catch (err) {
+            console.error('Failed to load team leads:', err);
+        }
+    }, [isAdmin]);
+
     useEffect(() => {
         loadConsultants();
-    }, [loadConsultants]);
+        loadTeamLeads();
+    }, [loadConsultants, loadTeamLeads]);
 
     useEffect(() => {
         loadDayActivities(currentDate);
@@ -217,26 +244,27 @@ const HourlyTrackerPage = () => {
     const getAct = (consultantId, slotId) => activities.get(`${consultantId}_${slotId}`) || null;
 
     const getStats = (consultantId) => {
-        let calls = 0, followups = 0, noshows = 0, drips = 0, physicalMtgs = 0, zoomMtgs = 0, teamMtgs = 0, activeHrs = 0, meetHrs = 0;
+        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, activeHrs = 0, meetHrs = 0;
         WORK_SLOTS.forEach((s) => {
             const d = getAct(consultantId, s.id);
             if (!d || d.isContinuation) return;
             const mins = d.duration || s.mins;
             const hrs = mins / 60;
             activeHrs += hrs;
-            if (d.activityType === 'call') calls += d.count || 1;
-            if (d.activityType === 'followup') followups += d.count || 1;
-            if (d.activityType === 'noshow') noshows += d.count || 1;
+            if (d.activityType === 'call' || d.activityType === 'call_followup') calls += d.count || 1;
+            if (d.activityType === 'followup' || d.activityType === 'call_followup') followups += d.count || 1;
+            if (d.activityType === 'noshow') noshows++;
             if (d.activityType === 'drip') drips++;
-            if (d.activityType === 'meeting' || d.activityType === 'outmeet') { physicalMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'outmeet') { outMtgs++; meetHrs += hrs; }
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
         });
-        return { calls, followups, noshows, drips, physicalMtgs, zoomMtgs, teamMtgs, activeHrs: +activeHrs.toFixed(1), meetHrs: +meetHrs.toFixed(1) };
+        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, activeHrs: +activeHrs.toFixed(1), meetHrs: +meetHrs.toFixed(1) };
     };
 
     const getTeamTotals = () => {
-        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, physicalMtgs: 0, zoomMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0 };
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0 };
         consultants.forEach((c) => {
             const s = getStats(c._id);
             Object.keys(t).forEach((k) => (t[k] += s[k]));
@@ -253,16 +281,22 @@ const HourlyTrackerPage = () => {
         if (!isTodaySelected) { showToast('Entries can only be made for today'); return; }
         const existing = getAct(consultant._id, slotId);
         // If it's a continuation, open the parent
+        const initFromActivity = (act) => {
+            if (!act?.activityType) { setPickerTypes([]); return; }
+            // Expand combined type back to array
+            if (act.activityType === 'call_followup') setPickerTypes(['call', 'followup']);
+            else setPickerTypes([act.activityType]);
+        };
         if (existing && existing.isContinuation && existing.parentSlotId) {
             setPickerTarget({ consultant, slotId: existing.parentSlotId });
             const parent = getAct(consultant._id, existing.parentSlotId);
-            setPickerType(parent?.activityType || null);
+            initFromActivity(parent);
             setPickerDur(parent?.duration || 60);
             setPickerCount(parent?.count || 1);
             setPickerNote(parent?.note || '');
         } else {
             setPickerTarget({ consultant, slotId });
-            setPickerType(existing?.activityType || null);
+            initFromActivity(existing);
             setPickerDur(existing?.duration || 60);
             setPickerCount(existing?.count || 1);
             setPickerNote(existing?.note || '');
@@ -271,9 +305,14 @@ const HourlyTrackerPage = () => {
     };
 
     const handleSave = async () => {
-        if (!pickerTarget || !pickerType) { showToast('Select an activity type'); return; }
+        if (!pickerTarget || pickerTypes.length === 0) { showToast('Select an activity type'); return; }
+        // Check if operations is selected and note is required
+        if (pickerTypes.includes('noshow') && !pickerNote.trim()) { showToast('Note is required for Operations'); return; }
         const { consultant, slotId } = pickerTarget;
-        const act = ACTIVITY_TYPES.find((a) => a.id === pickerType);
+        // Determine the stored activity type
+        const isCallFollowup = pickerTypes.includes('call') && pickerTypes.includes('followup');
+        const storedType = isCallFollowup ? 'call_followup' : pickerTypes[0];
+        const act = ACTIVITY_TYPES.find((a) => a.id === pickerTypes[0]);
         const slotDef = SLOTS.find((s) => s.id === slotId);
         const dur = act.hasDur ? pickerDur : (slotDef ? slotDef.mins : 60);
         const count = act.hasCount ? (pickerCount || 1) : 1;
@@ -285,7 +324,7 @@ const HourlyTrackerPage = () => {
                 consultantName: consultant.name,
                 date: formatDateStr(currentDate),
                 slotId,
-                activityType: pickerType,
+                activityType: storedType,
                 count,
                 duration: dur,
                 note: pickerNote,
@@ -296,7 +335,7 @@ const HourlyTrackerPage = () => {
             const cntStr = act.hasCount && count > 1 ? ` · ×${count}` : '';
             showToast(`${act.icon} ${consultant.name}${durStr}${cntStr}`);
         } catch (err) {
-            showToast('Failed to save');
+            showToast(err.response?.data?.message || err.message || 'Failed to save');
         }
         setLoading(false);
     };
@@ -317,6 +356,23 @@ const HourlyTrackerPage = () => {
             showToast('Failed to clear');
         }
         setLoading(false);
+    };
+
+    const getOpsNotes = (consultantId) => {
+        const notes = [];
+        WORK_SLOTS.forEach((s) => {
+            const d = getAct(consultantId, s.id);
+            if (d && d.activityType === 'noshow' && d.note) {
+                notes.push({ slot: `${s.lbl}–${s.end}`, note: d.note });
+            }
+        });
+        return notes;
+    };
+
+    const handleViewOpsNotes = (consultant) => {
+        const notes = getOpsNotes(consultant._id);
+        setOpsNoteContent({ name: consultant.name, notes });
+        setOpsNoteOpen(true);
     };
 
     const getAdmission = (consultantId) => admissions.get(consultantId) || 0;
@@ -351,13 +407,16 @@ const HourlyTrackerPage = () => {
 
     const handleAddConsultant = async () => {
         if (!newConsultantName.trim()) { showToast('Enter consultant name'); return; }
+        if (!selectedTeamLead) { showToast('Select a team lead'); return; }
+        const lead = teamLeads.find((l) => l._id === selectedTeamLead);
         try {
             await consultantService.createConsultant({
                 name: newConsultantName.trim(),
-                teamName: newConsultantTeam.trim() || 'General',
+                teamLead: selectedTeamLead,
+                teamName: lead?.teamName || '',
             });
             setNewConsultantName('');
-            setNewConsultantTeam('');
+            setSelectedTeamLead('');
             await loadConsultants();
             showToast('Consultant added');
         } catch (err) {
@@ -411,28 +470,29 @@ const HourlyTrackerPage = () => {
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
         const rows = consultants.map((c) => {
-            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, physicalMtgs: 0, zoomMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [] };
+            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [] };
             // Sum admissions for this consultant across the month
             monthAdmissions.filter((a) => a.consultant === c._id).forEach((a) => { r.admissions += a.count || 0; });
             for (let d = 1; d <= daysInMonth; d++) {
-                let dayCalls = 0, dayPhysical = 0, dayZoom = 0, dayTeam = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayActiveHrs = 0, dayMeetHrs = 0;
+                let dayCalls = 0, dayOffline = 0, dayZoom = 0, dayOut = 0, dayTeam = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayActiveHrs = 0, dayMeetHrs = 0;
                 const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 monthActivities.filter((a) => a.consultant === c._id && a.date && a.date.startsWith(dateStr) && !a.isContinuation).forEach((a) => {
                     const mins = a.duration || 60;
                     const hrs = mins / 60;
                     dayActiveHrs += hrs;
-                    if (a.activityType === 'call') dayCalls += a.count || 1;
-                    if (a.activityType === 'followup') dayFollowups += a.count || 1;
-                    if (a.activityType === 'noshow') dayNoshows += a.count || 1;
+                    if (a.activityType === 'call' || a.activityType === 'call_followup') dayCalls += a.count || 1;
+                    if (a.activityType === 'followup' || a.activityType === 'call_followup') dayFollowups += a.count || 1;
+                    if (a.activityType === 'noshow') dayNoshows++;
                     if (a.activityType === 'drip') dayDrips++;
-                    if (a.activityType === 'meeting' || a.activityType === 'outmeet') { dayPhysical++; dayMeetHrs += hrs; }
+                    if (a.activityType === 'meeting') { dayOffline++; dayMeetHrs += hrs; }
+                    if (a.activityType === 'outmeet') { dayOut++; dayMeetHrs += hrs; }
                     if (a.activityType === 'zoom') { dayZoom++; dayMeetHrs += hrs; }
                     if (a.activityType === 'teammeet') { dayTeam++; dayMeetHrs += hrs; }
                 });
                 r.calls += dayCalls; r.followups += dayFollowups; r.noshows += dayNoshows;
-                r.drips += dayDrips; r.physicalMtgs += dayPhysical; r.zoomMtgs += dayZoom; r.teamMtgs += dayTeam;
+                r.drips += dayDrips; r.offlineMtgs += dayOffline; r.zoomMtgs += dayZoom; r.outMtgs += dayOut; r.teamMtgs += dayTeam;
                 r.activeHrs += dayActiveHrs; r.meetHrs += dayMeetHrs;
-                const dayMeetings = dayPhysical + dayZoom + dayTeam;
+                const dayMeetings = dayOffline + dayZoom + dayOut + dayTeam;
                 if (dayCalls + dayMeetings + dayFollowups + dayNoshows + dayDrips > 0) r.days++;
                 r.heatmap.push(dayCalls + dayMeetings + dayDrips + dayFollowups);
             }
@@ -441,10 +501,10 @@ const HourlyTrackerPage = () => {
             return r;
         });
 
-        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, physicalMtgs: 0, zoomMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0 };
+        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0 };
         rows.forEach((r) => {
             teamTot.calls += r.calls; teamTot.followups += r.followups; teamTot.noshows += r.noshows;
-            teamTot.drips += r.drips; teamTot.physicalMtgs += r.physicalMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.teamMtgs += r.teamMtgs;
+            teamTot.drips += r.drips; teamTot.offlineMtgs += r.offlineMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.outMtgs += r.outMtgs; teamTot.teamMtgs += r.teamMtgs;
             teamTot.activeHrs += r.activeHrs; teamTot.meetHrs += r.meetHrs; teamTot.admissions += r.admissions; teamTot.days += r.days;
         });
         teamTot.activeHrs = +teamTot.activeHrs.toFixed(1);
@@ -463,11 +523,12 @@ const HourlyTrackerPage = () => {
 
     // ─── STYLES ──────────────────────────────────────
     const S = {
-        hdr: { background: '#0c1829', height: 52, display: 'flex', alignItems: 'center', gap: 1, px: 1.5, position: 'relative', zIndex: 50, boxShadow: '0 2px 12px rgba(0,0,0,.25)', overflow: 'visible', flexShrink: 0 },
+        hdrWrap: { background: '#faf8f5', position: 'relative', zIndex: 50, boxShadow: '0 2px 8px rgba(0,0,0,.08)', flexShrink: 0, borderBottom: '1px solid #e8e2d9' },
+        hdr: { display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.8 },
         brand: { display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, mr: 0.5 },
         brandMark: { width: 30, height: 30, borderRadius: '7px', background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff' },
-        vtab: (active) => ({ px: 1.5, py: 0.5, borderRadius: '5px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: active ? 'rgba(255,255,255,.15)' : 'none', color: active ? '#fff' : 'rgba(255,255,255,.5)', transition: 'all .15s', '&:hover': { background: 'rgba(255,255,255,.1)' }, minWidth: 'auto' }),
-        kpi: { display: 'flex', flexDirection: 'column', alignItems: 'center', px: 1.5, py: 0.3, borderRadius: '6px', background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.09)', minWidth: 58 },
+        vtab: (active) => ({ px: 1.5, py: 0.5, borderRadius: '5px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: active ? 'rgba(0,0,0,.08)' : 'none', color: active ? '#1a1a1a' : '#8a8a8a', transition: 'all .15s', '&:hover': { background: 'rgba(0,0,0,.05)' }, minWidth: 'auto' }),
+        kpi: { display: 'flex', flexDirection: 'column', alignItems: 'center', px: 1.5, py: 0.3, borderRadius: '6px', background: 'rgba(0,0,0,.03)', border: '1px solid rgba(0,0,0,.06)', minWidth: 58 },
         th: { background: '#243348', color: 'rgba(255,255,255,.7)', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, fontWeight: 500, p: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' },
         td: { borderRight: '1px solid #dde3ed', borderBottom: '1px solid #dde3ed', height: 36, verticalAlign: 'middle', p: 0 },
     };
@@ -478,37 +539,38 @@ const HourlyTrackerPage = () => {
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f3f8', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>
             {/* ── HEADER ── */}
-            <Box sx={S.hdr}>
-                <Tooltip title="Back to Dashboard">
-                    <IconButton size="small" onClick={() => navigate(user?.role === 'admin' ? '/admin/dashboard' : '/team-lead/dashboard')} sx={{ color: 'rgba(255,255,255,.5)', p: 0.5 }}>
-                        <ArrowBackIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                </Tooltip>
-                <Box sx={S.brand}>
-                    <Box sx={S.brandMark}>L</Box>
-                    <Typography sx={{ fontWeight: 700, fontSize: 13, color: '#fff', whiteSpace: 'nowrap' }}>
-                        <span style={{ color: '#0ea5e9' }}>Learners</span> Activity Tracker
-                    </Typography>
-                </Box>
+            <Box sx={S.hdrWrap}>
+                {/* Top row: brand, tabs, date nav, actions */}
+                <Box sx={S.hdr}>
+                    <Tooltip title="Back to Dashboard">
+                        <IconButton size="small" onClick={() => navigate(user?.role === 'admin' ? '/admin/dashboard' : '/team-lead/dashboard')} sx={{ color: '#6b7280', p: 0.5 }}>
+                            <ArrowBackIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                    </Tooltip>
+                    <Box sx={S.brand}>
+                        <Box sx={S.brandMark}>L</Box>
+                        <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: '#0ea5e9' }}>Consultant</span> Hourly Tracker
+                        </Typography>
+                    </Box>
 
-                <Box sx={{ width: '1px', height: 24, background: 'rgba(255,255,255,.1)', flexShrink: 0 }} />
+                    <Box sx={{ width: '1px', height: 24, background: 'rgba(0,0,0,.1)', flexShrink: 0 }} />
 
-                {/* View tabs */}
-                <Box sx={{ display: 'flex', gap: '3px', background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: '8px', p: '3px', flexShrink: 0 }}>
-                    <Button sx={S.vtab(currentView === 'daily')} onClick={() => setCurrentView('daily')}>📅 Daily</Button>
-                    <Button sx={S.vtab(currentView === 'monthly')} onClick={() => setCurrentView('monthly')}>📊 Monthly</Button>
-                </Box>
+                    {/* View tabs */}
+                    <Box sx={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,.04)', border: '1px solid rgba(0,0,0,.08)', borderRadius: '8px', p: '3px', flexShrink: 0 }}>
+                        <Button sx={S.vtab(currentView === 'daily')} onClick={() => setCurrentView('daily')}>📅 Daily</Button>
+                        <Button sx={S.vtab(currentView === 'monthly')} onClick={() => setCurrentView('monthly')}>📊 Monthly</Button>
+                    </Box>
 
-                <Box sx={{ width: '1px', height: 24, background: 'rgba(255,255,255,.1)', flexShrink: 0 }} />
+                    <Box sx={{ width: '1px', height: 24, background: 'rgba(0,0,0,.1)', flexShrink: 0 }} />
 
-                {/* Date nav (daily only) */}
-                {currentView === 'daily' && (
-                    <>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-                            <IconButton size="small" onClick={() => shiftDate(-1)} sx={{ width: 26, height: 26, borderRadius: '5px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.06)', color: 'rgba(255,255,255,.6)', '&:hover': { background: 'rgba(255,255,255,.14)', color: '#fff' } }}>
+                    {/* Date nav (daily only) */}
+                    {currentView === 'daily' && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                            <IconButton size="small" onClick={() => shiftDate(-1)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
                                 <ChevronLeft sx={{ fontSize: 16 }} />
                             </IconButton>
-                            <Box onClick={() => dateInputRef.current?.showPicker()} sx={{ px: '11px', py: '4px', borderRadius: '6px', background: 'rgba(255,255,255,.09)', border: '1px solid rgba(255,255,255,.12)', fontSize: 12, fontWeight: 600, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap', '&:hover': { background: 'rgba(255,255,255,.14)' } }}>
+                            <Box onClick={() => dateInputRef.current?.showPicker()} sx={{ px: '14px', py: '5px', borderRadius: '6px', background: 'rgba(0,0,0,.05)', border: '1px solid rgba(0,0,0,.1)', fontSize: 13, fontWeight: 600, color: '#1a1a1a', cursor: 'pointer', whiteSpace: 'nowrap', '&:hover': { background: 'rgba(0,0,0,.08)' } }}>
                                 {`${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
                             </Box>
                             <input
@@ -518,63 +580,66 @@ const HourlyTrackerPage = () => {
                                 onChange={(e) => { if (e.target.value) { const [y, m, d] = e.target.value.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); } }}
                                 style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}
                             />
-                            <IconButton size="small" onClick={() => shiftDate(1)} sx={{ width: 26, height: 26, borderRadius: '5px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.06)', color: 'rgba(255,255,255,.6)', '&:hover': { background: 'rgba(255,255,255,.14)', color: '#fff' } }}>
+                            <IconButton size="small" onClick={() => shiftDate(1)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
                                 <ChevronRight sx={{ fontSize: 16 }} />
                             </IconButton>
-                            <Button size="small" onClick={goToday} sx={{ px: '10px', py: '4px', borderRadius: '5px', border: '1px solid rgba(255,255,255,.15)', color: 'rgba(255,255,255,.5)', fontSize: 11, fontWeight: 500, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(255,255,255,.1)', color: '#fff' } }}>
+                            <Button size="small" onClick={goToday} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
                                 Today
                             </Button>
                         </Box>
+                    )}
 
-                        {/* KPIs */}
-                        <Box sx={{ display: 'flex', gap: '3px', ml: 'auto', flexShrink: 0 }}>
-                            {[
-                                { v: teamTotals.calls, l: 'Calls', c: '#60a5fa' },
-                                { v: teamTotals.physicalMtgs, l: 'Offline Meeting', c: '#4ade80' },
-                                { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#818cf8' },
-                                { v: teamTotals.teamMtgs, l: 'Team Meeting', c: '#f472b6' },
-                                { v: teamTotals.noshows, l: 'Ops', c: '#f87171' },
-                                { v: teamTotals.followups, l: 'Follow-ups', c: '#fbbf24' },
-                                { v: teamTotals.drips, l: 'Drips', c: '#c084fc' },
-                                { v: getTotalAdmissions(), l: 'Admissions', c: '#f9a8d4' },
-                            ].map((kpi) => (
-                                <Box key={kpi.l} sx={S.kpi}>
-                                    <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 600, color: kpi.c, lineHeight: 1.1 }}>{kpi.v}</Typography>
-                                    <Typography sx={{ fontSize: 9, color: 'rgba(255,255,255,.3)', textTransform: 'uppercase', letterSpacing: '.07em', mt: '1px' }}>{kpi.l}</Typography>
+                    <Box sx={{ flex: 1 }} />
+
+                    {currentView === 'daily' && !isTodaySelected && (
+                        <Box sx={{ px: '11px', py: '5px', borderRadius: '6px', border: '1px solid #f59e0b', background: '#fffbeb', fontSize: 11, fontWeight: 600, color: '#b45309', flexShrink: 0 }}>
+                            View Only
+                        </Box>
+                    )}
+                    {isAdmin && (
+                        <Button size="small" onClick={() => setManageOpen(true)} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                            <PersonAddIcon sx={{ fontSize: 14, mr: 0.5 }} /> Manage
+                        </Button>
+                    )}
+                    {currentView === 'daily' && isTodaySelected && isAdmin && (
+                        <Button size="small" onClick={handleClearDay} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#9ca3af', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' } }}>
+                            ✕ Clear Day
+                        </Button>
+                    )}
+                </Box>
+
+                {/* Bottom row: KPIs + Legend */}
+                {currentView === 'daily' && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', px: 2, pb: 1, pt: 0.3 }}>
+                        {[
+                            { v: teamTotals.calls, l: 'Calls', c: '#60a5fa', icon: '📞' },
+                            { v: teamTotals.offlineMtgs, l: 'Offline Mtg', c: '#4ade80', icon: '🤝' },
+                            { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#818cf8', icon: '💻' },
+                            { v: teamTotals.outMtgs, l: 'Out Mtg', c: '#a78bfa', icon: '🚗' },
+                            { v: teamTotals.teamMtgs, l: 'Team Mtg', c: '#f472b6', icon: '👥' },
+                            { v: teamTotals.noshows, l: 'Ops', c: '#f87171', icon: '⚙️' },
+                            { v: teamTotals.followups, l: 'Follow-ups', c: '#fbbf24', icon: '↩️' },
+                            { v: teamTotals.drips, l: 'Drips', c: '#c084fc', icon: '📧' },
+                            { v: getTotalAdmissions(), l: 'Admissions', c: '#f9a8d4', icon: '🎓' },
+                        ].map((kpi) => (
+                            <Box key={kpi.l} sx={S.kpi}>
+                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, color: kpi.c, lineHeight: 1.1 }}>{kpi.v}</Typography>
+                                <Typography sx={{ fontSize: 9, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '.07em', mt: '2px' }}>{kpi.icon} {kpi.l}</Typography>
+                            </Box>
+                        ))}
+
+                        <Box sx={{ flex: 1 }} />
+
+                        {/* Legend chips */}
+                        <Box sx={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', flexShrink: 0 }}>
+                            {ACTIVITY_TYPES.map((a) => (
+                                <Box key={a.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.2, py: 0.5, borderRadius: '14px', border: `1px solid ${a.color}40`, background: `${a.color}15`, whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: a.color, flexShrink: 0 }}>
+                                    <span style={{ fontSize: 15 }}>{a.icon}</span> {a.lbl}
                                 </Box>
                             ))}
                         </Box>
-
-                        {!isTodaySelected && (
-                            <Box sx={{ px: '11px', py: '4px', borderRadius: '6px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', fontSize: 11, fontWeight: 600, color: '#fbbf24', flexShrink: 0 }}>
-                                View Only
-                            </Box>
-                        )}
-                        {isAdmin && (
-                            <Button size="small" onClick={() => setManageOpen(true)} sx={{ px: '11px', py: '4px', borderRadius: '6px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', color: 'rgba(255,255,255,.5)', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(255,255,255,.12)', color: '#fff' } }}>
-                                <PersonAddIcon sx={{ fontSize: 14, mr: 0.5 }} /> Manage
-                            </Button>
-                        )}
-                        {isTodaySelected && isAdmin && (
-                            <Button size="small" onClick={handleClearDay} sx={{ px: '11px', py: '4px', borderRadius: '6px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(255,255,255,.05)', color: 'rgba(255,255,255,.4)', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(220,38,38,.2)', color: '#fca5a5', borderColor: 'rgba(220,38,38,.3)' } }}>
-                                ✕ Clear Day
-                            </Button>
-                        )}
-                    </>
-                )}
-            </Box>
-
-            {/* ── LEGEND BAR ── */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'nowrap', overflowX: 'auto', px: 2, py: 0.6, background: '#fff', borderBottom: '1px solid #dde3ed', flexShrink: 0, '&::-webkit-scrollbar': { height: 0 } }}>
-                {ACTIVITY_TYPES.map((a) => (
-                    <Box key={a.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.3, borderRadius: 20, border: `1px solid ${a.color}25`, color: a.color, background: a.bg, whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 500, flexShrink: 0 }}>
-                        <Box sx={{ width: 7, height: 7, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
-                        {a.icon} {a.lbl}
                     </Box>
-                ))}
-                <Typography sx={{ fontSize: 10.5, color: '#8a9ab0', whiteSpace: 'nowrap', ml: 0.5, flexShrink: 0 }}>
-                    Click cell to select activity & enter count/duration
-                </Typography>
+                )}
             </Box>
 
             {/* ── DAILY VIEW ── */}
@@ -595,7 +660,7 @@ const HourlyTrackerPage = () => {
                                 <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
                                     AFTERNOON 2:00-7:30
                                 </th>
-                                <th colSpan={10} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
+                                <th colSpan={11} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
                                     DAILY SUMMARY
                                 </th>
                             </tr>
@@ -612,7 +677,7 @@ const HourlyTrackerPage = () => {
                                 })}
                                 {[
                                     { l: 'CALLS', c: '#93c5fd' }, { l: 'F/UP', c: '#67e8f9' }, { l: 'OPS', c: '#fca5a5' },
-                                    { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'TEAM MEETING', c: '#f472b6' }, { l: 'ACT HRS', c: '#94a3b8' }, { l: 'MEETING HRS', c: '#94a3b8' }, { l: 'ADMISSION', c: '#f9a8d4' },
+                                    { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'OUT MEETING', c: '#a78bfa' }, { l: 'TEAM MEETING', c: '#f472b6' }, { l: 'ACT HRS', c: '#94a3b8' }, { l: 'MEETING HRS', c: '#94a3b8' }, { l: 'ADMISSION', c: '#f9a8d4' },
                                 ].map((h, i) => (
                                     <th key={h.l} style={{ width: 52, background: '#1e1a0e', color: h.c, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', borderLeft: i === 0 ? '2px solid #dfd08a' : 'none' }}>{h.l}</th>
                                 ))}
@@ -643,7 +708,7 @@ const HourlyTrackerPage = () => {
                                                 );
                                             }
                                             const d = getAct(c._id, s.id);
-                                            const act = d && !d.isContinuation ? ACTIVITY_TYPES.find((a) => a.id === d.activityType) : null;
+                                            const act = d && !d.isContinuation ? (ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType] || null) : null;
                                             const isCur = s.id === curSlot;
                                             return (
                                                 <td
@@ -662,7 +727,7 @@ const HourlyTrackerPage = () => {
                                                     }}
                                                 >
                                                     {d && d.isContinuation && (() => {
-                                                        const pAct = ACTIVITY_TYPES.find((a) => a.id === d.activityType);
+                                                        const pAct = ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
                                                         return pAct ? (
                                                             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '2px 5px', borderRadius: 4, fontSize: 8.5, fontWeight: 700, fontStyle: 'italic', color: pAct.color, background: pAct.bg, borderLeft: `2px solid ${pAct.color}`, opacity: .65 }}>
                                                                 {pAct.icon}
@@ -687,14 +752,20 @@ const HourlyTrackerPage = () => {
                                         })}
                                         {/* Stats columns */}
                                         {[
-                                            { v: st.calls, cls: '#2563eb' }, { v: st.followups, cls: '#0891b2' }, { v: st.noshows, cls: '#dc2626' },
-                                            { v: st.drips, cls: '#d97706' }, { v: st.physicalMtgs, cls: '#16a34a' }, { v: st.zoomMtgs, cls: '#4f46e5' }, { v: st.teamMtgs, cls: '#be185d' },
+                                            { v: st.calls, cls: '#2563eb' }, { v: st.followups, cls: '#0891b2' }, { v: st.noshows, cls: '#dc2626', isOps: true },
+                                            { v: st.drips, cls: '#d97706' }, { v: st.offlineMtgs, cls: '#16a34a' }, { v: st.zoomMtgs, cls: '#4f46e5' }, { v: st.outMtgs, cls: '#7c3aed' }, { v: st.teamMtgs, cls: '#be185d' },
                                             { v: st.activeHrs, cls: '#44556a', suf: 'h' }, { v: st.meetHrs, cls: '#44556a', suf: 'h' },
                                         ].map((sv, i) => (
                                             <td key={i} style={{ ...S.td, width: 52, textAlign: 'center', background: '#fffcf0', borderRight: '1px solid #e5dab8', borderLeft: i === 0 ? '2px solid #dfd08a' : undefined }}>
                                                 <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 600, color: sv.v === 0 ? '#c5d0df' : sv.cls }}>
                                                     {sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}
                                                 </span>
+                                                {sv.isOps && sv.v > 0 && (
+                                                    <VisibilityIcon
+                                                        onClick={(e) => { e.stopPropagation(); handleViewOpsNotes(c); }}
+                                                        sx={{ fontSize: 13, color: '#dc2626', ml: 0.3, cursor: 'pointer', verticalAlign: 'middle', opacity: 0.6, '&:hover': { opacity: 1 } }}
+                                                    />
+                                                )}
                                             </td>
                                         ))}
                                         {/* Admission cell */}
@@ -734,7 +805,7 @@ const HourlyTrackerPage = () => {
                                 })}
                                 {[
                                     { v: teamTotals.calls, c: '#93c5fd' }, { v: teamTotals.followups, c: '#67e8f9' }, { v: teamTotals.noshows, c: '#fca5a5' },
-                                    { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.physicalMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.teamMtgs, c: '#f472b6' },
+                                    { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.offlineMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.outMtgs, c: '#a78bfa' }, { v: teamTotals.teamMtgs, c: '#f472b6' },
                                     { v: teamTotals.activeHrs, c: '#94a3b8', suf: 'h' }, { v: teamTotals.meetHrs, c: '#94a3b8', suf: 'h' },
                                 ].map((sv, i) => (
                                     <td key={i} style={{ background: '#1a2840', borderBottom: 'none', borderRight: '1px solid rgba(255,255,255,.07)', height: 34, textAlign: 'center' }}>
@@ -775,11 +846,12 @@ const HourlyTrackerPage = () => {
                         </Box>
 
                         {/* Summary cards */}
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 1.2, mb: 2.5 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(10,1fr)', gap: 1.2, mb: 2.5 }}>
                             {[
                                 { v: teamTot.calls, l: 'Total Calls', sub: `avg ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0}/consultant`, c: '#2563eb', bc: '#2563eb' },
-                                { v: teamTot.physicalMtgs, l: 'Offline Meetings', sub: 'physical + out', c: '#16a34a', bc: '#16a34a' },
+                                { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'physical meetings', c: '#16a34a', bc: '#16a34a' },
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'virtual meetings', c: '#4f46e5', bc: '#4f46e5' },
+                                { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'outside meetings', c: '#7c3aed', bc: '#7c3aed' },
                                 { v: teamTot.teamMtgs, l: 'Team Meeting', sub: 'team meetings', c: '#be185d', bc: '#be185d' },
                                 { v: teamTot.noshows, l: 'Operations', sub: 'total logged', c: '#dc2626', bc: '#dc2626' },
                                 { v: teamTot.drips, l: 'Drip Steps', sub: 'campaigns executed', c: '#d97706', bc: '#d97706' },
@@ -804,7 +876,7 @@ const HourlyTrackerPage = () => {
                                             { l: '#', c: 'rgba(255,255,255,.3)', align: 'left', w: 40 },
                                             { l: 'Consultant', c: 'rgba(255,255,255,.7)', align: 'left', w: 160 },
                                             { l: 'Calls', c: '#93c5fd' }, { l: 'Follow-ups', c: '#67e8f9' }, { l: 'Operations', c: '#fca5a5' },
-                                            { l: 'Drips', c: '#fcd34d' }, { l: 'Offline Meeting', c: '#86efac' }, { l: 'Zoom', c: '#818cf8' }, { l: 'Team Meeting', c: '#f472b6' },
+                                            { l: 'Drips', c: '#fcd34d' }, { l: 'Offline Meeting', c: '#86efac' }, { l: 'Zoom', c: '#818cf8' }, { l: 'Out Meeting', c: '#a78bfa' }, { l: 'Team Meeting', c: '#f472b6' },
                                             { l: 'Act Hrs', c: '#94a3b8' }, { l: 'Meeting Hrs', c: '#94a3b8' }, { l: 'Admissions', c: '#f9a8d4' }, { l: 'Days Active', c: '#e2e8f0' },
                                             { l: 'Productivity', c: '#c084fc' }, { l: 'Activity Heatmap', c: '#c084fc', w: 140 },
                                         ].map((h) => (
@@ -822,7 +894,7 @@ const HourlyTrackerPage = () => {
                                                 <td style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: '#0d1520', borderRight: '1px solid #dde3ed' }}>{r.consultant.name}</td>
                                                 {[
                                                     { v: r.calls, c: '#2563eb' }, { v: r.followups, c: '#0891b2' }, { v: r.noshows, c: '#dc2626' },
-                                                    { v: r.drips, c: '#d97706' }, { v: r.physicalMtgs, c: '#16a34a' }, { v: r.zoomMtgs, c: '#4f46e5' }, { v: r.teamMtgs, c: '#be185d' },
+                                                    { v: r.drips, c: '#d97706' }, { v: r.offlineMtgs, c: '#16a34a' }, { v: r.zoomMtgs, c: '#4f46e5' }, { v: r.outMtgs, c: '#7c3aed' }, { v: r.teamMtgs, c: '#be185d' },
                                                     { v: r.activeHrs, c: '#44556a', suf: 'h' }, { v: r.meetHrs, c: '#44556a', suf: 'h' }, { v: r.admissions, c: '#be185d' },
                                                     { v: r.days, c: '#44556a' },
                                                 ].map((sv, j) => (
@@ -857,7 +929,7 @@ const HourlyTrackerPage = () => {
                                         <td style={{ padding: '9px 10px', textAlign: 'left', color: 'rgba(255,255,255,.6)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700, borderRight: '1px solid rgba(255,255,255,.07)' }}>TEAM TOTAL</td>
                                         {[
                                             { v: teamTot.calls, c: '#93c5fd' }, { v: teamTot.followups, c: '#67e8f9' }, { v: teamTot.noshows, c: '#fca5a5' },
-                                            { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.physicalMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.teamMtgs, c: '#f472b6' },
+                                            { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.offlineMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.outMtgs, c: '#a78bfa' }, { v: teamTot.teamMtgs, c: '#f472b6' },
                                             { v: teamTot.activeHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.admissions, c: '#f9a8d4' },
                                             { v: teamTot.days, c: '#e2e8f0' },
                                         ].map((sv, i) => (
@@ -878,14 +950,14 @@ const HourlyTrackerPage = () => {
             <Dialog
                 open={pickerOpen}
                 onClose={() => setPickerOpen(false)}
-                PaperProps={{ sx: { borderRadius: '14px', p: 2, width: 340, maxWidth: '96vw' } }}
+                PaperProps={{ sx: { borderRadius: '16px', p: 3, width: 520, maxWidth: '96vw', minHeight: 500 } }}
             >
                 <DialogContent sx={{ p: 0 }}>
                     {/* Header */}
                     <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1.5 }}>
                         <Box>
-                            <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#0d1520' }}>Log Activity</Typography>
-                            <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>
+                            <Typography sx={{ fontSize: 18, fontWeight: 700, color: '#0d1520' }}>Log Activity</Typography>
+                            <Typography sx={{ fontSize: 13, color: '#8a9ab0', mt: 0.3 }}>
                                 {pickerTarget?.consultant?.name || ''} · {(() => { const s = SLOTS.find((x) => x.id === pickerTarget?.slotId); return s ? `${s.lbl}–${s.end}` : ''; })()}
                             </Typography>
                         </Box>
@@ -895,29 +967,47 @@ const HourlyTrackerPage = () => {
                     </Box>
 
                     {/* Activity type grid */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.7, mb: 1.5 }}>
-                        {ACTIVITY_TYPES.map((a) => (
-                            <Box
-                                key={a.id}
-                                onClick={() => setPickerType(a.id)}
-                                sx={{
-                                    display: 'flex', alignItems: 'center', gap: 1, p: '8px 10px', borderRadius: '9px',
-                                    border: `1.5px solid ${a.color}30`, color: a.color, background: a.bg,
-                                    cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all .12s',
-                                    outline: pickerType === a.id ? `2px solid ${a.color}` : 'none', outlineOffset: 2,
-                                    '&:hover': { transform: 'translateY(-1px)', boxShadow: '0 3px 10px rgba(0,0,0,.1)' },
-                                }}
-                            >
-                                <span style={{ fontSize: 16, flexShrink: 0 }}>{a.icon}</span>{a.lbl}
-                            </Box>
-                        ))}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1 }}>
+                        {ACTIVITY_TYPES.map((a) => {
+                            const isSelected = pickerTypes.includes(a.id);
+                            const handleTypeClick = () => {
+                                if (a.multiWith) {
+                                    setPickerTypes((prev) => {
+                                        const has = prev.includes(a.id);
+                                        if (has) return prev.filter((t) => t !== a.id);
+                                        return [...prev.filter((t) => t === a.multiWith), a.id];
+                                    });
+                                } else {
+                                    setPickerTypes(isSelected ? [] : [a.id]);
+                                }
+                            };
+                            return (
+                                <Box
+                                    key={a.id}
+                                    onClick={handleTypeClick}
+                                    sx={{
+                                        display: 'flex', alignItems: 'center', gap: 1.2, p: '12px 14px', borderRadius: '10px',
+                                        border: `1.5px solid ${a.color}30`, color: a.color, background: a.bg,
+                                        cursor: 'pointer', fontSize: 14, fontWeight: 600, transition: 'all .12s',
+                                        outline: isSelected ? `2.5px solid ${a.color}` : 'none', outlineOffset: 2,
+                                        '&:hover': { transform: 'translateY(-1px)', boxShadow: '0 3px 10px rgba(0,0,0,.1)' },
+                                    }}
+                                >
+                                    <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>{a.lbl}
+                                </Box>
+                            );
+                        })}
                     </Box>
 
+                    <Typography sx={{ fontSize: 11.5, color: '#8a9ab0', fontStyle: 'italic', mb: 1.5, textAlign: 'center' }}>
+                        Call and Follow-up can be selected together
+                    </Typography>
+
                     {/* Count input */}
-                    {pickerType && ACTIVITY_TYPES.find((a) => a.id === pickerType)?.hasCount && (
+                    {pickerTypes.length > 0 && pickerTypes.some((t) => ACTIVITY_TYPES.find((a) => a.id === t)?.hasCount) && (
                         <Box sx={{ background: '#f7f9fc', border: '1px solid #dde3ed', borderRadius: '10px', p: 1.5, mb: 1.5 }}>
                             <Typography sx={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: '#8a9ab0', mb: 0.7 }}>
-                                Number of {ACTIVITY_TYPES.find((a) => a.id === pickerType)?.lbl}s
+                                Count
                             </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Button size="small" onClick={() => setPickerCount((p) => Math.max(1, p - 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>−</Button>
@@ -929,13 +1019,13 @@ const HourlyTrackerPage = () => {
                                     sx={{ width: 70, '& .MuiInputBase-input': { textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, p: '5px' } }}
                                 />
                                 <Button size="small" onClick={() => setPickerCount((p) => Math.min(999, p + 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>+</Button>
-                                <Typography sx={{ fontSize: 12, color: '#8a9ab0', ml: 0.5 }}>{ACTIVITY_TYPES.find((a) => a.id === pickerType)?.unit || 'count'}</Typography>
+                                <Typography sx={{ fontSize: 12, color: '#8a9ab0', ml: 0.5 }}>{pickerTypes.length === 1 ? (ACTIVITY_TYPES.find((a) => a.id === pickerTypes[0])?.unit || 'count') : 'count'}</Typography>
                             </Box>
                         </Box>
                     )}
 
                     {/* Duration picker */}
-                    {pickerType && ACTIVITY_TYPES.find((a) => a.id === pickerType)?.hasDur && (
+                    {pickerTypes.length > 0 && pickerTypes.some((t) => ACTIVITY_TYPES.find((a) => a.id === t)?.hasDur) && (
                         <Box sx={{ background: '#f7f9fc', border: '1px solid #dde3ed', borderRadius: '10px', p: 1.5, mb: 1.5 }}>
                             <Typography sx={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: '#8a9ab0', mb: 0.7 }}>Meeting Duration</Typography>
                             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 0.5 }}>
@@ -964,7 +1054,7 @@ const HourlyTrackerPage = () => {
                     {/* Note */}
                     <Box sx={{ mb: 1.5 }}>
                         <Typography sx={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: '#8a9ab0', mb: 0.4 }}>
-                            Note <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                            Note {pickerTypes.includes('noshow') ? <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#dc2626' }}>(required)</span> : <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>}
                         </Typography>
                         <TextField
                             multiline
@@ -983,7 +1073,7 @@ const HourlyTrackerPage = () => {
                         <Button onClick={handleClearSlot} disabled={loading} sx={{ px: 1.5, py: 1, border: '1px solid #c8d0de', borderRadius: '8px', color: '#8a9ab0', textTransform: 'none', fontSize: 13, '&:hover': { background: '#fee2e2', color: '#dc2626', borderColor: 'rgba(220,38,38,.3)' } }}>
                             Clear Slot
                         </Button>
-                        <Button onClick={handleSave} disabled={loading || !pickerType} sx={{ flex: 1, py: 1, background: '#0ea5e9', borderRadius: '8px', color: '#fff', textTransform: 'none', fontSize: 13, fontWeight: 700, '&:hover': { background: '#0284c7', transform: 'translateY(-1px)', boxShadow: '0 4px 12px rgba(14,165,233,.3)' }, '&:disabled': { background: '#c8d0de', color: '#fff' } }}>
+                        <Button onClick={handleSave} disabled={loading || pickerTypes.length === 0} sx={{ flex: 1, py: 1, background: '#0ea5e9', borderRadius: '8px', color: '#fff', textTransform: 'none', fontSize: 13, fontWeight: 700, '&:hover': { background: '#0284c7', transform: 'translateY(-1px)', boxShadow: '0 4px 12px rgba(14,165,233,.3)' }, '&:disabled': { background: '#c8d0de', color: '#fff' } }}>
                             Save
                         </Button>
                     </Box>
@@ -1003,26 +1093,35 @@ const HourlyTrackerPage = () => {
                     </Box>
 
                     {/* Add new consultant */}
-                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                        <TextField
-                            size="small"
-                            placeholder="Consultant name"
-                            value={newConsultantName}
-                            onChange={(e) => setNewConsultantName(e.target.value)}
-                            sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 13 } }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddConsultant(); }}
-                        />
-                        <TextField
-                            size="small"
-                            placeholder="Team name"
-                            value={newConsultantTeam}
-                            onChange={(e) => setNewConsultantTeam(e.target.value)}
-                            sx={{ width: 120, '& .MuiInputBase-input': { fontSize: 13 } }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddConsultant(); }}
-                        />
-                        <Button onClick={handleAddConsultant} variant="contained" size="small" sx={{ minWidth: 'auto', px: 1.5, background: '#0ea5e9', textTransform: 'none', fontWeight: 700, '&:hover': { background: '#0284c7' } }}>
-                            <AddIcon sx={{ fontSize: 18 }} />
-                        </Button>
+                    <Box sx={{ mb: 2 }}>
+                        <FormControl size="small" fullWidth sx={{ mb: 1 }}>
+                            <Select
+                                value={selectedTeamLead}
+                                onChange={(e) => setSelectedTeamLead(e.target.value)}
+                                displayEmpty
+                                sx={{ fontSize: 13 }}
+                            >
+                                <MenuItem value="" disabled><em>Select Team Lead</em></MenuItem>
+                                {teamLeads.map((tl) => (
+                                    <MenuItem key={tl._id} value={tl._id}>
+                                        {tl.name} {tl.teamName ? `(${tl.teamName})` : ''}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <TextField
+                                size="small"
+                                placeholder="Consultant name"
+                                value={newConsultantName}
+                                onChange={(e) => setNewConsultantName(e.target.value)}
+                                sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 13 } }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleAddConsultant(); }}
+                            />
+                            <Button onClick={handleAddConsultant} variant="contained" size="small" sx={{ minWidth: 'auto', px: 1.5, background: '#0ea5e9', textTransform: 'none', fontWeight: 700, '&:hover': { background: '#0284c7' } }}>
+                                <AddIcon sx={{ fontSize: 18 }} />
+                            </Button>
+                        </Box>
                     </Box>
 
                     {/* Consultant list */}
@@ -1039,6 +1138,33 @@ const HourlyTrackerPage = () => {
                             </Box>
                         ))}
                     </Box>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── OPS NOTES DIALOG ── */}
+            <Dialog
+                open={opsNoteOpen}
+                onClose={() => setOpsNoteOpen(false)}
+                PaperProps={{ sx: { borderRadius: '14px', p: 2, width: 380, maxWidth: '96vw' } }}
+            >
+                <DialogContent sx={{ p: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                        <Box>
+                            <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#0d1520' }}>Operations Notes</Typography>
+                            <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>{opsNoteContent.name}</Typography>
+                        </Box>
+                        <IconButton size="small" onClick={() => setOpsNoteOpen(false)} sx={{ width: 26, height: 26, borderRadius: '6px', border: '1px solid #dde3ed' }}>✕</IconButton>
+                    </Box>
+                    {opsNoteContent.notes.length === 0 ? (
+                        <Typography sx={{ fontSize: 12, color: '#8a9ab0', textAlign: 'center', py: 2 }}>No operations notes for today</Typography>
+                    ) : (
+                        opsNoteContent.notes.map((n, i) => (
+                            <Box key={i} sx={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', p: 1.2, mb: 1, borderLeft: '3px solid #dc2626' }}>
+                                <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.3 }}>{n.slot}</Typography>
+                                <Typography sx={{ fontSize: 12, color: '#44556a' }}>{n.note}</Typography>
+                            </Box>
+                        ))
+                    )}
                 </DialogContent>
             </Dialog>
 

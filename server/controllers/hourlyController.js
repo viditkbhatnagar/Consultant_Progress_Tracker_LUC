@@ -9,7 +9,15 @@ function parseDate(dateStr) {
     return new Date(Date.UTC(y, m - 1, d));
 }
 
-// Helper: check if a YYYY-MM-DD string matches today (client sends their local date)
+// Helper: check if a YYYY-MM-DD string is today or in the future (rejects only backdated entries)
+// Uses the date sent by the client (their local laptop time) — only rejects past dates
+function isTodayOrFutureStr(dateStr) {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return dateStr >= todayStr;
+}
+
+// Helper: check if date is exactly today (for strict validation)
 function isTodayStr(dateStr) {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -23,7 +31,7 @@ exports.getConsultants = async (req, res, next) => {
     try {
         const consultants = await Consultant.find({ isActive: true })
             .populate('teamLead', 'name teamName')
-            .sort('teamName name');
+            .sort('name');
 
         res.status(200).json({ success: true, data: consultants });
     } catch (error) {

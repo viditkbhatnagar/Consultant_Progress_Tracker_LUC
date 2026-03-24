@@ -37,6 +37,7 @@ const HourlyActivitySchema = new mongoose.Schema(
             enum: [
                 'call',
                 'followup',
+                'call_followup',
                 'noshow',
                 'drip',
                 'meeting',
