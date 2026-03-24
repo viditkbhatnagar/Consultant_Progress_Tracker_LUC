@@ -509,10 +509,4 @@ Phase 1 (Foundation) is complete! Next steps:
 
 ## Production Deployment (Future)
 
-When ready to deploy:
-1. Set up MongoDB Atlas
-2. Create Render web service
-3. Configure environment variables
-4. Deploy backend to Render
-5. Build frontend and deploy to Render static site
-6. Update REACT_APP_API_URL to production URL
+
