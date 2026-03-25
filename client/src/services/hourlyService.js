@@ -61,6 +61,11 @@ const getAIAnalysis = async (date) => {
     return response.data;
 };
 
+const getTeamLeads = async () => {
+    const response = await axios.get(`${API_BASE_URL}/users`);
+    return response.data;
+};
+
 const getLeaderboard = async (date) => {
     const response = await axios.get(`${API_URL}/leaderboard`, { params: { date } });
     return response.data;
@@ -77,6 +82,7 @@ const hourlyService = {
     upsertAdmission,
     getMonthAdmissions,
     getAIAnalysis,
+    getTeamLeads,
     getLeaderboard,
 };
 

@@ -27,7 +27,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import hourlyService from '../services/hourlyService';
 import consultantService from '../services/consultantService';
-import userService from '../services/userService';
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const SLOTS = [
@@ -217,7 +216,7 @@ const HourlyTrackerPage = () => {
     const loadTeamLeads = useCallback(async () => {
         if (!isAdmin) return;
         try {
-            const res = await userService.getUsers();
+            const res = await hourlyService.getTeamLeads();
             const leads = (res.data || []).filter((u) => u.role === 'team_lead' && u.isActive);
             setTeamLeads(leads);
         } catch (err) {
