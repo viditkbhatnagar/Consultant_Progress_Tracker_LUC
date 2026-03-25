@@ -84,7 +84,7 @@ exports.upsertSlot = async (req, res, next) => {
             });
         }
 
-        if (!isTodayStr(date)) {
+        if (req.user.role !== 'admin' && !isTodayStr(date)) {
             return res.status(403).json({
                 success: false,
                 message: 'Entries can only be made for today',
@@ -167,7 +167,7 @@ exports.clearSlot = async (req, res, next) => {
             });
         }
 
-        if (!isTodayStr(date)) {
+        if (req.user.role !== 'admin' && !isTodayStr(date)) {
             return res.status(403).json({
                 success: false,
                 message: 'Can only modify today\'s entries',
@@ -209,7 +209,7 @@ exports.clearDay = async (req, res, next) => {
                 .json({ success: false, message: 'Date is required' });
         }
 
-        if (!isTodayStr(date)) {
+        if (req.user.role !== 'admin' && !isTodayStr(date)) {
             return res.status(403).json({
                 success: false,
                 message: 'Can only clear today\'s data',
@@ -286,7 +286,7 @@ exports.upsertAdmission = async (req, res, next) => {
             });
         }
 
-        if (!isTodayStr(date)) {
+        if (req.user.role !== 'admin' && !isTodayStr(date)) {
             return res.status(403).json({
                 success: false,
                 message: 'Admissions can only be entered for today',
