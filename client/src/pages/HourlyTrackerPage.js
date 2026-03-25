@@ -728,7 +728,7 @@ const HourlyTrackerPage = () => {
                                 <th colSpan={AM_SLOTS.length} style={{ background: '#1e3055', color: '#93c5fd', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
                                     MORNING 9:30-1:00
                                 </th>
-                                <th colSpan={1} style={{ background: '#1c1c28', color: 'rgba(255,255,255,.25)', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
+                                <th colSpan={1} style={{ background: '#1c1c28', color: '#fff', fontSize: 15, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
                                     LUNCH
                                 </th>
                                 <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
@@ -745,7 +745,7 @@ const HourlyTrackerPage = () => {
                                 {SLOTS.map((s) => {
                                     const isCur = s.id === curSlot;
                                     if (s.isLunch) {
-                                        return <th key={s.id} style={{ minWidth: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.4)', fontSize: 12, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 11, fontWeight: 600 }}>2:00</span></th>;
+                                        return <th key={s.id} style={{ minWidth: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : '#fff', fontSize: 14, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 13, fontWeight: 600 }}>2:00</span></th>;
                                     }
                                     return <th key={s.id} style={{ minWidth: 125, background: isCur ? '#1a3a52' : '#243348', color: isCur ? '#7dd3fc' : '#fff', fontFamily: '"JetBrains Mono",monospace', fontSize: 14, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>{s.lbl}<br /><span style={{ fontSize: 13, fontWeight: 600 }}>{s.end}</span></th>;
                                 })}
@@ -903,7 +903,7 @@ const HourlyTrackerPage = () => {
             {currentView === 'monthly' && (() => {
                 const { rows, teamTot, daysInMonth } = getMonthlyStats();
                 return (
-                    <Box sx={{ flex: 1, overflow: 'auto', p: 2.5, '&::-webkit-scrollbar': { width: 6, height: 6 }, '&::-webkit-scrollbar-track': { background: '#f0f3f8' }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
+                    <Box sx={{ flex: 1, overflow: 'auto', p: 2.5, '&::-webkit-scrollbar': { width: 10, height: 12 }, '&::-webkit-scrollbar-track': { background: '#e8ecf2' }, '&::-webkit-scrollbar-thumb': { background: '#9aa5b8', borderRadius: 10, '&:hover': { background: '#7a8598' } } }}>
                         {/* Month header + nav */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
                             <Box>
@@ -924,25 +924,25 @@ const HourlyTrackerPage = () => {
                         {/* Summary cards */}
                         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 1.2, mb: 2.5 }}>
                             {[
-                                { v: teamTot.calls, l: 'Total Calls', sub: `avg ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0}/consultant`, c: '#2563eb', bc: '#2563eb' },
+                                { v: teamTot.calls, l: 'Total Calls', sub: `avg ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0} / consultant`, c: '#2563eb', bc: '#2563eb' },
+                                { v: teamTot.followups, l: 'Follow-ups', sub: `avg ${consultants.length ? Math.round(teamTot.followups / consultants.length) : 0} / consultant`, c: '#0891b2', bc: '#0891b2' },
                                 { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'physical meetings', c: '#16a34a', bc: '#16a34a' },
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'virtual meetings', c: '#4f46e5', bc: '#4f46e5' },
                                 { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'outside meetings', c: '#7c3aed', bc: '#7c3aed' },
                                 { v: teamTot.noshows, l: 'Operations', sub: 'total logged', c: '#dc2626', bc: '#dc2626' },
                                 { v: teamTot.drips, l: 'Drip Steps', sub: 'campaigns executed', c: '#d97706', bc: '#d97706' },
-                                { v: teamTot.followups, l: 'Follow-ups', sub: 'total sent', c: '#0891b2', bc: '#0891b2' },
                                 { v: teamTot.admissions, l: 'Admissions', sub: 'total', c: '#be185d', bc: '#be185d' },
                             ].map((card) => (
                                 <Box key={card.l} sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
                                     <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 26, fontWeight: 600, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
                                     <Typography sx={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 600 }}>{card.l}</Typography>
-                                    <Typography sx={{ fontSize: 10, color: '#c5d0df', mt: 0.3, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
+                                    <Typography sx={{ fontSize: 12, color: '#1a1a1a', mt: 0.3, fontWeight: 600, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
                                 </Box>
                             ))}
                         </Box>
 
                         {/* Monthly table */}
-                        <Box sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', '&::-webkit-scrollbar': { height: 6 }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
+                        <Box sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', '&::-webkit-scrollbar': { height: 12 }, '&::-webkit-scrollbar-track': { background: '#e8ecf2' }, '&::-webkit-scrollbar-thumb': { background: '#9aa5b8', borderRadius: 10, '&:hover': { background: '#7a8598' } } }}>
                             <table style={{ borderCollapse: 'collapse', minWidth: 1200 }}>
                                 <thead>
                                     <tr style={{ background: '#1a2840' }}>
