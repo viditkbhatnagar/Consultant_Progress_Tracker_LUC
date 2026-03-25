@@ -518,11 +518,11 @@ const HourlyTrackerPage = () => {
         const rows = consultants.map((c) => {
             const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [] };
             // Sum admissions for this consultant across the month
-            monthAdmissions.filter((a) => a.consultant === c._id).forEach((a) => { r.admissions += a.count || 0; });
+            monthAdmissions.filter((a) => String(a.consultant) === String(c._id)).forEach((a) => { r.admissions += a.count || 0; });
             for (let d = 1; d <= daysInMonth; d++) {
                 let dayCalls = 0, dayOffline = 0, dayZoom = 0, dayOut = 0, dayTeam = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayActiveHrs = 0, dayMeetHrs = 0;
                 const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                monthActivities.filter((a) => a.consultant === c._id && a.date && a.date.startsWith(dateStr) && !a.isContinuation).forEach((a) => {
+                monthActivities.filter((a) => String(a.consultant) === String(c._id) && a.date && a.date.startsWith(dateStr) && !a.isContinuation).forEach((a) => {
                     const mins = a.duration || 60;
                     const hrs = mins / 60;
                     dayActiveHrs += hrs;
@@ -949,8 +949,8 @@ const HourlyTrackerPage = () => {
                         </Box>
 
                         {/* Monthly table */}
-                        <Box sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)' }}>
-                            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                        <Box sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', '&::-webkit-scrollbar': { height: 6 }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
+                            <table style={{ borderCollapse: 'collapse', minWidth: 1200 }}>
                                 <thead>
                                     <tr style={{ background: '#1a2840' }}>
                                         {[
@@ -968,7 +968,7 @@ const HourlyTrackerPage = () => {
                                 <tbody>
                                     {rows.map((r, i) => {
                                         const p = prd(r);
-                                        const anyData = r.calls + r.physicalMtgs + r.zoomMtgs + r.teamMtgs + r.noshows + r.drips + r.followups > 0;
+                                        const anyData = r.calls + r.offlineMtgs + r.zoomMtgs + r.outMtgs + r.teamMtgs + r.noshows + r.drips + r.followups > 0;
                                         return (
                                             <tr key={r.consultant._id} style={{ borderBottom: '1px solid #dde3ed' }}>
                                                 <td style={{ padding: '8px 10px', color: '#8a9ab0', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, borderRight: '1px solid #dde3ed' }}>{i + 1}</td>
