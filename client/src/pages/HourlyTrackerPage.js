@@ -12,6 +12,7 @@ import {
     MenuItem,
     Select,
     FormControl,
+    CircularProgress,
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -143,6 +144,16 @@ const HourlyTrackerPage = () => {
     // Ops note viewer
     const [opsNoteOpen, setOpsNoteOpen] = useState(false);
     const [opsNoteContent, setOpsNoteContent] = useState({ name: '', notes: [] });
+
+    // AI Analysis
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiAnalysis, setAiAnalysis] = useState('');
+
+    // Leaderboard
+    const [lbOpen, setLbOpen] = useState(false);
+    const [lbLoading, setLbLoading] = useState(false);
+    const [lbData, setLbData] = useState('');
 
     // Toast
     const [toast, setToast] = useState({ open: false, msg: '' });
@@ -359,20 +370,28 @@ const HourlyTrackerPage = () => {
         setLoading(false);
     };
 
-    const getOpsNotes = (consultantId) => {
+    const getNotesForType = (consultantId, actTypes) => {
         const notes = [];
         WORK_SLOTS.forEach((s) => {
             const d = getAct(consultantId, s.id);
-            if (d && d.activityType === 'noshow' && d.note) {
-                notes.push({ slot: `${s.lbl}–${s.end}`, note: d.note });
+            if (d && d.note && actTypes.includes(d.activityType)) {
+                const act = ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
+                notes.push({ slot: `${s.lbl}–${s.end}`, note: d.note, icon: act?.icon || '', lbl: act?.lbl || d.activityType });
             }
         });
         return notes;
     };
 
-    const handleViewOpsNotes = (consultant) => {
-        const notes = getOpsNotes(consultant._id);
-        setOpsNoteContent({ name: consultant.name, notes });
+    const hasNotesForType = (consultantId, actTypes) => {
+        return WORK_SLOTS.some((s) => {
+            const d = getAct(consultantId, s.id);
+            return d && d.note && actTypes.includes(d.activityType);
+        });
+    };
+
+    const handleViewNotes = (consultant, actTypes, title) => {
+        const notes = getNotesForType(consultant._id, actTypes);
+        setOpsNoteContent({ name: `${consultant.name} — ${title}`, notes });
         setOpsNoteOpen(true);
     };
 
@@ -465,6 +484,32 @@ const HourlyTrackerPage = () => {
         setCurrentDate(d);
     };
 
+    const handleAIAnalysis = async () => {
+        setAiLoading(true);
+        setAiOpen(true);
+        setAiAnalysis('');
+        try {
+            const res = await hourlyService.getAIAnalysis(formatDateStr(currentDate));
+            setAiAnalysis(res.data || 'No analysis available');
+        } catch (err) {
+            setAiAnalysis(err.response?.data?.message || 'Failed to generate analysis');
+        }
+        setAiLoading(false);
+    };
+
+    const handleLeaderboard = async () => {
+        setLbLoading(true);
+        setLbOpen(true);
+        setLbData('');
+        try {
+            const res = await hourlyService.getLeaderboard(formatDateStr(currentDate));
+            setLbData(res.data || 'No data available');
+        } catch (err) {
+            setLbData(err.response?.data?.message || 'Failed to generate leaderboard');
+        }
+        setLbLoading(false);
+    };
+
     // ─── MONTHLY STATS ──────────────────────────────
     const getMonthlyStats = () => {
         const { y, m } = monthReport;
@@ -529,7 +574,7 @@ const HourlyTrackerPage = () => {
         brand: { display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, mr: 0.5 },
         brandMark: { width: 30, height: 30, borderRadius: '7px', background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff' },
         vtab: (active) => ({ px: 1.5, py: 0.5, borderRadius: '5px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: active ? 'rgba(0,0,0,.08)' : 'none', color: active ? '#1a1a1a' : '#8a8a8a', transition: 'all .15s', '&:hover': { background: 'rgba(0,0,0,.05)' }, minWidth: 'auto' }),
-        kpi: { display: 'flex', flexDirection: 'column', alignItems: 'center', px: 1.5, py: 0.3, borderRadius: '6px', background: 'rgba(0,0,0,.03)', border: '1px solid rgba(0,0,0,.06)', minWidth: 58 },
+        kpi: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 64, px: 1, py: 0.4, borderRadius: '6px', background: 'rgba(0,0,0,.03)', border: '1px solid rgba(0,0,0,.06)' },
         th: { background: '#243348', color: 'rgba(255,255,255,.7)', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, fontWeight: 500, p: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' },
         td: { borderRight: '1px solid #dde3ed', borderBottom: '1px solid #dde3ed', height: 36, verticalAlign: 'middle', p: 0 },
     };
@@ -587,6 +632,37 @@ const HourlyTrackerPage = () => {
                             <Button size="small" onClick={goToday} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
                                 Today
                             </Button>
+                            <Button size="small" onClick={handleAIAnalysis} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                                🤖 AI Analysis
+                            </Button>
+                            <Button size="small" onClick={handleLeaderboard} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                                🏆 Leaderboard
+                            </Button>
+                            <Tooltip
+                                title={
+                                    <Box sx={{ p: 1, maxWidth: 320, fontSize: 11, lineHeight: 1.6 }}>
+                                        <Box sx={{ fontWeight: 700, fontSize: 12, mb: 0.5 }}>How Leaderboard Rankings Work</Box>
+                                        <Box sx={{ mb: 0.5 }}>AI calculates a score out of 100 using weighted criteria:</Box>
+                                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                                            <li><b>Admissions</b> — Highest weight (actual conversions)</li>
+                                            <li><b>Meetings</b> — High weight (direct client engagement)</li>
+                                            <li><b>Follow-ups</b> — Medium weight (pipeline nurturing)</li>
+                                            <li><b>Calls</b> — Medium weight (volume matters but quality more)</li>
+                                            <li><b>Drips</b> — Lower weight (marketing effort)</li>
+                                            <li><b>Operations</b> — Penalty (non-productive time)</li>
+                                        </Box>
+                                        <Box sx={{ mt: 0.5, fontStyle: 'italic', color: '#bbb' }}>
+                                            A balanced consultant (calls + meetings + follow-ups + admissions) ranks higher than one who only makes calls. Rankings update in real-time based on current data.
+                                        </Box>
+                                    </Box>
+                                }
+                                arrow
+                                placement="bottom"
+                            >
+                                <Button size="small" sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                                    ℹ️ Leaderboard Info
+                                </Button>
+                            </Tooltip>
                         </Box>
                     )}
 
@@ -613,19 +689,19 @@ const HourlyTrackerPage = () => {
                 {currentView === 'daily' && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', px: 2, pb: 1, pt: 0.3 }}>
                         {[
-                            { v: teamTotals.calls, l: 'Calls', c: '#60a5fa', icon: '📞' },
-                            { v: teamTotals.offlineMtgs, l: 'Offline Mtg', c: '#4ade80', icon: '🤝' },
-                            { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#818cf8', icon: '💻' },
-                            { v: teamTotals.outMtgs, l: 'Out Mtg', c: '#a78bfa', icon: '🚗' },
-                            { v: teamTotals.teamMtgs, l: 'Team Mtg', c: '#f472b6', icon: '👥' },
-                            { v: teamTotals.noshows, l: 'Ops', c: '#f87171', icon: '⚙️' },
-                            { v: teamTotals.followups, l: 'Follow-ups', c: '#fbbf24', icon: '↩️' },
-                            { v: teamTotals.drips, l: 'Drips', c: '#c084fc', icon: '📧' },
-                            { v: getTotalAdmissions(), l: 'Admissions', c: '#f9a8d4', icon: '🎓' },
+                            { v: teamTotals.calls, l: 'Calls', c: '#2563eb' },
+                            { v: teamTotals.followups, l: 'Follow-ups', c: '#0891b2' },
+                            { v: teamTotals.noshows, l: 'Operations', c: '#dc2626' },
+                            { v: teamTotals.drips, l: 'Drips', c: '#d97706' },
+                            { v: teamTotals.offlineMtgs, l: 'Offline Meeting', c: '#16a34a' },
+                            { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#4f46e5' },
+                            { v: teamTotals.outMtgs, l: 'Out Meeting', c: '#7c3aed' },
+                            { v: teamTotals.teamMtgs, l: 'Team Meeting', c: '#be185d' },
+                            { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d' },
                         ].map((kpi) => (
                             <Box key={kpi.l} sx={S.kpi}>
-                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, color: kpi.c, lineHeight: 1.1 }}>{kpi.v}</Typography>
-                                <Typography sx={{ fontSize: 9, color: '#8a8a8a', textTransform: 'uppercase', letterSpacing: '.07em', mt: '2px' }}>{kpi.icon} {kpi.l}</Typography>
+                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
+                                <Typography sx={{ fontSize: 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>{kpi.l}</Typography>
                             </Box>
                         ))}
 
@@ -634,8 +710,8 @@ const HourlyTrackerPage = () => {
                         {/* Legend chips */}
                         <Box sx={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', flexShrink: 0 }}>
                             {ACTIVITY_TYPES.map((a) => (
-                                <Box key={a.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.2, py: 0.5, borderRadius: '14px', border: `1px solid ${a.color}40`, background: `${a.color}15`, whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, color: a.color, flexShrink: 0 }}>
-                                    <span style={{ fontSize: 15 }}>{a.icon}</span> {a.lbl}
+                                <Box key={a.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.3, px: 0.8, py: 0.3, borderRadius: '10px', border: `1px solid ${a.color}35`, background: `${a.color}10`, whiteSpace: 'nowrap', fontSize: 10, fontWeight: 600, color: a.color, flexShrink: 0 }}>
+                                    <span style={{ fontSize: 12 }}>{a.icon}</span> {a.lbl}
                                 </Box>
                             ))}
                         </Box>
@@ -645,42 +721,43 @@ const HourlyTrackerPage = () => {
 
             {/* ── DAILY VIEW ── */}
             {currentView === 'daily' && (
-                <Box sx={{ flex: 1, overflow: 'auto', '&::-webkit-scrollbar': { width: 6, height: 6 }, '&::-webkit-scrollbar-track': { background: '#f0f3f8' }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
-                    <table style={{ borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}>
+                <Box sx={{ flex: 1, overflow: 'auto', '&::-webkit-scrollbar': { width: 5, height: 5 }, '&::-webkit-scrollbar-track': { background: '#f0f3f8' }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
+                    <table style={{ borderCollapse: 'collapse' }}>
                         <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                             {/* Group header */}
                             <tr>
-                                <th style={{ width: 34, background: '#1a2840', border: 'none', position: 'sticky', left: 0, zIndex: 40 }} />
-                                <th style={{ width: 160, background: '#1a2840', border: 'none', position: 'sticky', left: 34, zIndex: 40 }} />
+                                <th style={{ width: 34, minWidth: 34, background: '#1a2840', border: 'none', position: 'sticky', left: 0, zIndex: 40 }} />
+                                <th style={{ width: 160, minWidth: 160, background: '#1a2840', border: 'none', position: 'sticky', left: 34, zIndex: 40 }} />
                                 <th colSpan={AM_SLOTS.length} style={{ background: '#1e3055', color: '#93c5fd', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
                                     MORNING 9:30-1:00
                                 </th>
                                 <th colSpan={1} style={{ background: '#1c1c28', color: 'rgba(255,255,255,.25)', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
                                     LUNCH
                                 </th>
-                                <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.06)' }}>
+                                <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
                                     AFTERNOON 2:00-7:30
                                 </th>
-                                <th colSpan={11} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
+                                <th colSpan={11} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderLeft: '2px solid #dfd08a' }}>
                                     DAILY SUMMARY
                                 </th>
                             </tr>
                             {/* Slot header */}
                             <tr>
-                                <th style={{ width: 34, background: '#1a2535', color: 'rgba(255,255,255,.3)', fontSize: 9, padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', position: 'sticky', left: 0, zIndex: 40 }}>#</th>
-                                <th style={{ width: 160, background: '#1a2535', color: 'rgba(255,255,255,.6)', fontSize: 10, padding: '0 8px', textAlign: 'left', borderRight: '1px solid rgba(255,255,255,.07)', position: 'sticky', left: 34, zIndex: 40 }}>CONSULTANT</th>
+                                <th style={{ width: 34, minWidth: 34, background: '#1a2535', color: 'rgba(255,255,255,.3)', fontSize: 9, padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', position: 'sticky', left: 0, zIndex: 40 }}>#</th>
+                                <th style={{ width: 160, minWidth: 160, background: '#1a2535', color: 'rgba(255,255,255,.6)', fontSize: 10, padding: '0 8px', textAlign: 'left', borderRight: '1px solid rgba(255,255,255,.07)', position: 'sticky', left: 34, zIndex: 40 }}>CONSULTANT</th>
                                 {SLOTS.map((s) => {
                                     const isCur = s.id === curSlot;
                                     if (s.isLunch) {
-                                        return <th key={s.id} style={{ width: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.25)', fontSize: 9, padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 7.5, opacity: .5 }}>2:00</span></th>;
+                                        return <th key={s.id} style={{ minWidth: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.4)', fontSize: 12, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 9, opacity: .5 }}>2:00</span></th>;
                                     }
-                                    return <th key={s.id} style={{ width: 74, background: isCur ? '#1a3a52' : '#243348', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.7)', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, fontWeight: 500, padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>{s.lbl}<br /><span style={{ fontSize: 7.5, opacity: .5 }}>{s.end}</span></th>;
+                                    return <th key={s.id} style={{ minWidth: 125, background: isCur ? '#1a3a52' : '#243348', color: isCur ? '#7dd3fc' : '#fff', fontFamily: '"JetBrains Mono",monospace', fontSize: 14, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>{s.lbl}<br /><span style={{ fontSize: 10, opacity: .5, fontWeight: 500 }}>{s.end}</span></th>;
                                 })}
                                 {[
-                                    { l: 'CALLS', c: '#93c5fd' }, { l: 'F/UP', c: '#67e8f9' }, { l: 'OPS', c: '#fca5a5' },
-                                    { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'OUT MEETING', c: '#a78bfa' }, { l: 'TEAM MEETING', c: '#f472b6' }, { l: 'ACT HRS', c: '#94a3b8' }, { l: 'MEETING HRS', c: '#94a3b8' }, { l: 'ADMISSION', c: '#f9a8d4' },
-                                ].map((h, i) => (
-                                    <th key={h.l} style={{ width: 52, background: '#1e1a0e', color: h.c, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', padding: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', borderLeft: i === 0 ? '2px solid #dfd08a' : 'none' }}>{h.l}</th>
+                                    { l: 'CALLS', c: '#93c5fd' }, { l: 'FOLLOW-UPS', c: '#67e8f9' }, { l: 'OPERATIONS', c: '#fca5a5' },
+                                    { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'OUT MEETING', c: '#a78bfa' }, { l: 'TEAM MEETING', c: '#f472b6' },
+                                    { l: 'ACTIVE HOURS', c: '#94a3b8' }, { l: 'MEETING HOURS', c: '#94a3b8' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
+                                ].map((h) => (
+                                    <th key={h.l} style={{ minWidth: 80, background: '#2a2010', color: h.c, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', padding: '8px 10px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' }}>{h.l}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -689,8 +766,8 @@ const HourlyTrackerPage = () => {
                                 const st = getStats(c._id);
                                 return (
                                     <tr key={c._id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfd' }}>
-                                        <td style={{ ...S.td, width: 34, textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, color: '#8a9ab0', background: '#f6f8fc', borderRight: '1px solid #c8d0de', position: 'sticky', left: 0, zIndex: 5 }}>{idx + 1}</td>
-                                        <td style={{ ...S.td, width: 160, background: '#f6f8fc', borderRight: '2px solid #c8d0de', padding: '0 7px', position: 'sticky', left: 34, zIndex: 5 }}>
+                                        <td style={{ ...S.td, width: 34, minWidth: 34, textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, color: '#8a9ab0', background: '#f6f8fc', borderRight: '1px solid #c8d0de', position: 'sticky', left: 0, zIndex: 5 }}>{idx + 1}</td>
+                                        <td style={{ ...S.td, width: 160, minWidth: 160, background: '#f6f8fc', borderRight: '2px solid #c8d0de', padding: '0 7px', position: 'sticky', left: 34, zIndex: 5 }}>
                                             <Tooltip title={c.teamLead?.name ? `Team: ${c.teamName || c.teamLead.teamName || ''}` : ''} placement="right">
                                                 <div style={{ fontSize: 11.5, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {c.name}
@@ -701,28 +778,27 @@ const HourlyTrackerPage = () => {
                                             if (s.isLunch) {
                                                 return (
                                                     <td key={s.id} style={{ ...S.td, width: 58, textAlign: 'center', background: '#fef9ec', cursor: 'default' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                                            <span style={{ fontSize: 12 }}>🍽</span>
-                                                            <span style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '.06em', color: '#d97706', marginTop: 1 }}>Lunch</span>
-                                                        </div>
+                                                        <span style={{ fontSize: 18 }}>🍽</span>
                                                     </td>
                                                 );
                                             }
                                             const d = getAct(c._id, s.id);
                                             const act = d && !d.isContinuation ? (ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType] || null) : null;
                                             const isCur = s.id === curSlot;
+                                            const isAM = ['s0930','s1030','s1130','s1230'].includes(s.id);
+                                            const emptyBg = isAM ? '#f0f5ff' : '#fffdf0';
                                             return (
                                                 <td
                                                     key={s.id}
                                                     onClick={() => handleCellClick(c, s.id)}
                                                     style={{
                                                         ...S.td,
-                                                        width: 74,
+                                                        minWidth: 125,
                                                         textAlign: 'center',
                                                         cursor: canEdit ? 'pointer' : 'default',
                                                         position: 'relative',
                                                         overflow: 'hidden',
-                                                        background: d ? (act ? act.bg : 'transparent') : 'transparent',
+                                                        background: d ? (act ? act.bg : emptyBg) : emptyBg,
                                                         boxShadow: isCur ? 'inset 0 0 0 2px rgba(14,165,233,.35)' : 'none',
                                                         opacity: d && d.isContinuation ? 0.85 : 1,
                                                     }}
@@ -751,26 +827,31 @@ const HourlyTrackerPage = () => {
                                                 </td>
                                             );
                                         })}
-                                        {/* Stats columns */}
                                         {[
-                                            { v: st.calls, cls: '#2563eb' }, { v: st.followups, cls: '#0891b2' }, { v: st.noshows, cls: '#dc2626', isOps: true },
-                                            { v: st.drips, cls: '#d97706' }, { v: st.offlineMtgs, cls: '#16a34a' }, { v: st.zoomMtgs, cls: '#4f46e5' }, { v: st.outMtgs, cls: '#7c3aed' }, { v: st.teamMtgs, cls: '#be185d' },
-                                            { v: st.activeHrs, cls: '#44556a', suf: 'h' }, { v: st.meetHrs, cls: '#44556a', suf: 'h' },
+                                            { v: st.calls, cls: '#2563eb', types: ['call', 'call_followup'], title: 'Calls' },
+                                            { v: st.followups, cls: '#0891b2', types: ['followup', 'call_followup'], title: 'Follow-ups' },
+                                            { v: st.noshows, cls: '#dc2626', types: ['noshow'], title: 'Operations' },
+                                            { v: st.drips, cls: '#d97706', types: ['drip'], title: 'Drips' },
+                                            { v: st.offlineMtgs, cls: '#16a34a', types: ['meeting'], title: 'Offline Meeting' },
+                                            { v: st.zoomMtgs, cls: '#4f46e5', types: ['zoom'], title: 'Zoom' },
+                                            { v: st.outMtgs, cls: '#7c3aed', types: ['outmeet'], title: 'Out Meeting' },
+                                            { v: st.teamMtgs, cls: '#be185d', types: ['teammeet'], title: 'Team Meeting' },
+                                            { v: st.activeHrs, cls: '#44556a', suf: 'h' },
+                                            { v: st.meetHrs, cls: '#44556a', suf: 'h' },
                                         ].map((sv, i) => (
-                                            <td key={i} style={{ ...S.td, width: 52, textAlign: 'center', background: '#fffcf0', borderRight: '1px solid #e5dab8', borderLeft: i === 0 ? '2px solid #dfd08a' : undefined }}>
-                                                <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 600, color: sv.v === 0 ? '#c5d0df' : sv.cls }}>
+                                            <td key={i} style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc' }}>
+                                                <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 15, fontWeight: 600, color: sv.v === 0 ? '#d4c9a8' : sv.cls }}>
                                                     {sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}
                                                 </span>
-                                                {sv.isOps && sv.v > 0 && (
+                                                {sv.types && hasNotesForType(c._id, sv.types) && (
                                                     <VisibilityIcon
-                                                        onClick={(e) => { e.stopPropagation(); handleViewOpsNotes(c); }}
-                                                        sx={{ fontSize: 13, color: '#dc2626', ml: 0.3, cursor: 'pointer', verticalAlign: 'middle', opacity: 0.6, '&:hover': { opacity: 1 } }}
+                                                        onClick={() => handleViewNotes(c, sv.types, sv.title)}
+                                                        sx={{ fontSize: 14, color: sv.cls, ml: 0.4, cursor: 'pointer', verticalAlign: 'middle', opacity: 0.5, '&:hover': { opacity: 1 } }}
                                                     />
                                                 )}
                                             </td>
                                         ))}
-                                        {/* Admission cell */}
-                                        <td style={{ ...S.td, width: 60, textAlign: 'center', background: '#fdf2f8', borderRight: '1px solid #e5dab8' }}>
+                                        <td style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc', background: '#fdf2f8' }}>
                                             {canEdit ? (
                                                 <input
                                                     type="number"
@@ -778,10 +859,10 @@ const HourlyTrackerPage = () => {
                                                     value={getAdmission(c._id) || ''}
                                                     placeholder="—"
                                                     onChange={(e) => handleAdmissionChange(c, e.target.value)}
-                                                    style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 600, color: '#be185d', padding: '0 4px' }}
+                                                    style={{ width: 60, border: 'none', outline: 'none', background: 'transparent', textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 14, fontWeight: 600, color: '#be185d' }}
                                                 />
                                             ) : (
-                                                <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 600, color: getAdmission(c._id) > 0 ? '#be185d' : '#c5d0df' }}>
+                                                <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 15, fontWeight: 600, color: getAdmission(c._id) > 0 ? '#be185d' : '#d4c9a8' }}>
                                                     {getAdmission(c._id) || '—'}
                                                 </span>
                                             )}
@@ -809,13 +890,12 @@ const HourlyTrackerPage = () => {
                                     { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.offlineMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.outMtgs, c: '#a78bfa' }, { v: teamTotals.teamMtgs, c: '#f472b6' },
                                     { v: teamTotals.activeHrs, c: '#94a3b8', suf: 'h' }, { v: teamTotals.meetHrs, c: '#94a3b8', suf: 'h' },
                                 ].map((sv, i) => (
-                                    <td key={i} style={{ background: '#1a2840', borderBottom: 'none', borderRight: '1px solid rgba(255,255,255,.07)', height: 34, textAlign: 'center' }}>
-                                        <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 13, fontWeight: 600, color: sv.v === 0 ? 'rgba(255,255,255,.2)' : sv.c }}>{sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}</span>
+                                    <td key={i} style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
+                                        <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: sv.v === 0 ? 'rgba(255,255,255,.2)' : sv.c }}>{sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}</span>
                                     </td>
                                 ))}
-                                {/* Admission total */}
-                                <td style={{ background: '#1a2840', borderBottom: 'none', borderRight: '1px solid rgba(255,255,255,.07)', height: 34, textAlign: 'center' }}>
-                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 13, fontWeight: 600, color: getTotalAdmissions() === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{getTotalAdmissions() || '—'}</span>
+                                <td style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
+                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: getTotalAdmissions() === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{getTotalAdmissions() || '—'}</span>
                                 </td>
                             </tr>
                         </tfoot>
@@ -1151,20 +1231,104 @@ const HourlyTrackerPage = () => {
                 <DialogContent sx={{ p: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                         <Box>
-                            <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#0d1520' }}>Operations Notes</Typography>
+                            <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#0d1520' }}>Activity Notes</Typography>
                             <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>{opsNoteContent.name}</Typography>
                         </Box>
                         <IconButton size="small" onClick={() => setOpsNoteOpen(false)} sx={{ width: 26, height: 26, borderRadius: '6px', border: '1px solid #dde3ed' }}>✕</IconButton>
                     </Box>
                     {opsNoteContent.notes.length === 0 ? (
-                        <Typography sx={{ fontSize: 12, color: '#8a9ab0', textAlign: 'center', py: 2 }}>No operations notes for today</Typography>
+                        <Typography sx={{ fontSize: 12, color: '#8a9ab0', textAlign: 'center', py: 2 }}>No notes found</Typography>
                     ) : (
                         opsNoteContent.notes.map((n, i) => (
-                            <Box key={i} sx={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', p: 1.2, mb: 1, borderLeft: '3px solid #dc2626' }}>
-                                <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.3 }}>{n.slot}</Typography>
+                            <Box key={i} sx={{ background: '#f7f9fc', border: '1px solid #dde3ed', borderRadius: '8px', p: 1.2, mb: 1, borderLeft: '3px solid #6366f1' }}>
+                                <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.3 }}>{n.icon} {n.lbl} · {n.slot}</Typography>
                                 <Typography sx={{ fontSize: 12, color: '#44556a' }}>{n.note}</Typography>
                             </Box>
                         ))
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* AI Analysis Dialog */}
+            <Dialog
+                open={aiOpen}
+                onClose={() => setAiOpen(false)}
+                PaperProps={{ sx: { borderRadius: '16px', p: 3, width: 700, maxWidth: '96vw', maxHeight: '85vh' } }}
+            >
+                <DialogContent sx={{ p: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ width: 36, height: 36, borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🤖</Box>
+                            <Box>
+                                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#0d1520' }}>AI Performance Analysis</Typography>
+                                <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>
+                                    {`${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`} · gpt-4o-mini
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <IconButton size="small" onClick={() => setAiOpen(false)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid #dde3ed' }}>✕</IconButton>
+                    </Box>
+                    {aiLoading ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 2 }}>
+                            <CircularProgress size={36} sx={{ color: '#6366f1' }} />
+                            <Typography sx={{ fontSize: 13, color: '#8a9ab0' }}>Analyzing team performance...</Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                fontSize: 13, color: '#44556a', lineHeight: 1.8,
+                                '& h2': { fontSize: 16, fontWeight: 700, color: '#0d1520', mt: 2.5, mb: 1, pb: 0.5, borderBottom: '2px solid #e5e7eb' },
+                                '& h3': { fontSize: 14, fontWeight: 600, color: '#1e293b', mt: 2, mb: 0.5 },
+                                '& strong': { color: '#0d1520' },
+                                '& ul': { pl: 2.5, my: 0.5 },
+                                '& li': { mb: 0.3 },
+                                '& p': { my: 0.5 },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: aiAnalysis.replace(/### (.*)/g, '<h3>$1</h3>').replace(/## (.*)/g, '<h2>$1</h2>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/Needs Improvement/g, '<span style="color:#dc2626;font-weight:700">Needs Improvement</span>').replace(/Average/g, '<span style="color:#d97706;font-weight:700">Average</span>').replace(/\bGood\b/g, '<span style="color:#16a34a;font-weight:700">Good</span>').replace(/Excellent/g, '<span style="color:#059669;font-weight:700">Excellent</span>').replace(/^- (.*)/gm, '<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>').replace(/^\d+\. (.*)/gm, '<li>$1</li>').replace(/\n{2,}/g, '<br/>') }}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Leaderboard Dialog */}
+            <Dialog
+                open={lbOpen}
+                onClose={() => setLbOpen(false)}
+                PaperProps={{ sx: { borderRadius: '16px', p: 3, width: 650, maxWidth: '96vw', maxHeight: '85vh' } }}
+            >
+                <DialogContent sx={{ p: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Box sx={{ width: 36, height: 36, borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏆</Box>
+                            <Box>
+                                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#0d1520' }}>Daily Leaderboard</Typography>
+                                <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>
+                                    {`${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`} · AI-powered ranking
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <IconButton size="small" onClick={() => setLbOpen(false)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid #dde3ed' }}>✕</IconButton>
+                    </Box>
+                    {lbLoading ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 2 }}>
+                            <CircularProgress size={36} sx={{ color: '#f59e0b' }} />
+                            <Typography sx={{ fontSize: 13, color: '#8a9ab0' }}>Calculating rankings...</Typography>
+                        </Box>
+                    ) : (
+                        <Box
+                            sx={{
+                                fontSize: 13, color: '#44556a', lineHeight: 1.8,
+                                '& h2': { fontSize: 16, fontWeight: 700, color: '#0d1520', mt: 2.5, mb: 1, pb: 0.5, borderBottom: '2px solid #e5e7eb' },
+                                '& h3': { fontSize: 14, fontWeight: 600, color: '#1e293b', mt: 2, mb: 0.5 },
+                                '& strong': { color: '#0d1520' },
+                                '& ul': { pl: 2.5, my: 0.5 },
+                                '& li': { mb: 0.3 },
+                                '& .rank-1': { color: '#f59e0b', fontSize: 18, fontWeight: 800 },
+                                '& .rank-2': { color: '#94a3b8', fontSize: 16, fontWeight: 700 },
+                                '& .rank-3': { color: '#b45309', fontSize: 15, fontWeight: 700 },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: lbData.replace(/### (.*)/g, '<h3>$1</h3>').replace(/## (.*)/g, '<h2>$1</h2>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/^- (.*)/gm, '<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>').replace(/^\d+\. (.*)/gm, '<li>$1</li>').replace(/\n{2,}/g, '<br/>') }}
+                        />
                     )}
                 </DialogContent>
             </Dialog>

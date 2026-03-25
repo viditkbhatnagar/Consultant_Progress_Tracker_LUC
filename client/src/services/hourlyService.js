@@ -56,6 +56,16 @@ const getMonthAdmissions = async (year, month) => {
     return response.data;
 };
 
+const getAIAnalysis = async (date) => {
+    const response = await axios.get(`${API_URL}/ai-analysis`, { params: { date } });
+    return response.data;
+};
+
+const getLeaderboard = async (date) => {
+    const response = await axios.get(`${API_URL}/leaderboard`, { params: { date } });
+    return response.data;
+};
+
 const hourlyService = {
     getConsultants,
     getDayActivities,
@@ -66,6 +76,8 @@ const hourlyService = {
     getDayAdmissions,
     upsertAdmission,
     getMonthAdmissions,
+    getAIAnalysis,
+    getLeaderboard,
 };
 
 export default hourlyService;

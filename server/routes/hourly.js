@@ -9,6 +9,8 @@ const {
     getDayAdmissions,
     upsertAdmission,
     getMonthAdmissions,
+    getAIAnalysis,
+    getLeaderboard,
 } = require('../controllers/hourlyController');
 const { protect } = require('../middleware/auth');
 
@@ -17,6 +19,8 @@ const router = express.Router();
 // All routes require authentication (any role)
 router.use(protect);
 
+router.get('/ai-analysis', getAIAnalysis);
+router.get('/leaderboard', getLeaderboard);
 router.get('/consultants', getConsultants);
 router.get('/day', getDayActivities);
 router.put('/slot', upsertSlot);
