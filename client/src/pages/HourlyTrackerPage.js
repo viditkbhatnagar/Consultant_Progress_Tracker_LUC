@@ -255,13 +255,12 @@ const HourlyTrackerPage = () => {
     const getAct = (consultantId, slotId) => activities.get(`${consultantId}_${slotId}`) || null;
 
     const getStats = (consultantId) => {
-        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, activeHrs = 0, meetHrs = 0;
+        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, meetHrs = 0;
         WORK_SLOTS.forEach((s) => {
             const d = getAct(consultantId, s.id);
             if (!d || d.isContinuation) return;
             const mins = d.duration || s.mins;
             const hrs = mins / 60;
-            activeHrs += hrs;
             if (d.activityType === 'call' || d.activityType === 'call_followup') calls += d.count || 1;
             if (d.activityType === 'followup' || d.activityType === 'call_followup') followups += d.count || 1;
             if (d.activityType === 'noshow') noshows++;
@@ -271,16 +270,15 @@ const HourlyTrackerPage = () => {
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
         });
-        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, activeHrs: +activeHrs.toFixed(1), meetHrs: +meetHrs.toFixed(1) };
+        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, meetHrs: +meetHrs.toFixed(1) };
     };
 
     const getTeamTotals = () => {
-        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0 };
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, meetHrs: 0 };
         consultants.forEach((c) => {
             const s = getStats(c._id);
             Object.keys(t).forEach((k) => (t[k] += s[k]));
         });
-        t.activeHrs = +t.activeHrs.toFixed(1);
         t.meetHrs = +t.meetHrs.toFixed(1);
         return t;
     };
@@ -516,7 +514,7 @@ const HourlyTrackerPage = () => {
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
         const rows = consultants.map((c) => {
-            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [] };
+            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
             // Sum admissions for this consultant across the month
             monthAdmissions.filter((a) => String(a.consultant) === String(c._id)).forEach((a) => { r.admissions += a.count || 0; });
             for (let d = 1; d <= daysInMonth; d++) {
@@ -721,7 +719,7 @@ const HourlyTrackerPage = () => {
 
             {/* ── DAILY VIEW ── */}
             {currentView === 'daily' && (
-                <Box sx={{ flex: 1, overflow: 'auto', '&::-webkit-scrollbar': { width: 5, height: 5 }, '&::-webkit-scrollbar-track': { background: '#f0f3f8' }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
+                <Box sx={{ flex: 1, overflow: 'auto', '&::-webkit-scrollbar': { width: 10, height: 12 }, '&::-webkit-scrollbar-track': { background: '#e8ecf2' }, '&::-webkit-scrollbar-thumb': { background: '#9aa5b8', borderRadius: 10, '&:hover': { background: '#7a8598' } } }}>
                     <table style={{ borderCollapse: 'collapse' }}>
                         <thead style={{ position: 'sticky', top: 0, zIndex: 30 }}>
                             {/* Group header */}
@@ -737,7 +735,7 @@ const HourlyTrackerPage = () => {
                                 <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
                                     AFTERNOON 2:00-7:30
                                 </th>
-                                <th colSpan={11} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderLeft: '2px solid #dfd08a' }}>
+                                <th colSpan={10} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderLeft: '2px solid #dfd08a' }}>
                                     DAILY SUMMARY
                                 </th>
                             </tr>
@@ -748,14 +746,14 @@ const HourlyTrackerPage = () => {
                                 {SLOTS.map((s) => {
                                     const isCur = s.id === curSlot;
                                     if (s.isLunch) {
-                                        return <th key={s.id} style={{ minWidth: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.4)', fontSize: 12, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 9, opacity: .5 }}>2:00</span></th>;
+                                        return <th key={s.id} style={{ minWidth: 58, background: isCur ? '#1a3a52' : '#1e1e2e', color: isCur ? '#7dd3fc' : 'rgba(255,255,255,.4)', fontSize: 12, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>1:00<br /><span style={{ fontSize: 11, fontWeight: 600 }}>2:00</span></th>;
                                     }
-                                    return <th key={s.id} style={{ minWidth: 125, background: isCur ? '#1a3a52' : '#243348', color: isCur ? '#7dd3fc' : '#fff', fontFamily: '"JetBrains Mono",monospace', fontSize: 14, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>{s.lbl}<br /><span style={{ fontSize: 10, opacity: .5, fontWeight: 500 }}>{s.end}</span></th>;
+                                    return <th key={s.id} style={{ minWidth: 125, background: isCur ? '#1a3a52' : '#243348', color: isCur ? '#7dd3fc' : '#fff', fontFamily: '"JetBrains Mono",monospace', fontSize: 14, fontWeight: 700, padding: '8px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', boxShadow: isCur ? 'inset 0 -2px 0 #38bdf8' : 'none' }}>{s.lbl}<br /><span style={{ fontSize: 13, fontWeight: 600 }}>{s.end}</span></th>;
                                 })}
                                 {[
                                     { l: 'CALLS', c: '#93c5fd' }, { l: 'FOLLOW-UPS', c: '#67e8f9' }, { l: 'OPERATIONS', c: '#fca5a5' },
                                     { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'OUT MEETING', c: '#a78bfa' }, { l: 'TEAM MEETING', c: '#f472b6' },
-                                    { l: 'ACTIVE HOURS', c: '#94a3b8' }, { l: 'MEETING HOURS', c: '#94a3b8' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
+                                    { l: 'MEETING HOURS', c: '#94a3b8' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
                                 ].map((h) => (
                                     <th key={h.l} style={{ minWidth: 80, background: '#2a2010', color: h.c, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', padding: '8px 10px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' }}>{h.l}</th>
                                 ))}
@@ -769,7 +767,7 @@ const HourlyTrackerPage = () => {
                                         <td style={{ ...S.td, width: 34, minWidth: 34, textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, color: '#8a9ab0', background: '#f6f8fc', borderRight: '1px solid #c8d0de', position: 'sticky', left: 0, zIndex: 5 }}>{idx + 1}</td>
                                         <td style={{ ...S.td, width: 160, minWidth: 160, background: '#f6f8fc', borderRight: '2px solid #c8d0de', padding: '0 7px', position: 'sticky', left: 34, zIndex: 5 }}>
                                             <Tooltip title={c.teamLead?.name ? `Team: ${c.teamName || c.teamLead.teamName || ''}` : ''} placement="right">
-                                                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                <div style={{ fontSize: 14, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {c.name}
                                                 </div>
                                             </Tooltip>
@@ -836,7 +834,6 @@ const HourlyTrackerPage = () => {
                                             { v: st.zoomMtgs, cls: '#4f46e5', types: ['zoom'], title: 'Zoom' },
                                             { v: st.outMtgs, cls: '#7c3aed', types: ['outmeet'], title: 'Out Meeting' },
                                             { v: st.teamMtgs, cls: '#be185d', types: ['teammeet'], title: 'Team Meeting' },
-                                            { v: st.activeHrs, cls: '#44556a', suf: 'h' },
                                             { v: st.meetHrs, cls: '#44556a', suf: 'h' },
                                         ].map((sv, i) => (
                                             <td key={i} style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc' }}>
@@ -888,7 +885,7 @@ const HourlyTrackerPage = () => {
                                 {[
                                     { v: teamTotals.calls, c: '#93c5fd' }, { v: teamTotals.followups, c: '#67e8f9' }, { v: teamTotals.noshows, c: '#fca5a5' },
                                     { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.offlineMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.outMtgs, c: '#a78bfa' }, { v: teamTotals.teamMtgs, c: '#f472b6' },
-                                    { v: teamTotals.activeHrs, c: '#94a3b8', suf: 'h' }, { v: teamTotals.meetHrs, c: '#94a3b8', suf: 'h' },
+                                    { v: teamTotals.meetHrs, c: '#94a3b8', suf: 'h' },
                                 ].map((sv, i) => (
                                     <td key={i} style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
                                         <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: sv.v === 0 ? 'rgba(255,255,255,.2)' : sv.c }}>{sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}</span>
@@ -906,7 +903,6 @@ const HourlyTrackerPage = () => {
             {/* ── MONTHLY VIEW ── */}
             {currentView === 'monthly' && (() => {
                 const { rows, teamTot, daysInMonth } = getMonthlyStats();
-                const prd = (r) => { const mx = r.days * 10; return mx > 0 ? Math.min(100, Math.round((r.activeHrs / mx) * 100)) : 0; };
                 return (
                     <Box sx={{ flex: 1, overflow: 'auto', p: 2.5, '&::-webkit-scrollbar': { width: 6, height: 6 }, '&::-webkit-scrollbar-track': { background: '#f0f3f8' }, '&::-webkit-scrollbar-thumb': { background: '#c8d0de', borderRadius: 10 } }}>
                         {/* Month header + nav */}
@@ -927,7 +923,7 @@ const HourlyTrackerPage = () => {
                         </Box>
 
                         {/* Summary cards */}
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(10,1fr)', gap: 1.2, mb: 2.5 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(9,1fr)', gap: 1.2, mb: 2.5 }}>
                             {[
                                 { v: teamTot.calls, l: 'Total Calls', sub: `avg ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0}/consultant`, c: '#2563eb', bc: '#2563eb' },
                                 { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'physical meetings', c: '#16a34a', bc: '#16a34a' },
@@ -938,7 +934,6 @@ const HourlyTrackerPage = () => {
                                 { v: teamTot.drips, l: 'Drip Steps', sub: 'campaigns executed', c: '#d97706', bc: '#d97706' },
                                 { v: teamTot.followups, l: 'Follow-ups', sub: 'total sent', c: '#0891b2', bc: '#0891b2' },
                                 { v: teamTot.admissions, l: 'Admissions', sub: 'total', c: '#be185d', bc: '#be185d' },
-                                { v: `${teamTot.activeHrs}h`, l: 'Active Hours', sub: `${teamTot.days} consultant-days`, c: '#475569', bc: '#64748b' },
                             ].map((card) => (
                                 <Box key={card.l} sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
                                     <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 26, fontWeight: 600, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
@@ -958,8 +953,8 @@ const HourlyTrackerPage = () => {
                                             { l: 'Consultant', c: 'rgba(255,255,255,.7)', align: 'left', w: 160 },
                                             { l: 'Calls', c: '#93c5fd' }, { l: 'Follow-ups', c: '#67e8f9' }, { l: 'Operations', c: '#fca5a5' },
                                             { l: 'Drips', c: '#fcd34d' }, { l: 'Offline Meeting', c: '#86efac' }, { l: 'Zoom', c: '#818cf8' }, { l: 'Out Meeting', c: '#a78bfa' }, { l: 'Team Meeting', c: '#f472b6' },
-                                            { l: 'Act Hrs', c: '#94a3b8' }, { l: 'Meeting Hrs', c: '#94a3b8' }, { l: 'Admissions', c: '#f9a8d4' }, { l: 'Days Active', c: '#e2e8f0' },
-                                            { l: 'Productivity', c: '#c084fc' }, { l: 'Activity Heatmap', c: '#c084fc', w: 140 },
+                                            { l: 'Meeting Hrs', c: '#94a3b8' }, { l: 'Admissions', c: '#f9a8d4' }, { l: 'Days Active', c: '#e2e8f0' },
+                                            { l: 'Activity Heatmap', c: '#c084fc', w: 140 },
                                         ].map((h) => (
                                             <th key={h.l} style={{ padding: '9px 10px', textAlign: h.align || 'center', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: h.c, borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap', width: h.w || 'auto' }}>{h.l}</th>
                                         ))}
@@ -967,8 +962,6 @@ const HourlyTrackerPage = () => {
                                 </thead>
                                 <tbody>
                                     {rows.map((r, i) => {
-                                        const p = prd(r);
-                                        const anyData = r.calls + r.offlineMtgs + r.zoomMtgs + r.outMtgs + r.teamMtgs + r.noshows + r.drips + r.followups > 0;
                                         return (
                                             <tr key={r.consultant._id} style={{ borderBottom: '1px solid #dde3ed' }}>
                                                 <td style={{ padding: '8px 10px', color: '#8a9ab0', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, borderRight: '1px solid #dde3ed' }}>{i + 1}</td>
@@ -976,7 +969,7 @@ const HourlyTrackerPage = () => {
                                                 {[
                                                     { v: r.calls, c: '#2563eb' }, { v: r.followups, c: '#0891b2' }, { v: r.noshows, c: '#dc2626' },
                                                     { v: r.drips, c: '#d97706' }, { v: r.offlineMtgs, c: '#16a34a' }, { v: r.zoomMtgs, c: '#4f46e5' }, { v: r.outMtgs, c: '#7c3aed' }, { v: r.teamMtgs, c: '#be185d' },
-                                                    { v: r.activeHrs, c: '#44556a', suf: 'h' }, { v: r.meetHrs, c: '#44556a', suf: 'h' }, { v: r.admissions, c: '#be185d' },
+                                                    { v: r.meetHrs, c: '#44556a', suf: 'h' }, { v: r.admissions, c: '#be185d' },
                                                     { v: r.days, c: '#44556a' },
                                                 ].map((sv, j) => (
                                                     <td key={j} style={{ padding: '8px 10px', textAlign: 'center', fontSize: 12, borderRight: '1px solid #dde3ed' }}>
@@ -985,14 +978,6 @@ const HourlyTrackerPage = () => {
                                                         </span>
                                                     </td>
                                                 ))}
-                                                <td style={{ padding: '8px 10px', borderRight: '1px solid #dde3ed' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <div style={{ flex: 1, height: 6, background: '#eef1f6', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
-                                                            <div style={{ height: '100%', borderRadius: 3, background: 'linear-gradient(90deg,#0ea5e9,#6366f1)', width: `${anyData ? p : 0}%`, transition: 'width .4s' }} />
-                                                        </div>
-                                                        <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 11, fontWeight: 600, color: '#44556a', whiteSpace: 'nowrap' }}>{anyData ? `${p}%` : '—'}</span>
-                                                    </div>
-                                                </td>
                                                 <td style={{ padding: '8px 10px' }}>
                                                     <div style={{ display: 'flex', gap: 2, flexWrap: 'nowrap', overflow: 'hidden' }}>
                                                         {r.heatmap.map((v, hi) => (
@@ -1011,14 +996,14 @@ const HourlyTrackerPage = () => {
                                         {[
                                             { v: teamTot.calls, c: '#93c5fd' }, { v: teamTot.followups, c: '#67e8f9' }, { v: teamTot.noshows, c: '#fca5a5' },
                                             { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.offlineMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.outMtgs, c: '#a78bfa' }, { v: teamTot.teamMtgs, c: '#f472b6' },
-                                            { v: teamTot.activeHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.admissions, c: '#f9a8d4' },
+                                            { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.admissions, c: '#f9a8d4' },
                                             { v: teamTot.days, c: '#e2e8f0' },
                                         ].map((sv, i) => (
                                             <td key={i} style={{ padding: '9px 10px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 700, color: sv.v > 0 ? sv.c : 'rgba(255,255,255,.2)' }}>
                                                 {sv.v > 0 ? `${sv.v}${sv.suf || ''}` : '—'}
                                             </td>
                                         ))}
-                                        <td colSpan={2} style={{ borderRight: 'none' }} />
+                                        <td style={{ borderRight: 'none' }} />
                                     </tr>
                                 </tfoot>
                             </table>
