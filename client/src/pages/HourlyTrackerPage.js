@@ -694,7 +694,6 @@ const HourlyTrackerPage = () => {
                             { v: teamTotals.offlineMtgs, l: 'Offline Meeting', c: '#16a34a' },
                             { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#4f46e5' },
                             { v: teamTotals.outMtgs, l: 'Out Meeting', c: '#7c3aed' },
-                            { v: teamTotals.teamMtgs, l: 'Team Meeting', c: '#be185d' },
                             { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d' },
                         ].map((kpi) => (
                             <Box key={kpi.l} sx={S.kpi}>
@@ -811,7 +810,7 @@ const HourlyTrackerPage = () => {
                                                     })()}
                                                     {act && (
                                                         <>
-                                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '2px 5px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '2px 5px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap' }}>
                                                                 {act.icon} {act.lbl}
                                                             </span>
                                                             {d.count > 1 && (
@@ -884,7 +883,7 @@ const HourlyTrackerPage = () => {
                                 })}
                                 {[
                                     { v: teamTotals.calls, c: '#93c5fd' }, { v: teamTotals.followups, c: '#67e8f9' }, { v: teamTotals.noshows, c: '#fca5a5' },
-                                    { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.offlineMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.outMtgs, c: '#a78bfa' }, { v: teamTotals.teamMtgs, c: '#f472b6' },
+                                    { v: teamTotals.drips, c: '#fcd34d' }, { v: teamTotals.offlineMtgs, c: '#86efac' }, { v: teamTotals.zoomMtgs, c: '#818cf8' }, { v: teamTotals.outMtgs, c: '#a78bfa' }, { v: 0, c: '#f472b6', hide: true },
                                     { v: teamTotals.meetHrs, c: '#94a3b8', suf: 'h' },
                                 ].map((sv, i) => (
                                     <td key={i} style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
@@ -929,7 +928,6 @@ const HourlyTrackerPage = () => {
                                 { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'physical meetings', c: '#16a34a', bc: '#16a34a' },
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'virtual meetings', c: '#4f46e5', bc: '#4f46e5' },
                                 { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'outside meetings', c: '#7c3aed', bc: '#7c3aed' },
-                                { v: teamTot.teamMtgs, l: 'Team Meeting', sub: 'team meetings', c: '#be185d', bc: '#be185d' },
                                 { v: teamTot.noshows, l: 'Operations', sub: 'total logged', c: '#dc2626', bc: '#dc2626' },
                                 { v: teamTot.drips, l: 'Drip Steps', sub: 'campaigns executed', c: '#d97706', bc: '#d97706' },
                                 { v: teamTot.followups, l: 'Follow-ups', sub: 'total sent', c: '#0891b2', bc: '#0891b2' },
@@ -995,7 +993,7 @@ const HourlyTrackerPage = () => {
                                         <td style={{ padding: '9px 10px', textAlign: 'left', color: 'rgba(255,255,255,.6)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 700, borderRight: '1px solid rgba(255,255,255,.07)' }}>TEAM TOTAL</td>
                                         {[
                                             { v: teamTot.calls, c: '#93c5fd' }, { v: teamTot.followups, c: '#67e8f9' }, { v: teamTot.noshows, c: '#fca5a5' },
-                                            { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.offlineMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.outMtgs, c: '#a78bfa' }, { v: teamTot.teamMtgs, c: '#f472b6' },
+                                            { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.offlineMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.outMtgs, c: '#a78bfa' }, { v: 0, c: '#f472b6', hide: true },
                                             { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.admissions, c: '#f9a8d4' },
                                             { v: teamTot.days, c: '#e2e8f0' },
                                         ].map((sv, i) => (
