@@ -276,9 +276,10 @@ const HourlyTrackerPage = () => {
 
     // ─── ACTIONS ─────────────────────────────────────
     const isTodaySelected = isToday(currentDate);
+    const canEdit = isTodaySelected || isAdmin; // Admins can edit any date
 
     const handleCellClick = (consultant, slotId) => {
-        if (!isTodaySelected) { showToast('Entries can only be made for today'); return; }
+        if (!canEdit) { showToast('Entries can only be made for today'); return; }
         const existing = getAct(consultant._id, slotId);
         // If it's a continuation, open the parent
         const initFromActivity = (act) => {
@@ -378,7 +379,7 @@ const HourlyTrackerPage = () => {
     const getAdmission = (consultantId) => admissions.get(consultantId) || 0;
 
     const handleAdmissionChange = async (consultant, value) => {
-        if (!isTodaySelected) return;
+        if (!canEdit) return;
         const count = parseInt(value) || 0;
         // Optimistic update
         setAdmissions((prev) => {
@@ -436,7 +437,7 @@ const HourlyTrackerPage = () => {
     };
 
     const handleClearDay = async () => {
-        if (!isTodaySelected) { showToast('Can only clear today\'s data'); return; }
+        if (!canEdit) { showToast('Can only clear today\'s data'); return; }
         if (!window.confirm(`Clear ALL data for ${formatDateStr(currentDate)}?`)) return;
         setLoading(true);
         try {
@@ -591,7 +592,7 @@ const HourlyTrackerPage = () => {
 
                     <Box sx={{ flex: 1 }} />
 
-                    {currentView === 'daily' && !isTodaySelected && (
+                    {currentView === 'daily' && !canEdit && (
                         <Box sx={{ px: '11px', py: '5px', borderRadius: '6px', border: '1px solid #f59e0b', background: '#fffbeb', fontSize: 11, fontWeight: 600, color: '#b45309', flexShrink: 0 }}>
                             View Only
                         </Box>
@@ -601,7 +602,7 @@ const HourlyTrackerPage = () => {
                             <PersonAddIcon sx={{ fontSize: 14, mr: 0.5 }} /> Manage
                         </Button>
                     )}
-                    {currentView === 'daily' && isTodaySelected && isAdmin && (
+                    {currentView === 'daily' && canEdit && isAdmin && (
                         <Button size="small" onClick={handleClearDay} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#9ca3af', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' } }}>
                             ✕ Clear Day
                         </Button>
@@ -718,7 +719,7 @@ const HourlyTrackerPage = () => {
                                                         ...S.td,
                                                         width: 74,
                                                         textAlign: 'center',
-                                                        cursor: isTodaySelected ? 'pointer' : 'default',
+                                                        cursor: canEdit ? 'pointer' : 'default',
                                                         position: 'relative',
                                                         overflow: 'hidden',
                                                         background: d ? (act ? act.bg : 'transparent') : 'transparent',
@@ -770,7 +771,7 @@ const HourlyTrackerPage = () => {
                                         ))}
                                         {/* Admission cell */}
                                         <td style={{ ...S.td, width: 60, textAlign: 'center', background: '#fdf2f8', borderRight: '1px solid #e5dab8' }}>
-                                            {isTodaySelected ? (
+                                            {canEdit ? (
                                                 <input
                                                     type="number"
                                                     min="0"
