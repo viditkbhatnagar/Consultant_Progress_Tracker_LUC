@@ -594,9 +594,9 @@ const HourlyTrackerPage = () => {
                         </IconButton>
                     </Tooltip>
                     <Box sx={S.brand}>
-                        <Box sx={S.brandMark}>L</Box>
+                        <img src="/LUC-new-logo-svg-1.svg" alt="Logo" style={{ height: 32, width: 'auto' }} />
                         <Typography sx={{ fontWeight: 700, fontSize: 14, color: '#1a1a1a', whiteSpace: 'nowrap' }}>
-                            <span style={{ color: '#0ea5e9' }}>Consultant</span> Hourly Tracker
+                            Hourly Tracker
                         </Typography>
                     </Box>
 
@@ -928,15 +928,15 @@ const HourlyTrackerPage = () => {
                         {/* Summary cards */}
                         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 1.2, mb: 2.5 }}>
                             {[
-                                { v: teamTot.calls, l: 'Total Calls', sub: `avg ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0} / consultant`, c: '#2563eb', bc: '#2563eb' },
-                                { v: teamTot.followups, l: 'Follow-ups', sub: `avg ${consultants.length ? Math.round(teamTot.followups / consultants.length) : 0} / consultant`, c: '#0891b2', bc: '#0891b2' },
-                                { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'physical meetings', c: '#16a34a', bc: '#16a34a' },
-                                { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'virtual meetings', c: '#4f46e5', bc: '#4f46e5' },
-                                { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'outside meetings', c: '#7c3aed', bc: '#7c3aed' },
-                                { v: teamTot.noshows, l: 'Operations', sub: 'total logged', c: '#dc2626', bc: '#dc2626' },
-                                { v: teamTot.drips, l: 'Drip Steps', sub: 'campaigns executed', c: '#d97706', bc: '#d97706' },
-                                { v: teamTot.tlMtgs, l: "TL's Team Mtg", sub: 'team lead meetings', c: '#0d9488', bc: '#0d9488' },
-                                { v: teamTot.admissions, l: 'Admissions', sub: 'total', c: '#be185d', bc: '#be185d' },
+                                { v: teamTot.calls, l: 'Total Calls', sub: `Average ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb' },
+                                { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${consultants.length ? Math.round(teamTot.followups / consultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2' },
+                                { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'Physical Meetings', c: '#16a34a', bc: '#16a34a' },
+                                { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'Virtual Meetings', c: '#4f46e5', bc: '#4f46e5' },
+                                { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'Outside Meetings', c: '#7c3aed', bc: '#7c3aed' },
+                                { v: teamTot.noshows, l: 'Operations', sub: 'Total Logged', c: '#dc2626', bc: '#dc2626' },
+                                { v: teamTot.drips, l: 'Drip Steps', sub: 'Campaigns Executed', c: '#d97706', bc: '#d97706' },
+                                { v: teamTot.tlMtgs, l: "TL's Team Meeting", sub: 'Team Lead Meetings', c: '#0d9488', bc: '#0d9488' },
+                                { v: teamTot.admissions, l: 'Admissions', sub: 'Total', c: '#be185d', bc: '#be185d' },
                             ].map((card) => (
                                 <Box key={card.l} sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
                                     <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 26, fontWeight: 600, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
