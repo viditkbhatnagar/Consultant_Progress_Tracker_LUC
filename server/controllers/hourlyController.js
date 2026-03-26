@@ -28,6 +28,9 @@ function isTodayOrFutureStr(dateStr) {
     return dateStr >= todayStr;
 }
 
+// Activity types that are locked once saved (cannot be edited or deleted)
+const LOCKED_TYPES = ['call', 'followup', 'call_followup'];
+
 // Helper: check if date is exactly today (for strict validation)
 function isTodayStr(dateStr) {
     const now = new Date();
@@ -103,6 +106,21 @@ exports.upsertSlot = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
+
+        // Check if existing entry is locked (call/followup/call_followup cannot be changed — admin can override)
+        if (req.user.role !== 'admin') {
+            const existing = await HourlyActivity.findOne({
+                consultant: consultantId,
+                date: dateObj,
+                slotId,
+            });
+            if (existing && LOCKED_TYPES.includes(existing.activityType) && !existing.isContinuation) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Call and Follow-up entries cannot be modified once logged',
+                });
+            }
+        }
 
         // Clear old continuations from this slot first
         await HourlyActivity.deleteMany({
@@ -187,6 +205,21 @@ exports.clearSlot = async (req, res, next) => {
 
         const dateObj = parseDate(date);
 
+        // Check if existing entry is locked (admin can override)
+        if (req.user.role !== 'admin') {
+            const existing = await HourlyActivity.findOne({
+                consultant: consultantId,
+                date: dateObj,
+                slotId,
+            });
+            if (existing && LOCKED_TYPES.includes(existing.activityType) && !existing.isContinuation) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Call and Follow-up entries cannot be deleted once logged',
+                });
+            }
+        }
+
         // Delete the slot itself
         await HourlyActivity.deleteOne({
             consultant: consultantId,
@@ -228,7 +261,15 @@ exports.clearDay = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
-        await HourlyActivity.deleteMany({ date: dateObj });
+        // Admin can clear everything; others skip locked entries
+        if (req.user.role === 'admin') {
+            await HourlyActivity.deleteMany({ date: dateObj });
+        } else {
+            await HourlyActivity.deleteMany({
+                date: dateObj,
+                activityType: { $nin: LOCKED_TYPES },
+            });
+        }
 
         res.status(200).json({ success: true, message: 'Day cleared' });
     } catch (error) {

@@ -289,9 +289,23 @@ const HourlyTrackerPage = () => {
     const isTodaySelected = isToday(currentDate);
     const canEdit = isTodaySelected || isAdmin; // Admins can edit any date
 
+    const LOCKED_TYPES = ['call', 'followup', 'call_followup'];
+
     const handleCellClick = (consultant, slotId) => {
         if (!canEdit) { showToast('Entries can only be made for today'); return; }
         const existing = getAct(consultant._id, slotId);
+        // Check if entry is locked (call/followup cannot be changed — admin can override)
+        if (!isAdmin && existing && !existing.isContinuation && LOCKED_TYPES.includes(existing.activityType)) {
+            showToast('Call and Follow-up entries cannot be modified once logged');
+            return;
+        }
+        if (!isAdmin && existing && existing.isContinuation && existing.parentSlotId) {
+            const parent = getAct(consultant._id, existing.parentSlotId);
+            if (parent && LOCKED_TYPES.includes(parent.activityType)) {
+                showToast('Call and Follow-up entries cannot be modified once logged');
+                return;
+            }
+        }
         // If it's a continuation, open the parent
         const initFromActivity = (act) => {
             if (!act?.activityType) { setPickerTypes([]); return; }
@@ -853,6 +867,7 @@ const HourlyTrackerPage = () => {
                                             const isCur = s.id === curSlot;
                                             const isAM = ['s0930','s1030','s1130','s1230'].includes(s.id);
                                             const emptyBg = isAM ? '#f0f5ff' : '#fffdf0';
+                                            const isLocked = !isAdmin && d && !d.isContinuation && LOCKED_TYPES.includes(d.activityType);
                                             return (
                                                 <td
                                                     key={s.id}
@@ -861,7 +876,7 @@ const HourlyTrackerPage = () => {
                                                         ...S.td,
                                                         minWidth: 125,
                                                         textAlign: 'center',
-                                                        cursor: canEdit ? 'pointer' : 'default',
+                                                        cursor: isLocked ? 'not-allowed' : (canEdit ? 'pointer' : 'default'),
                                                         position: 'relative',
                                                         overflow: 'hidden',
                                                         background: d ? (act ? act.bg : emptyBg) : emptyBg,
@@ -882,6 +897,9 @@ const HourlyTrackerPage = () => {
                                                             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '2px 5px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap' }}>
                                                                 {act.icon} {act.lbl}
                                                             </span>
+                                                            {isLocked && (
+                                                                <span style={{ position: 'absolute', top: 2, left: 3, fontSize: 8, opacity: 0.5 }}>🔒</span>
+                                                            )}
                                                             {d.count > 1 && (
                                                                 <span style={{ position: 'absolute', top: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 9, fontWeight: 600, background: 'rgba(0,0,0,.12)', color: '#fff', borderRadius: 3, padding: '0 3px', lineHeight: 1.4 }}>{d.count}</span>
                                                             )}
@@ -1085,7 +1103,7 @@ const HourlyTrackerPage = () => {
             <Dialog
                 open={pickerOpen}
                 onClose={() => setPickerOpen(false)}
-                PaperProps={{ sx: { borderRadius: '16px', p: 3, width: 520, maxWidth: '96vw', minHeight: 500 } }}
+                PaperProps={{ sx: { borderRadius: '16px', p: 3.5, width: 620, maxWidth: '96vw', minHeight: 580 } }}
             >
                 <DialogContent sx={{ p: 0 }}>
                     {/* Header */}
@@ -1134,8 +1152,11 @@ const HourlyTrackerPage = () => {
                         })}
                     </Box>
 
-                    <Typography sx={{ fontSize: 11.5, color: '#8a9ab0', fontStyle: 'italic', mb: 1.5, textAlign: 'center' }}>
+                    <Typography sx={{ fontSize: 13, color: '#1a1a1a', fontStyle: 'italic', mb: 0.8, textAlign: 'center', fontWeight: 600 }}>
                         Call and Follow-up can be selected together
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: '#dc2626', fontWeight: 700, mb: 1.5, textAlign: 'center', lineHeight: 1.4 }}>
+                        ⚠️ Once you enter Call, Follow-up, or both together, it cannot be deleted. Contact admin if you need it removed.
                     </Typography>
 
                     {/* Count input */}
