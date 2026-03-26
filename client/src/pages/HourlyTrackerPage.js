@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import hourlyService from '../services/hourlyService';
 import consultantService from '../services/consultantService';
+import { exportToExcel, exportToCSV } from '../services/exportService';
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const SLOTS = [
@@ -468,6 +469,65 @@ const HourlyTrackerPage = () => {
         setLoading(false);
     };
 
+    // ─── EXPORT ──────────────────────────────────────
+    const handleExport = (type) => {
+        const dateStr = formatDateStr(currentDate);
+        const dayLabel = currentDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+
+        if (currentView === 'daily') {
+            const data = consultants.map((c, i) => {
+                const st = getStats(c._id);
+                const row = { '#': i + 1, 'Consultant': c.name };
+                SLOTS.filter(s => !s.isLunch).forEach(s => {
+                    const d = activities.get(`${c._id}_${s.id}`);
+                    if (d && !d.isContinuation) {
+                        const act = ACTIVITY_TYPES.find(a => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
+                        row[`${s.lbl}-${s.end}`] = act ? `${act.lbl}${d.count > 1 ? ` (${d.count})` : ''}${d.note ? ` [${d.note}]` : ''}` : '';
+                    } else {
+                        row[`${s.lbl}-${s.end}`] = '';
+                    }
+                });
+                row['Calls'] = st.calls || '';
+                row['Follow-Ups'] = st.followups || '';
+                row['Operations'] = st.noshows || '';
+                row['Drips'] = st.drips || '';
+                row['Offline Meeting'] = st.offlineMtgs || '';
+                row['Zoom'] = st.zoomMtgs || '';
+                row['Out Meeting'] = st.outMtgs || '';
+                row['Team Meeting'] = st.teamMtgs || '';
+                row["TL's Team Meeting"] = st.tlMtgs || '';
+                row['Meeting Hours'] = st.meetHrs ? `${st.meetHrs}h` : '';
+                row['Admissions'] = getAdmission(c._id) || '';
+                return row;
+            });
+            const filename = `Hourly_Tracker_${dateStr}`;
+            type === 'xlsx' ? exportToExcel(data, filename) : exportToCSV(data, filename);
+            showToast(`Exported ${type.toUpperCase()} — ${dayLabel}`);
+        } else {
+            const { rows } = getMonthlyStats();
+            const data = rows.map((r, i) => ({
+                '#': i + 1,
+                'Consultant': r.consultant.name,
+                'Calls': r.calls || '',
+                'Follow-Ups': r.followups || '',
+                'Operations': r.noshows || '',
+                'Drips': r.drips || '',
+                'Offline Meeting': r.offlineMtgs || '',
+                'Zoom': r.zoomMtgs || '',
+                'Out Meeting': r.outMtgs || '',
+                'Team Meeting': r.teamMtgs || '',
+                "TL's Team Meeting": r.tlMtgs || '',
+                'Meeting Hours': r.meetHrs ? `${r.meetHrs}h` : '',
+                'Admissions': r.admissions || '',
+                'Days Active': r.days || '',
+            }));
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const filename = `Hourly_Tracker_${monthNames[monthReport.m]}_${monthReport.y}`;
+            type === 'xlsx' ? exportToExcel(data, filename) : exportToCSV(data, filename);
+            showToast(`Exported ${type.toUpperCase()} — ${monthNames[monthReport.m]} ${monthReport.y}`);
+        }
+    };
+
     // ─── DATE NAV ────────────────────────────────────
     const shiftDate = (delta) => {
         setCurrentDate((prev) => {
@@ -673,6 +733,12 @@ const HourlyTrackerPage = () => {
                             View Only
                         </Box>
                     )}
+                    <Button size="small" onClick={() => handleExport('xlsx')} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                        📥 Export XLSX
+                    </Button>
+                    <Button size="small" onClick={() => handleExport('csv')} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                        📄 Export CSV
+                    </Button>
                     {isAdmin && (
                         <Button size="small" onClick={() => setManageOpen(true)} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
                             <PersonAddIcon sx={{ fontSize: 14, mr: 0.5 }} /> Manage
