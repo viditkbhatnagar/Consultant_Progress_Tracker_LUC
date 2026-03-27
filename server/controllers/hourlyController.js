@@ -322,7 +322,8 @@ exports.getDayAdmissions = async (req, res, next) => {
                 .json({ success: false, message: 'Date is required' });
         }
         const dateObj = parseDate(date);
-        const admissions = await DailyAdmission.find({ date: dateObj });
+        const admissions = await DailyAdmission.find({ date: dateObj })
+            .populate('consultant', 'name');
         res.status(200).json({ success: true, data: admissions });
     } catch (error) {
         next(error);
