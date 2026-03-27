@@ -38,12 +38,17 @@ function isTodayStr(dateStr) {
     return dateStr === todayStr;
 }
 
-// @desc    Get all active consultants (shared view, no role scoping)
+// @desc    Get active consultants (admin sees all, team_lead sees own team only)
 // @route   GET /api/hourly/consultants
 // @access  Private
 exports.getConsultants = async (req, res, next) => {
     try {
-        const consultants = await Consultant.find({ isActive: true })
+        const filter = { isActive: true };
+        if (req.user.role === 'team_lead' && req.query.scope !== 'org') {
+            filter.teamLead = req.user.id;
+        }
+
+        const consultants = await Consultant.find(filter)
             .populate('teamLead', 'name teamName')
             .sort('name');
 

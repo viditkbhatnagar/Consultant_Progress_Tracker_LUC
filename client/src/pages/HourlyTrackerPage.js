@@ -13,6 +13,7 @@ import {
     Select,
     FormControl,
     CircularProgress,
+    Drawer,
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -141,6 +142,16 @@ const HourlyTrackerPage = () => {
     const [newConsultantName, setNewConsultantName] = useState('');
     const [selectedTeamLead, setSelectedTeamLead] = useState('');
     const [teamLeads, setTeamLeads] = useState([]);
+
+    // Admin team & consultant filter
+    const [teamFilter, setTeamFilter] = useState('all');
+    const [consultantFilter, setConsultantFilter] = useState('all');
+
+    // Org view drawer
+    const [orgViewOpen, setOrgViewOpen] = useState(false);
+    const [orgConsultants, setOrgConsultants] = useState([]);
+    const [orgActivities, setOrgActivities] = useState(new Map());
+    const [orgLoading, setOrgLoading] = useState(false);
 
     // Ops note viewer
     const [opsNoteOpen, setOpsNoteOpen] = useState(false);
@@ -542,6 +553,65 @@ const HourlyTrackerPage = () => {
         }
     };
 
+    // ─── ORG VIEW ─────────────────────────────────────
+    const openOrgView = async () => {
+        setOrgViewOpen(true);
+        setOrgLoading(true);
+        try {
+            const [cRes, aRes] = await Promise.all([
+                hourlyService.getConsultants('org'),
+                hourlyService.getDayActivities(formatDateStr(currentDate)),
+            ]);
+            setOrgConsultants(cRes.data || []);
+            const m = new Map();
+            (aRes.data || []).forEach((a) => m.set(`${a.consultant}_${a.slotId}`, a));
+            setOrgActivities(m);
+        } catch (err) {
+            showToast('Failed to load organization data');
+        }
+        setOrgLoading(false);
+    };
+
+    const getOrgAct = (cId, slotId) => orgActivities.get(`${cId}_${slotId}`);
+
+    const hasOrgNotesForType = (consultantId, actTypes) => {
+        return WORK_SLOTS.some((s) => {
+            const d = getOrgAct(consultantId, s.id);
+            return d && d.note && actTypes.includes(d.activityType);
+        });
+    };
+
+    const handleOrgViewNotes = (consultant, actTypes, title) => {
+        const notes = [];
+        WORK_SLOTS.forEach((s) => {
+            const d = getOrgAct(consultant._id, s.id);
+            if (d && d.note && actTypes.includes(d.activityType)) {
+                const slot = SLOTS.find((x) => x.id === s.id);
+                notes.push({ slot: slot ? `${slot.lbl}–${slot.end}` : s.id, note: d.note });
+            }
+        });
+        setOpsNoteContent({ name: `${consultant.name} — ${title}`, notes });
+        setOpsNoteOpen(true);
+    };
+
+    const getOrgStats = (consultantId) => {
+        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, tlMtgs = 0, meetHrs = 0;
+        orgActivities.forEach((d) => {
+            if (String(d.consultant) !== String(consultantId) || d.isContinuation) return;
+            const hrs = (d.duration || 60) / 60;
+            if (d.activityType === 'call' || d.activityType === 'call_followup') calls += d.count || 1;
+            if (d.activityType === 'followup' || d.activityType === 'call_followup') followups += d.count || 1;
+            if (d.activityType === 'noshow') noshows++;
+            if (d.activityType === 'drip') drips++;
+            if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'outmeet') { outMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'tlmeet') { tlMtgs++; meetHrs += hrs; }
+        });
+        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, meetHrs: +meetHrs.toFixed(1) };
+    };
+
     // ─── DATE NAV ────────────────────────────────────
     const shiftDate = (delta) => {
         setCurrentDate((prev) => {
@@ -583,12 +653,20 @@ const HourlyTrackerPage = () => {
         setLbLoading(false);
     };
 
+    // Admin team filter — derived list
+    const displayConsultants = (() => {
+        let list = consultants;
+        if (isAdmin && teamFilter !== 'all') list = list.filter((c) => String(c.teamLead?._id) === teamFilter);
+        if (isAdmin && consultantFilter !== 'all') list = list.filter((c) => String(c._id) === consultantFilter);
+        return list;
+    })();
+
     // ─── MONTHLY STATS ──────────────────────────────
     const getMonthlyStats = () => {
         const { y, m } = monthReport;
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
-        const rows = consultants.map((c) => {
+        const rows = displayConsultants.map((c) => {
             const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
             // Sum admissions for this consultant across the month
             monthAdmissions.filter((a) => String(a.consultant) === String(c._id)).forEach((a) => { r.admissions += a.count || 0; });
@@ -644,23 +722,31 @@ const HourlyTrackerPage = () => {
     // ─── STYLES ──────────────────────────────────────
     const S = {
         hdrWrap: { background: '#faf8f5', position: 'relative', zIndex: 50, boxShadow: '0 2px 8px rgba(0,0,0,.08)', flexShrink: 0, borderBottom: '1px solid #e8e2d9' },
-        hdr: { display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.8 },
+        hdr: { display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 0.8, flexWrap: 'wrap' },
         brand: { display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, mr: 0.5 },
         brandMark: { width: 30, height: 30, borderRadius: '7px', background: 'linear-gradient(135deg,#0ea5e9,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff' },
         vtab: (active) => ({ px: 1.5, py: 0.5, borderRadius: '5px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', background: active ? 'rgba(0,0,0,.08)' : 'none', color: active ? '#1a1a1a' : '#8a8a8a', transition: 'all .15s', '&:hover': { background: 'rgba(0,0,0,.05)' }, minWidth: 'auto' }),
         kpi: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: 90, minWidth: 90, maxWidth: 90, height: 56, px: 0.5, py: 0.4, borderRadius: '6px', background: 'rgba(0,0,0,.03)', border: '1px solid rgba(0,0,0,.06)', flexShrink: 0 },
         th: { background: '#243348', color: 'rgba(255,255,255,.7)', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, fontWeight: 500, p: '5px 2px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' },
-        td: { borderRight: '1px solid #dde3ed', borderBottom: '1px solid #dde3ed', height: 36, verticalAlign: 'middle', p: 0 },
+        td: { borderRight: '1px solid #dde3ed', borderBottom: '1px solid #dde3ed', height: displayConsultants.length <= 3 ? 80 : displayConsultants.length <= 6 ? 64 : 52, verticalAlign: 'middle', p: 0 },
     };
 
-    const teamTotals = currentView === 'daily' ? getTeamTotals() : {};
+    const teamTotals = currentView === 'daily' ? (() => {
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0 };
+        displayConsultants.forEach((c) => {
+            const s = getStats(c._id);
+            Object.keys(t).forEach((k) => (t[k] += s[k]));
+        });
+        t.meetHrs = +t.meetHrs.toFixed(1);
+        return t;
+    })() : {};
 
     // ─── RENDER ──────────────────────────────────────
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f3f8', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>
             {/* ── HEADER ── */}
             <Box sx={S.hdrWrap}>
-                {/* Top row: brand, tabs, date nav, actions */}
+                {/* Row 1: brand, tabs, date nav */}
                 <Box sx={S.hdr}>
                     <Tooltip title="Back to Dashboard">
                         <IconButton size="small" onClick={() => navigate(user?.role === 'admin' ? '/admin/dashboard' : '/team-lead/dashboard')} sx={{ color: '#6b7280', p: 0.5 }}>
@@ -681,16 +767,22 @@ const HourlyTrackerPage = () => {
                         <Button sx={S.vtab(currentView === 'daily')} onClick={() => setCurrentView('daily')}>📅 Daily</Button>
                         <Button sx={S.vtab(currentView === 'monthly')} onClick={() => setCurrentView('monthly')}>📊 Monthly</Button>
                     </Box>
+                    <Button
+                        onClick={openOrgView}
+                        sx={{ px: 1.5, py: 0.5, borderRadius: '8px', fontSize: 12, fontWeight: 700, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff', textTransform: 'none', minWidth: 'auto', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(99,102,241,.3)', '&:hover': { background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 3px 10px rgba(99,102,241,.4)' } }}
+                    >
+                        🏢 View Organization
+                    </Button>
 
                     <Box sx={{ width: '1px', height: 24, background: 'rgba(0,0,0,.1)', flexShrink: 0 }} />
 
-                    {/* Date nav (daily only) */}
+                    {/* Date nav */}
                     {currentView === 'daily' && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                            <IconButton size="small" onClick={() => shiftDate(-1)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            <IconButton size="small" onClick={() => shiftDate(-1)} sx={{ width: 26, height: 26, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
                                 <ChevronLeft sx={{ fontSize: 16 }} />
                             </IconButton>
-                            <Box onClick={() => dateInputRef.current?.showPicker()} sx={{ px: '14px', py: '5px', borderRadius: '6px', background: 'rgba(0,0,0,.05)', border: '1px solid rgba(0,0,0,.1)', fontSize: 13, fontWeight: 600, color: '#1a1a1a', cursor: 'pointer', whiteSpace: 'nowrap', '&:hover': { background: 'rgba(0,0,0,.08)' } }}>
+                            <Box onClick={() => dateInputRef.current?.showPicker()} sx={{ px: '10px', py: '4px', borderRadius: '6px', background: 'rgba(0,0,0,.05)', border: '1px solid rgba(0,0,0,.1)', fontSize: 12, fontWeight: 600, color: '#1a1a1a', cursor: 'pointer', whiteSpace: 'nowrap', '&:hover': { background: 'rgba(0,0,0,.08)' } }}>
                                 {`${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`}
                             </Box>
                             <input
@@ -700,72 +792,108 @@ const HourlyTrackerPage = () => {
                                 onChange={(e) => { if (e.target.value) { const [y, m, d] = e.target.value.split('-').map(Number); setCurrentDate(new Date(y, m - 1, d)); } }}
                                 style={{ position: 'absolute', opacity: 0, width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}
                             />
-                            <IconButton size="small" onClick={() => shiftDate(1)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
+                            <IconButton size="small" onClick={() => shiftDate(1)} sx={{ width: 26, height: 26, borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.04)', color: '#6b7280', '&:hover': { background: 'rgba(0,0,0,.08)', color: '#1a1a1a' } }}>
                                 <ChevronRight sx={{ fontSize: 16 }} />
                             </IconButton>
-                            <Button size="small" onClick={goToday} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
+                            <Button size="small" onClick={goToday} sx={{ px: '10px', py: '4px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
                                 Today
                             </Button>
-                            <Button size="small" onClick={handleAIAnalysis} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                                🤖 AI Analysis
-                            </Button>
-                            <Button size="small" onClick={handleLeaderboard} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                                🏆 Leaderboard
-                            </Button>
-                            <Tooltip
-                                title={
-                                    <Box sx={{ p: 1, maxWidth: 320, fontSize: 11, lineHeight: 1.6 }}>
-                                        <Box sx={{ fontWeight: 700, fontSize: 12, mb: 0.5 }}>How Leaderboard Rankings Work</Box>
-                                        <Box sx={{ mb: 0.5 }}>AI calculates a score out of 100 using weighted criteria:</Box>
-                                        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                                            <li><b>Admissions</b> — Highest weight (actual conversions)</li>
-                                            <li><b>Meetings</b> — High weight (direct client engagement)</li>
-                                            <li><b>Follow-ups</b> — Medium weight (pipeline nurturing)</li>
-                                            <li><b>Calls</b> — Medium weight (volume matters but quality more)</li>
-                                            <li><b>Drips</b> — Lower weight (marketing effort)</li>
-                                            <li><b>Operations</b> — Penalty (non-productive time)</li>
-                                        </Box>
-                                        <Box sx={{ mt: 0.5, fontStyle: 'italic', color: '#bbb' }}>
-                                            A balanced consultant (calls + meetings + follow-ups + admissions) ranks higher than one who only makes calls. Rankings update in real-time based on current data.
-                                        </Box>
-                                    </Box>
-                                }
-                                arrow
-                                placement="bottom"
-                            >
-                                <Button size="small" sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, fontWeight: 600, textTransform: 'none', minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                                    ℹ️ Leaderboard Info
-                                </Button>
-                            </Tooltip>
                         </Box>
+                    )}
+
+                    {/* Admin team filter */}
+                    {isAdmin && (
+                        <>
+                            <Box sx={{ width: '1px', height: 24, background: 'rgba(0,0,0,.1)', flexShrink: 0 }} />
+                            <FormControl size="small" sx={{ minWidth: 140, flexShrink: 0 }}>
+                                <Select
+                                    value={teamFilter}
+                                    onChange={(e) => { setTeamFilter(e.target.value); setConsultantFilter('all'); }}
+                                    sx={{ fontSize: 12, fontWeight: 600, borderRadius: '8px', height: 32, '& .MuiSelect-select': { py: '4px', px: '10px' } }}
+                                >
+                                    <MenuItem value="all" sx={{ fontSize: 12 }}>All Teams</MenuItem>
+                                    {teamLeads.map((tl) => (
+                                        <MenuItem key={tl._id} value={tl._id} sx={{ fontSize: 12 }}>{tl.teamName || tl.name}</MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ minWidth: 150, flexShrink: 0 }}>
+                                <Select
+                                    value={consultantFilter}
+                                    onChange={(e) => setConsultantFilter(e.target.value)}
+                                    sx={{ fontSize: 12, fontWeight: 600, borderRadius: '8px', height: 32, '& .MuiSelect-select': { py: '4px', px: '10px' } }}
+                                >
+                                    <MenuItem value="all" sx={{ fontSize: 12 }}>All Consultants</MenuItem>
+                                    {(teamFilter !== 'all' ? consultants.filter((c) => String(c.teamLead?._id) === teamFilter) : consultants).map((c) => (
+                                        <MenuItem key={c._id} value={c._id} sx={{ fontSize: 12 }}>{c.name}</MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        </>
                     )}
 
                     <Box sx={{ flex: 1 }} />
 
                     {currentView === 'daily' && !canEdit && (
-                        <Box sx={{ px: '11px', py: '5px', borderRadius: '6px', border: '1px solid #f59e0b', background: '#fffbeb', fontSize: 11, fontWeight: 600, color: '#b45309', flexShrink: 0 }}>
+                        <Box sx={{ px: '11px', py: '4px', borderRadius: '6px', border: '1px solid #f59e0b', background: '#fffbeb', fontSize: 10, fontWeight: 600, color: '#b45309', flexShrink: 0 }}>
                             View Only
                         </Box>
                     )}
-                    <Button size="small" onClick={() => handleExport('xlsx')} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                        📥 Export XLSX
-                    </Button>
-                    <Button size="small" onClick={() => handleExport('csv')} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                        📄 Export CSV
-                    </Button>
-                    {isAdmin && (
-                        <Button size="small" onClick={() => setManageOpen(true)} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#6b7280', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: 'rgba(0,0,0,.06)', color: '#1a1a1a' } }}>
-                            <PersonAddIcon sx={{ fontSize: 14, mr: 0.5 }} /> Manage
-                        </Button>
-                    )}
-                    {currentView === 'daily' && canEdit && isAdmin && (
-                        <Button size="small" onClick={handleClearDay} sx={{ px: '12px', py: '5px', borderRadius: '6px', border: '1px solid rgba(0,0,0,.12)', background: 'rgba(0,0,0,.03)', color: '#9ca3af', fontSize: 11, textTransform: 'none', flexShrink: 0, minWidth: 'auto', lineHeight: 1, '&:hover': { background: '#fee2e2', color: '#dc2626', borderColor: '#fca5a5' } }}>
-                            ✕ Clear Day
-                        </Button>
-                    )}
+
                 </Box>
 
-                {/* Bottom row: KPIs + Legend */}
+                {/* Row 2: Action buttons — full width */}
+                <Box sx={{ display: 'flex', gap: '6px', px: 2, pb: 0.8, flexWrap: 'wrap' }}>
+                    {[
+                        { label: '🤖 AI Analysis', onClick: handleAIAnalysis },
+                        { label: '🏆 Leaderboard', onClick: handleLeaderboard },
+                        { label: '📥 Export XLSX', onClick: () => handleExport('xlsx') },
+                        { label: '📄 Export CSV', onClick: () => handleExport('csv') },
+                        ...(isAdmin ? [{ label: '👥 Manage Consultants', onClick: () => setManageOpen(true) }] : []),
+                        ...(currentView === 'daily' && canEdit && isAdmin ? [{ label: '✕ Clear Day', onClick: handleClearDay, danger: true }] : []),
+                    ].map((btn) => (
+                        <Button
+                            key={btn.label}
+                            size="small"
+                            onClick={btn.onClick}
+                            sx={{
+                                flex: 1, px: 1.5, py: 0.7, borderRadius: '8px',
+                                border: btn.danger ? '1px solid #fca5a5' : '1px solid rgba(0,0,0,.1)',
+                                background: btn.danger ? '#fff5f5' : 'rgba(0,0,0,.03)',
+                                color: btn.danger ? '#dc2626' : '#4b5563', fontSize: 12, fontWeight: 600,
+                                textTransform: 'none', minWidth: 0, lineHeight: 1.3,
+                                '&:hover': btn.danger
+                                    ? { background: '#fee2e2', borderColor: '#f87171' }
+                                    : { background: 'rgba(0,0,0,.07)', color: '#1a1a1a' },
+                            }}
+                        >
+                            {btn.label}
+                        </Button>
+                    ))}
+                    <Tooltip
+                        title={
+                            <Box sx={{ p: 1, maxWidth: 320, fontSize: 11, lineHeight: 1.6 }}>
+                                <Box sx={{ fontWeight: 700, fontSize: 12, mb: 0.5 }}>How Leaderboard Rankings Work</Box>
+                                <Box sx={{ mb: 0.5 }}>AI calculates a score out of 100 using weighted criteria:</Box>
+                                <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                                    <li><b>Admissions</b> — Highest weight</li>
+                                    <li><b>Meetings</b> — High weight</li>
+                                    <li><b>Follow-ups / Calls</b> — Medium weight</li>
+                                    <li><b>Drips</b> — Lower weight</li>
+                                    <li><b>Operations</b> — Penalty</li>
+                                </Box>
+                            </Box>
+                        }
+                        arrow
+                        placement="bottom"
+                    >
+                        <Button size="small" sx={{ px: 1.5, py: 0.7, borderRadius: '8px', border: '1px solid rgba(0,0,0,.1)', background: 'rgba(0,0,0,.03)', color: '#4b5563', fontSize: 12, fontWeight: 600, textTransform: 'none', minWidth: 0, lineHeight: 1.3, '&:hover': { background: 'rgba(0,0,0,.07)', color: '#1a1a1a' } }}>
+                            ℹ️ Ranking Info
+                        </Button>
+                    </Tooltip>
+                </Box>
+
+                {/* Bottom row: KPIs */}
                 {currentView === 'daily' && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', px: 2, pb: 1, pt: 0.3 }}>
                         {[
@@ -779,22 +907,11 @@ const HourlyTrackerPage = () => {
                             { v: teamTotals.tlMtgs, l: "TL's Team Mtg", c: '#0d9488' },
                             { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d' },
                         ].map((kpi) => (
-                            <Box key={kpi.l} sx={S.kpi}>
-                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
-                                <Typography sx={{ fontSize: 7.5, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
+                            <Box key={kpi.l} sx={{ ...S.kpi, flex: 1, width: 'auto', minWidth: 0, maxWidth: 'none' }}>
+                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
+                                <Typography sx={{ fontSize: 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
                             </Box>
                         ))}
-
-                        <Box sx={{ flex: 1 }} />
-
-                        {/* Legend chips */}
-                        <Box sx={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', flexShrink: 0 }}>
-                            {ACTIVITY_TYPES.map((a) => (
-                                <Box key={a.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.3, px: 0.8, py: 0.3, borderRadius: '10px', border: `1px solid ${a.color}35`, background: `${a.color}10`, whiteSpace: 'nowrap', fontSize: 10, fontWeight: 600, color: a.color, flexShrink: 0 }}>
-                                    <span style={{ fontSize: 12 }}>{a.icon}</span> {a.lbl}
-                                </Box>
-                            ))}
-                        </Box>
                     </Box>
                 )}
             </Box>
@@ -842,14 +959,14 @@ const HourlyTrackerPage = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {consultants.map((c, idx) => {
+                            {displayConsultants.map((c, idx) => {
                                 const st = getStats(c._id);
                                 return (
                                     <tr key={c._id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfd' }}>
                                         <td style={{ ...S.td, width: 34, minWidth: 34, textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, color: '#8a9ab0', background: '#f6f8fc', borderRight: '1px solid #c8d0de', position: 'sticky', left: 0, zIndex: 5 }}>{idx + 1}</td>
                                         <td style={{ ...S.td, width: 160, minWidth: 160, background: '#f6f8fc', borderRight: '2px solid #c8d0de', padding: '0 7px', position: 'sticky', left: 34, zIndex: 5 }}>
                                             <Tooltip title={c.teamLead?.name ? `Team: ${c.teamName || c.teamLead.teamName || ''}` : ''} placement="right">
-                                                <div style={{ fontSize: 14, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                <div style={{ fontSize: displayConsultants.length <= 3 ? 17 : 15, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {c.name}
                                                 </div>
                                             </Tooltip>
@@ -894,17 +1011,17 @@ const HourlyTrackerPage = () => {
                                                     })()}
                                                     {act && (
                                                         <>
-                                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '2px 5px', borderRadius: 4, fontSize: 9.5, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap' }}>
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, padding: displayConsultants.length <= 3 ? '5px 10px' : '3px 7px', borderRadius: 5, fontSize: displayConsultants.length <= 3 ? 13 : displayConsultants.length <= 6 ? 12 : 11, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap' }}>
                                                                 {act.icon} {act.lbl}
                                                             </span>
                                                             {isLocked && (
                                                                 <span style={{ position: 'absolute', top: 2, left: 3, fontSize: 8, opacity: 0.5 }}>🔒</span>
                                                             )}
                                                             {d.count > 1 && (
-                                                                <span style={{ position: 'absolute', top: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 9, fontWeight: 600, background: 'rgba(0,0,0,.12)', color: '#fff', borderRadius: 3, padding: '0 3px', lineHeight: 1.4 }}>{d.count}</span>
+                                                                <span style={{ position: 'absolute', top: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 11, fontWeight: 800, background: '#334155', color: '#fff', borderRadius: 4, padding: '1px 5px', lineHeight: 1.4, boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{d.count}</span>
                                                             )}
                                                             {d.duration > 60 && (
-                                                                <span style={{ position: 'absolute', bottom: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 9, fontWeight: 600, background: 'rgba(0,0,0,.12)', color: '#fff', borderRadius: 3, padding: '0 3px', lineHeight: 1.4 }}>{d.duration / 60}h</span>
+                                                                <span style={{ position: 'absolute', bottom: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 11, fontWeight: 800, background: '#334155', color: '#fff', borderRadius: 4, padding: '1px 5px', lineHeight: 1.4, boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{d.duration / 60}h</span>
                                                             )}
                                                         </>
                                                     )}
@@ -964,7 +1081,7 @@ const HourlyTrackerPage = () => {
                                 {SLOTS.map((s) => {
                                     if (s.isLunch) return <td key={s.id} style={{ background: '#1a2840', borderBottom: 'none', borderRight: '1px solid rgba(255,255,255,.07)', height: 34 }} />;
                                     let cnt = 0;
-                                    consultants.forEach((c) => { const d = getAct(c._id, s.id); if (d && !d.isContinuation) cnt++; });
+                                    displayConsultants.forEach((c) => { const d = getAct(c._id, s.id); if (d && !d.isContinuation) cnt++; });
                                     return <td key={s.id} style={{ background: '#1a2840', borderBottom: 'none', borderRight: '1px solid rgba(255,255,255,.07)', height: 34, textAlign: 'center' }}>
                                         <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 13, fontWeight: 600, color: cnt === 0 ? 'rgba(255,255,255,.2)' : '#fff' }}>{cnt || '—'}</span>
                                     </td>;
@@ -996,7 +1113,7 @@ const HourlyTrackerPage = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
                             <Box>
                                 <Typography sx={{ fontSize: 20, fontWeight: 800, color: '#0d1520' }}>{MONTH_NAMES[monthReport.m]} {monthReport.y} — Monthly Report</Typography>
-                                <Typography sx={{ fontSize: 12, color: '#8a9ab0', mt: 0.2 }}>Productivity summary across all {consultants.length} consultants · {daysInMonth} days tracked</Typography>
+                                <Typography sx={{ fontSize: 12, color: '#8a9ab0', mt: 0.2 }}>Productivity summary across all {displayConsultants.length} consultants · {daysInMonth} days tracked</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 'auto' }}>
                                 <IconButton size="small" onClick={() => setMonthReport((p) => { let m = p.m - 1, y = p.y; if (m < 0) { m = 11; y--; } return { y, m }; })} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a' }}>
@@ -1012,8 +1129,8 @@ const HourlyTrackerPage = () => {
                         {/* Summary cards */}
                         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 1.2, mb: 2.5 }}>
                             {[
-                                { v: teamTot.calls, l: 'Total Calls', sub: `Average ${consultants.length ? Math.round(teamTot.calls / consultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb' },
-                                { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${consultants.length ? Math.round(teamTot.followups / consultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2' },
+                                { v: teamTot.calls, l: 'Total Calls', sub: `Average ${displayConsultants.length ? Math.round(teamTot.calls / displayConsultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb' },
+                                { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${displayConsultants.length ? Math.round(teamTot.followups / displayConsultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2' },
                                 { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'Physical Meetings', c: '#16a34a', bc: '#16a34a' },
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'Virtual Meetings', c: '#4f46e5', bc: '#4f46e5' },
                                 { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'Outside Meetings', c: '#7c3aed', bc: '#7c3aed' },
@@ -1407,6 +1524,135 @@ const HourlyTrackerPage = () => {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* ── ORG VIEW DRAWER ── */}
+            <Drawer
+                anchor="right"
+                open={orgViewOpen}
+                onClose={() => setOrgViewOpen(false)}
+                PaperProps={{ sx: { width: '92vw', maxWidth: 1600, background: '#f8f9fc' } }}
+            >
+                <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    {/* Drawer header */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 3, py: 1.5, background: '#fff', borderBottom: '1px solid #dde3ed', flexShrink: 0 }}>
+                        <Box sx={{ flex: 1 }}>
+                            <Typography sx={{ fontSize: 20, fontWeight: 800, color: '#0d1520' }}>
+                                🏢 Organization Hourly Tracker
+                            </Typography>
+                            <Typography sx={{ fontSize: 12, color: '#8a9ab0', mt: 0.3 }}>
+                                {currentDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })} · {orgConsultants.length} consultants · <span style={{ color: '#6366f1', fontWeight: 600 }}>View Only</span>
+                            </Typography>
+                        </Box>
+                        <Button
+                            onClick={() => setOrgViewOpen(false)}
+                            sx={{ px: 2, py: 0.7, borderRadius: '8px', border: '1px solid #dde3ed', background: '#fff', color: '#6b7280', fontSize: 12, fontWeight: 600, textTransform: 'none', '&:hover': { background: '#f3f4f6' } }}
+                        >
+                            ✕ Close
+                        </Button>
+                    </Box>
+
+                    {/* Drawer body */}
+                    {orgLoading ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                            <CircularProgress size={40} />
+                        </Box>
+                    ) : (
+                        <Box sx={{ flex: 1, overflow: 'auto' }}>
+                            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ ...S.th, position: 'sticky', top: 0, left: 0, zIndex: 10, width: 34, minWidth: 34, background: '#243348' }}>#</th>
+                                        <th style={{ ...S.th, position: 'sticky', top: 0, left: 34, zIndex: 10, width: 160, minWidth: 160, textAlign: 'left', background: '#243348' }}>CONSULTANT</th>
+                                        <th style={{ ...S.th, position: 'sticky', top: 0, zIndex: 8, width: 100, minWidth: 100, textAlign: 'left', background: '#1e3a5f', color: '#93c5fd' }}>TEAM</th>
+                                        {SLOTS.map((s) => (
+                                            <th key={s.id} style={{ ...S.th, position: 'sticky', top: 0, zIndex: 7, minWidth: s.isLunch ? 50 : 120, background: s.isLunch ? '#3d3520' : '#243348', color: s.isLunch ? '#fcd34d' : 'rgba(255,255,255,.7)' }}>
+                                                {s.isLunch ? '🍽' : <>{s.lbl}<br />{s.end}</>}
+                                            </th>
+                                        ))}
+                                        {[
+                                            { l: 'CALLS', c: '#93c5fd' }, { l: 'FOLLOW-UPS', c: '#67e8f9' }, { l: 'OPERATIONS', c: '#fca5a5' },
+                                            { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MTG', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' },
+                                            { l: 'OUT MTG', c: '#a78bfa' }, { l: 'TEAM MTG', c: '#f472b6' }, { l: "TL'S MTG", c: '#5eead4' },
+                                            { l: 'MTG HOURS', c: '#94a3b8' },
+                                        ].map((h) => (
+                                            <th key={h.l} style={{ ...S.th, position: 'sticky', top: 0, zIndex: 7, minWidth: 75, background: '#2a2010', color: h.c, fontSize: 9, fontWeight: 700, letterSpacing: '.04em' }}>{h.l}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {orgConsultants.map((c, idx) => {
+                                        const teamName = c.teamLead?.teamName || c.teamLead?.name || '';
+                                        return (
+                                            <tr key={c._id} style={{ borderBottom: '1px solid #dde3ed' }}>
+                                                <td style={{ ...S.td, width: 34, minWidth: 34, textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 10, color: '#8a9ab0', background: '#f6f8fc', position: 'sticky', left: 0, zIndex: 5 }}>{idx + 1}</td>
+                                                <td style={{ ...S.td, width: 160, minWidth: 160, background: '#f6f8fc', padding: '0 7px', position: 'sticky', left: 34, zIndex: 5, borderRight: '1px solid #c8d0de' }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0d1520', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                                                </td>
+                                                <td style={{ ...S.td, width: 100, minWidth: 100, background: '#f0f4ff', padding: '0 6px' }}>
+                                                    <div style={{ fontSize: 10, fontWeight: 600, color: '#4f46e5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamName}</div>
+                                                </td>
+                                                {SLOTS.map((s) => {
+                                                    if (s.isLunch) {
+                                                        return <td key={s.id} style={{ ...S.td, minWidth: 50, textAlign: 'center', background: '#fef9ec' }}><span style={{ fontSize: 16 }}>🍽</span></td>;
+                                                    }
+                                                    const d = getOrgAct(c._id, s.id);
+                                                    const act = d && !d.isContinuation ? (ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType] || null) : null;
+                                                    const isAM = ['s0930', 's1030', 's1130', 's1230'].includes(s.id);
+                                                    return (
+                                                        <td key={s.id} style={{ ...S.td, minWidth: 120, textAlign: 'center', background: d ? (act ? act.bg : (isAM ? '#f0f5ff' : '#fffdf0')) : (isAM ? '#f0f5ff' : '#fffdf0'), cursor: 'default' }}>
+                                                            {d && d.isContinuation && (() => {
+                                                                const pAct = ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
+                                                                return pAct ? <span style={{ fontSize: 8, fontWeight: 700, fontStyle: 'italic', color: pAct.color, opacity: .5 }}>{pAct.icon}</span> : null;
+                                                            })()}
+                                                            {act && (
+                                                                <>
+                                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '2px 5px', borderRadius: 4, fontSize: 9, fontWeight: 700, color: act.color, background: act.bg, borderLeft: `2px solid ${act.color}`, whiteSpace: 'nowrap' }}>
+                                                                        {act.icon} {act.lbl}
+                                                                    </span>
+                                                                    {d.count > 1 && (
+                                                                        <span style={{ position: 'relative', top: -4, marginLeft: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 11, fontWeight: 800, background: '#334155', color: '#fff', borderRadius: 4, padding: '1px 5px', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{d.count}</span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                                {(() => {
+                                                    const os = getOrgStats(c._id);
+                                                    return [
+                                                        { v: os.calls, c: '#2563eb', types: ['call', 'call_followup'], title: 'Calls' },
+                                                        { v: os.followups, c: '#0891b2', types: ['followup', 'call_followup'], title: 'Follow-ups' },
+                                                        { v: os.noshows, c: '#dc2626', types: ['noshow'], title: 'Operations' },
+                                                        { v: os.drips, c: '#d97706', types: ['drip'], title: 'Drips' },
+                                                        { v: os.offlineMtgs, c: '#16a34a', types: ['meeting'], title: 'Offline Meeting' },
+                                                        { v: os.zoomMtgs, c: '#4f46e5', types: ['zoom'], title: 'Zoom' },
+                                                        { v: os.outMtgs, c: '#7c3aed', types: ['outmeet'], title: 'Out Meeting' },
+                                                        { v: os.teamMtgs, c: '#be185d', types: ['teammeet'], title: 'Team Meeting' },
+                                                        { v: os.tlMtgs, c: '#0d9488', types: ['tlmeet'], title: "TL's Team Meeting" },
+                                                        { v: os.meetHrs, c: '#44556a', suf: 'h' },
+                                                    ].map((sv, i) => (
+                                                        <td key={`s${i}`} style={{ minWidth: 75, padding: '4px 6px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc' }}>
+                                                            <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 13, fontWeight: 600, color: sv.v === 0 ? '#d4c9a8' : sv.c }}>
+                                                                {sv.v === 0 ? '—' : `${sv.v}${sv.suf || ''}`}
+                                                            </span>
+                                                            {sv.types && hasOrgNotesForType(c._id, sv.types) && (
+                                                                <VisibilityIcon
+                                                                    onClick={() => handleOrgViewNotes(c, sv.types, sv.title)}
+                                                                    sx={{ fontSize: 14, color: sv.c, ml: 0.4, cursor: 'pointer', verticalAlign: 'middle', opacity: 0.5, '&:hover': { opacity: 1 } }}
+                                                                />
+                                                            )}
+                                                        </td>
+                                                    ));
+                                                })()}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </Box>
+                    )}
+                </Box>
+            </Drawer>
 
             {/* Toast */}
             <Snackbar

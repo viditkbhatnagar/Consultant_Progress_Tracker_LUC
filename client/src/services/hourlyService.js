@@ -3,8 +3,9 @@ import { API_BASE_URL } from '../utils/constants';
 
 const API_URL = `${API_BASE_URL}/hourly`;
 
-const getConsultants = async () => {
-    const response = await axios.get(`${API_URL}/consultants`);
+const getConsultants = async (scope) => {
+    const params = scope ? { scope } : {};
+    const response = await axios.get(`${API_URL}/consultants`, { params });
     return response.data;
 };
 
