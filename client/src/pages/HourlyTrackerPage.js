@@ -122,6 +122,7 @@ const HourlyTrackerPage = () => {
     const [consultants, setConsultants] = useState([]);
     const [activities, setActivities] = useState(new Map());
     const [admissions, setAdmissions] = useState(new Map());
+    const [admissionsList, setAdmissionsList] = useState([]); // full admission records for display
     const [loading, setLoading] = useState(false);
 
     // Picker state
@@ -199,10 +200,16 @@ const HourlyTrackerPage = () => {
         try {
             const res = await hourlyService.getDayAdmissions(formatDateStr(date));
             const map = new Map();
+            const list = [];
             (res.data || []).forEach((a) => {
-                map.set(a.consultant, a.count);
+                const cId = a.consultant?._id || a.consultant;
+                const cName = a.consultant?.name || a.consultantName || '';
+                map.set(cId, a.count);
+                if (a.count > 0) list.push({ ...a, consultant: cId, consultantName: cName });
             });
+            list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
             setAdmissions(map);
+            setAdmissionsList(list);
         } catch (err) {
             console.error('Failed to load admissions:', err);
         }
@@ -431,6 +438,11 @@ const HourlyTrackerPage = () => {
             if (count > 0) next.set(consultant._id, count);
             else next.delete(consultant._id);
             return next;
+        });
+        setAdmissionsList((prev) => {
+            const filtered = prev.filter((a) => String(a.consultant) !== String(consultant._id));
+            if (count > 0) filtered.push({ consultant: consultant._id, consultantName: consultant.name, count, createdAt: new Date().toISOString() });
+            return filtered.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         });
         try {
             await hourlyService.upsertAdmission({
@@ -872,20 +884,42 @@ const HourlyTrackerPage = () => {
                     ))}
                     <Tooltip
                         title={
-                            <Box sx={{ p: 1, maxWidth: 320, fontSize: 11, lineHeight: 1.6 }}>
-                                <Box sx={{ fontWeight: 700, fontSize: 12, mb: 0.5 }}>How Leaderboard Rankings Work</Box>
-                                <Box sx={{ mb: 0.5 }}>AI calculates a score out of 100 using weighted criteria:</Box>
-                                <Box component="ul" sx={{ pl: 2, m: 0 }}>
-                                    <li><b>Admissions</b> — Highest weight</li>
-                                    <li><b>Meetings</b> — High weight</li>
-                                    <li><b>Follow-ups / Calls</b> — Medium weight</li>
-                                    <li><b>Drips</b> — Lower weight</li>
-                                    <li><b>Operations</b> — Penalty</li>
+                            <Box sx={{ p: 2, maxWidth: 420, fontSize: 13, lineHeight: 1.7 }}>
+                                <Box sx={{ fontWeight: 800, fontSize: 16, mb: 1, borderBottom: '1px solid rgba(255,255,255,.15)', pb: 0.8 }}>How Leaderboard Rankings Work</Box>
+                                <Box sx={{ mb: 1.2, fontSize: 13 }}>AI calculates a performance score out of <b>100</b> using the following weighted criteria:</Box>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,.2)' }}>
+                                            <th style={{ textAlign: 'left', padding: '4px 0', fontWeight: 700 }}>Metric</th>
+                                            <th style={{ textAlign: 'center', padding: '4px 0', fontWeight: 700 }}>Weight</th>
+                                            <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 700 }}>Impact</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[
+                                            { m: 'Admissions', w: '30%', i: 'Actual student conversions', cl: '#f472b6' },
+                                            { m: 'Meetings', w: '25%', i: 'Offline + Zoom + Out meetings', cl: '#86efac' },
+                                            { m: 'Follow-ups', w: '15%', i: 'Pipeline nurturing & engagement', cl: '#67e8f9' },
+                                            { m: 'Calls', w: '15%', i: 'Outreach volume & consistency', cl: '#93c5fd' },
+                                            { m: 'Drips', w: '10%', i: 'Marketing & campaign efforts', cl: '#fcd34d' },
+                                            { m: 'Operations', w: '5%', i: 'Penalty — reduces score', cl: '#fca5a5' },
+                                        ].map((r) => (
+                                            <tr key={r.m} style={{ borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                                                <td style={{ padding: '5px 0', fontWeight: 600, color: r.cl }}>{r.m}</td>
+                                                <td style={{ padding: '5px 0', textAlign: 'center', fontWeight: 800, fontSize: 14 }}>{r.w}</td>
+                                                <td style={{ padding: '5px 8px', fontSize: 12, opacity: 0.8 }}>{r.i}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <Box sx={{ mt: 1.2, pt: 0.8, borderTop: '1px solid rgba(255,255,255,.15)', fontSize: 12, fontStyle: 'italic', opacity: 0.7 }}>
+                                    A balanced consultant with admissions + meetings + follow-ups ranks higher than one who only makes calls. Rankings update in real-time.
                                 </Box>
                             </Box>
                         }
                         arrow
                         placement="bottom"
+                        componentsProps={{ tooltip: { sx: { maxWidth: 450, borderRadius: '12px', p: 0 } } }}
                     >
                         <Button size="small" sx={{ px: 1.5, py: 0.7, borderRadius: '8px', border: '1px solid rgba(0,0,0,.1)', background: 'rgba(0,0,0,.03)', color: '#4b5563', fontSize: 12, fontWeight: 600, textTransform: 'none', minWidth: 0, lineHeight: 1.3, '&:hover': { background: 'rgba(0,0,0,.07)', color: '#1a1a1a' } }}>
                             ℹ️ Ranking Info
@@ -895,21 +929,43 @@ const HourlyTrackerPage = () => {
 
                 {/* Bottom row: KPIs */}
                 {currentView === 'daily' && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', px: 2, pb: 1, pt: 0.3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '5px', px: 2, pb: 1, pt: 0.3 }}>
                         {[
-                            { v: teamTotals.calls, l: 'Calls', c: '#2563eb' },
-                            { v: teamTotals.followups, l: 'Follow-ups', c: '#0891b2' },
+                            { v: teamTotals.calls, l: 'Calls', c: '#2563eb', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.calls / displayConsultants.length)}` : '' },
+                            { v: teamTotals.followups, l: 'Follow-ups', c: '#0891b2', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.followups / displayConsultants.length)}` : '' },
+                            { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d', wide: true, admList: true },
                             { v: teamTotals.noshows, l: 'Operations', c: '#dc2626' },
                             { v: teamTotals.drips, l: 'Drips', c: '#d97706' },
-                            { v: teamTotals.offlineMtgs, l: 'Offline Meeting', c: '#16a34a' },
+                            { v: teamTotals.offlineMtgs, l: 'Offline Mtg', c: '#16a34a' },
                             { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#4f46e5' },
-                            { v: teamTotals.outMtgs, l: 'Out Meeting', c: '#7c3aed' },
-                            { v: teamTotals.tlMtgs, l: "TL's Team Mtg", c: '#0d9488' },
-                            { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d' },
+                            { v: teamTotals.outMtgs, l: 'Out Mtg', c: '#7c3aed' },
+                            { v: teamTotals.tlMtgs, l: "TL's Mtg", c: '#0d9488' },
                         ].map((kpi) => (
-                            <Box key={kpi.l} sx={{ ...S.kpi, flex: 1, width: 'auto', minWidth: 0, maxWidth: 'none' }}>
-                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
-                                <Typography sx={{ fontSize: 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
+                            <Box key={kpi.l} sx={{ ...S.kpi, flex: kpi.wide ? 1.8 : 1, width: 'auto', minWidth: 0, maxWidth: 'none', position: 'relative' }}>
+                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: kpi.wide ? 22 : 18, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
+                                <Typography sx={{ fontSize: kpi.wide ? 9 : 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
+                                {kpi.sub && <Typography sx={{ fontSize: 12, color: '#444', fontWeight: 800, textAlign: 'center', lineHeight: 1, mt: 0.3 }}>{kpi.sub}</Typography>}
+                                {kpi.admList && admissionsList.length > 0 && (
+                                    <Tooltip
+                                        title={
+                                            <Box sx={{ p: 1, fontSize: 12 }}>
+                                                <Box sx={{ fontWeight: 700, mb: 0.5, borderBottom: '1px solid rgba(255,255,255,.15)', pb: 0.5 }}>Admissions (by entry order)</Box>
+                                                {admissionsList.map((a, i) => (
+                                                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.3 }}>
+                                                        <span>{i + 1}. {a.consultantName}</span>
+                                                        <span style={{ fontWeight: 700 }}>×{a.count}</span>
+                                                    </Box>
+                                                ))}
+                                            </Box>
+                                        }
+                                        arrow
+                                        placement="bottom"
+                                    >
+                                        <Typography sx={{ fontSize: 9, color: '#be185d', fontWeight: 600, textAlign: 'center', mt: 0.2, cursor: 'pointer', opacity: 0.7, '&:hover': { opacity: 1 } }}>
+                                            {admissionsList.map((a) => a.consultantName.split(' ')[0]).join(', ')}
+                                        </Typography>
+                                    </Tooltip>
+                                )}
                             </Box>
                         ))}
                     </Box>
@@ -1127,22 +1183,22 @@ const HourlyTrackerPage = () => {
                         </Box>
 
                         {/* Summary cards */}
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 1.2, mb: 2.5 }}>
+                        <Box sx={{ display: 'flex', gap: 1.2, mb: 2.5, flexWrap: 'wrap' }}>
                             {[
-                                { v: teamTot.calls, l: 'Total Calls', sub: `Average ${displayConsultants.length ? Math.round(teamTot.calls / displayConsultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb' },
-                                { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${displayConsultants.length ? Math.round(teamTot.followups / displayConsultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2' },
+                                { v: teamTot.calls, l: 'Total Calls', sub: `Average ${displayConsultants.length ? Math.round(teamTot.calls / displayConsultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb', wide: true },
+                                { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${displayConsultants.length ? Math.round(teamTot.followups / displayConsultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2', wide: true },
+                                { v: teamTot.admissions, l: 'Admissions', sub: 'Total Conversions', c: '#be185d', bc: '#be185d', wide: true },
+                                { v: teamTot.noshows, l: 'Operations', sub: 'Total Logged', c: '#dc2626', bc: '#dc2626' },
+                                { v: teamTot.drips, l: 'Drip Steps', sub: 'Campaigns Executed', c: '#d97706', bc: '#d97706' },
                                 { v: teamTot.offlineMtgs, l: 'Offline Meetings', sub: 'Physical Meetings', c: '#16a34a', bc: '#16a34a' },
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'Virtual Meetings', c: '#4f46e5', bc: '#4f46e5' },
                                 { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'Outside Meetings', c: '#7c3aed', bc: '#7c3aed' },
-                                { v: teamTot.noshows, l: 'Operations', sub: 'Total Logged', c: '#dc2626', bc: '#dc2626' },
-                                { v: teamTot.drips, l: 'Drip Steps', sub: 'Campaigns Executed', c: '#d97706', bc: '#d97706' },
                                 { v: teamTot.tlMtgs, l: "TL's Team Meeting", sub: 'Team Lead Meetings', c: '#0d9488', bc: '#0d9488' },
-                                { v: teamTot.admissions, l: 'Admissions', sub: 'Total', c: '#be185d', bc: '#be185d' },
                             ].map((card) => (
-                                <Box key={card.l} sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
-                                    <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 26, fontWeight: 600, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
-                                    <Typography sx={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 600 }}>{card.l}</Typography>
-                                    <Typography sx={{ fontSize: 12, color: '#1a1a1a', mt: 0.3, fontWeight: 600, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
+                                <Box key={card.l} sx={{ flex: card.wide ? '1.8 1 0' : '1 1 0', minWidth: card.wide ? 160 : 100, background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
+                                    <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: card.wide ? 30 : 24, fontWeight: 700, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
+                                    <Typography sx={{ fontSize: card.wide ? 11 : 9, color: '#8a9ab0', textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 600 }}>{card.l}</Typography>
+                                    <Typography sx={{ fontSize: card.wide ? 13 : 11, color: '#444', mt: 0.3, fontWeight: 700, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
                                 </Box>
                             ))}
                         </Box>
