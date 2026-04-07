@@ -91,6 +91,7 @@ exports.upsertSlot = async (req, res, next) => {
             slotId,
             activityType,
             count,
+            followupCount,
             duration,
             note,
         } = req.body;
@@ -148,6 +149,7 @@ exports.upsertSlot = async (req, res, next) => {
                 slotId,
                 activityType,
                 count: count || 1,
+                followupCount: followupCount || 0,
                 duration: dur,
                 note: note || '',
                 isContinuation: false,
