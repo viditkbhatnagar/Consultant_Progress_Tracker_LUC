@@ -131,6 +131,7 @@ const HourlyTrackerPage = () => {
     const [pickerTypes, setPickerTypes] = useState([]);
     const [pickerDur, setPickerDur] = useState(60);
     const [pickerCount, setPickerCount] = useState(1);
+    const [pickerFollowupCount, setPickerFollowupCount] = useState(1);
     const [pickerNote, setPickerNote] = useState('');
 
     // Monthly data
@@ -280,8 +281,12 @@ const HourlyTrackerPage = () => {
             if (!d || d.isContinuation) return;
             const mins = d.duration || s.mins;
             const hrs = mins / 60;
-            if (d.activityType === 'call' || d.activityType === 'call_followup') calls += d.count || 1;
-            if (d.activityType === 'followup' || d.activityType === 'call_followup') followups += d.count || 1;
+            if (d.activityType === 'call') calls += d.count || 1;
+            if (d.activityType === 'followup') followups += d.count || 1;
+            if (d.activityType === 'call_followup') {
+                calls += d.count || 1;
+                followups += d.followupCount || 0;
+            }
             if (d.activityType === 'noshow') noshows++;
             if (d.activityType === 'drip') drips++;
             if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
@@ -337,12 +342,14 @@ const HourlyTrackerPage = () => {
             initFromActivity(parent);
             setPickerDur(parent?.duration || 60);
             setPickerCount(parent?.count || 1);
+            setPickerFollowupCount(parent?.followupCount || 1);
             setPickerNote(parent?.note || '');
         } else {
             setPickerTarget({ consultant, slotId });
             initFromActivity(existing);
             setPickerDur(existing?.duration || 60);
             setPickerCount(existing?.count || 1);
+            setPickerFollowupCount(existing?.followupCount || 1);
             setPickerNote(existing?.note || '');
         }
         setPickerOpen(true);
@@ -360,6 +367,7 @@ const HourlyTrackerPage = () => {
         const slotDef = SLOTS.find((s) => s.id === slotId);
         const dur = act.hasDur ? pickerDur : (slotDef ? slotDef.mins : 60);
         const count = act.hasCount ? (pickerCount || 1) : 1;
+        const followupCount = isCallFollowup ? (pickerFollowupCount || 1) : 0;
 
         setLoading(true);
         try {
@@ -370,6 +378,7 @@ const HourlyTrackerPage = () => {
                 slotId,
                 activityType: storedType,
                 count,
+                followupCount,
                 duration: dur,
                 note: pickerNote,
             });
@@ -519,7 +528,8 @@ const HourlyTrackerPage = () => {
                     const d = activities.get(`${c._id}_${s.id}`);
                     if (d && !d.isContinuation) {
                         const act = ACTIVITY_TYPES.find(a => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
-                        row[`${s.lbl}-${s.end}`] = act ? `${act.lbl}${d.count > 1 ? ` (${d.count})` : ''}${d.note ? ` [${d.note}]` : ''}` : '';
+                        const cntStr = d.activityType === 'call_followup' ? ` (${d.count || 1} calls + ${d.followupCount || 0} follow-ups)` : (d.count > 1 ? ` (${d.count})` : '');
+                        row[`${s.lbl}-${s.end}`] = act ? `${act.lbl}${cntStr}${d.note ? ` [${d.note}]` : ''}` : '';
                     } else {
                         row[`${s.lbl}-${s.end}`] = '';
                     }
@@ -611,8 +621,12 @@ const HourlyTrackerPage = () => {
         orgActivities.forEach((d) => {
             if (String(d.consultant) !== String(consultantId) || d.isContinuation) return;
             const hrs = (d.duration || 60) / 60;
-            if (d.activityType === 'call' || d.activityType === 'call_followup') calls += d.count || 1;
-            if (d.activityType === 'followup' || d.activityType === 'call_followup') followups += d.count || 1;
+            if (d.activityType === 'call') calls += d.count || 1;
+            if (d.activityType === 'followup') followups += d.count || 1;
+            if (d.activityType === 'call_followup') {
+                calls += d.count || 1;
+                followups += d.followupCount || 0;
+            }
             if (d.activityType === 'noshow') noshows++;
             if (d.activityType === 'drip') drips++;
             if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
@@ -689,8 +703,12 @@ const HourlyTrackerPage = () => {
                     const mins = a.duration || 60;
                     const hrs = mins / 60;
                     dayActiveHrs += hrs;
-                    if (a.activityType === 'call' || a.activityType === 'call_followup') dayCalls += a.count || 1;
-                    if (a.activityType === 'followup' || a.activityType === 'call_followup') dayFollowups += a.count || 1;
+                    if (a.activityType === 'call') dayCalls += a.count || 1;
+                    if (a.activityType === 'followup') dayFollowups += a.count || 1;
+                    if (a.activityType === 'call_followup') {
+                        dayCalls += a.count || 1;
+                        dayFollowups += a.followupCount || 0;
+                    }
                     if (a.activityType === 'noshow') dayNoshows++;
                     if (a.activityType === 'drip') dayDrips++;
                     if (a.activityType === 'meeting') { dayOffline++; dayMeetHrs += hrs; }
@@ -1073,7 +1091,11 @@ const HourlyTrackerPage = () => {
                                                             {isLocked && (
                                                                 <span style={{ position: 'absolute', top: 2, left: 3, fontSize: 8, opacity: 0.5 }}>🔒</span>
                                                             )}
-                                                            {d.count > 1 && (
+                                                            {d.activityType === 'call_followup' ? (
+                                                                <span style={{ position: 'absolute', top: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 10, fontWeight: 800, background: '#334155', color: '#fff', borderRadius: 4, padding: '1px 5px', lineHeight: 1.4, boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>
+                                                                    📞{d.count || 1}/↩{d.followupCount || 0}
+                                                                </span>
+                                                            ) : d.count > 1 && (
                                                                 <span style={{ position: 'absolute', top: 2, right: 3, fontFamily: '"JetBrains Mono",monospace', fontSize: 11, fontWeight: 800, background: '#334155', color: '#fff', borderRadius: 4, padding: '1px 5px', lineHeight: 1.4, boxShadow: '0 1px 3px rgba(0,0,0,.25)' }}>{d.count}</span>
                                                             )}
                                                             {d.duration > 60 && (
@@ -1332,26 +1354,57 @@ const HourlyTrackerPage = () => {
                         ⚠️ Once you enter Call, Follow-up, or both together, it cannot be deleted. Contact admin if you need it removed.
                     </Typography>
 
-                    {/* Count input */}
-                    {pickerTypes.length > 0 && pickerTypes.some((t) => ACTIVITY_TYPES.find((a) => a.id === t)?.hasCount) && (
-                        <Box sx={{ background: '#f7f9fc', border: '1px solid #dde3ed', borderRadius: '10px', p: 1.5, mb: 1.5 }}>
-                            <Typography sx={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.07em', color: '#8a9ab0', mb: 0.7 }}>
-                                Count
-                            </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Button size="small" onClick={() => setPickerCount((p) => Math.max(1, p - 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>−</Button>
-                                <TextField
-                                    type="number"
-                                    value={pickerCount}
-                                    onChange={(e) => setPickerCount(Math.max(1, Math.min(999, +e.target.value || 1)))}
-                                    size="small"
-                                    sx={{ width: 70, '& .MuiInputBase-input': { textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, p: '5px' } }}
-                                />
-                                <Button size="small" onClick={() => setPickerCount((p) => Math.min(999, p + 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>+</Button>
-                                <Typography sx={{ fontSize: 12, color: '#8a9ab0', ml: 0.5 }}>{pickerTypes.length === 1 ? (ACTIVITY_TYPES.find((a) => a.id === pickerTypes[0])?.unit || 'count') : 'count'}</Typography>
+                    {/* Count input(s) */}
+                    {pickerTypes.length > 0 && pickerTypes.some((t) => ACTIVITY_TYPES.find((a) => a.id === t)?.hasCount) && (() => {
+                        const bothSelected = pickerTypes.includes('call') && pickerTypes.includes('followup');
+                        const singleType = pickerTypes.length === 1 ? ACTIVITY_TYPES.find((a) => a.id === pickerTypes[0]) : null;
+                        return (
+                            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+                                {/* Calls count */}
+                                {(pickerTypes.includes('call') || (singleType && singleType.id !== 'followup')) && (
+                                    <Box sx={{ flex: 1, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', p: 1.5 }}>
+                                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#2563eb', mb: 0.7 }}>
+                                            {bothSelected ? '📞 Calls Count' : (singleType?.lbl || 'Count')}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Button size="small" onClick={() => setPickerCount((p) => Math.max(1, p - 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>−</Button>
+                                            <TextField
+                                                type="number"
+                                                value={pickerCount}
+                                                onChange={(e) => setPickerCount(Math.max(1, Math.min(999, +e.target.value || 1)))}
+                                                size="small"
+                                                sx={{ width: 70, '& .MuiInputBase-input': { textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, p: '5px' } }}
+                                            />
+                                            <Button size="small" onClick={() => setPickerCount((p) => Math.min(999, p + 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>+</Button>
+                                        </Box>
+                                    </Box>
+                                )}
+                                {/* Follow-ups count */}
+                                {(pickerTypes.includes('followup')) && (
+                                    <Box sx={{ flex: 1, background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '10px', p: 1.5 }}>
+                                        <Typography sx={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: '#0891b2', mb: 0.7 }}>
+                                            {bothSelected ? '↩️ Follow-Ups Count' : 'Follow-Up'}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Button size="small" onClick={() => bothSelected ? setPickerFollowupCount((p) => Math.max(1, p - 1)) : setPickerCount((p) => Math.max(1, p - 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>−</Button>
+                                            <TextField
+                                                type="number"
+                                                value={bothSelected ? pickerFollowupCount : pickerCount}
+                                                onChange={(e) => {
+                                                    const v = Math.max(1, Math.min(999, +e.target.value || 1));
+                                                    if (bothSelected) setPickerFollowupCount(v);
+                                                    else setPickerCount(v);
+                                                }}
+                                                size="small"
+                                                sx={{ width: 70, '& .MuiInputBase-input': { textAlign: 'center', fontFamily: '"JetBrains Mono",monospace', fontSize: 18, fontWeight: 600, p: '5px' } }}
+                                            />
+                                            <Button size="small" onClick={() => bothSelected ? setPickerFollowupCount((p) => Math.min(999, p + 1)) : setPickerCount((p) => Math.min(999, p + 1))} sx={{ minWidth: 30, width: 30, height: 30, borderRadius: '7px', border: '1px solid #c8d0de', background: '#fff', color: '#44556a', fontSize: 16, fontWeight: 700, p: 0 }}>+</Button>
+                                        </Box>
+                                    </Box>
+                                )}
                             </Box>
-                        </Box>
-                    )}
+                        );
+                    })()}
 
                     {/* Duration picker */}
                     {pickerTypes.length > 0 && pickerTypes.some((t) => ACTIVITY_TYPES.find((a) => a.id === t)?.hasDur) && (

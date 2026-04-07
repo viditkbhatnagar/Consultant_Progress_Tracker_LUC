@@ -51,6 +51,10 @@ const HourlyActivitySchema = new mongoose.Schema(
             type: Number,
             default: 1,
         },
+        followupCount: {
+            type: Number,
+            default: 0,
+        },
         duration: {
             type: Number,
             default: 60,
