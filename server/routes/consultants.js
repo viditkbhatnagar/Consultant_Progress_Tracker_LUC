@@ -16,7 +16,7 @@ router.use(protect);
 
 router
     .route('/')
-    .get(authorize('admin', 'team_lead'), getConsultants)
+    .get(authorize('admin', 'team_lead', 'manager'), getConsultants)
     .post(authorize('admin', 'team_lead'), createConsultant);
 
 router

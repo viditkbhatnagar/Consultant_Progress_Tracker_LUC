@@ -24,6 +24,8 @@ const HomeRedirect = () => {
     return <Navigate to="/admin/dashboard" replace />;
   } else if (user.role === 'team_lead') {
     return <Navigate to="/team-lead/dashboard" replace />;
+  } else if (user.role === 'manager') {
+    return <Navigate to="/student-database" replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -63,7 +65,7 @@ function App() {
             <Route
               path="/student-database"
               element={
-                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'manager']}>
                   <StudentDatabasePage />
                 </PrivateRoute>
               }

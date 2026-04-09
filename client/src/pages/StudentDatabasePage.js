@@ -69,10 +69,12 @@ const StudentDatabasePage = () => {
     const handleBack = () => {
         if (user?.role === 'admin') {
             navigate('/admin/dashboard');
-        } else {
+        } else if (user?.role === 'team_lead') {
             navigate('/team-lead/dashboard');
         }
     };
+
+    const isManager = user?.role === 'manager';
 
     return (
         <Box sx={{ minHeight: '100vh', backgroundColor: '#A0D2EB' }}>
@@ -90,20 +92,22 @@ const StudentDatabasePage = () => {
                 }}
             >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Button
-                        startIcon={<ArrowBackIcon />}
-                        onClick={handleBack}
-                        sx={{ color: 'white' }}
-                    >
-                        Back to Dashboard
-                    </Button>
+                    {!isManager && (
+                        <Button
+                            startIcon={<ArrowBackIcon />}
+                            onClick={handleBack}
+                            sx={{ color: 'white' }}
+                        >
+                            Back to Dashboard
+                        </Button>
+                    )}
                     <Typography variant="h5" sx={{ fontWeight: 600 }}>
                         Student Database
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Typography variant="body1">
-                        {user?.name} ({user?.role === 'admin' ? 'Admin' : user?.teamName})
+                        {user?.name} ({user?.role === 'admin' ? 'Admin' : user?.role === 'manager' ? 'Manager' : user?.teamName})
                     </Typography>
                     <Button
                         startIcon={<LogoutIcon />}

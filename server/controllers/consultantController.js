@@ -11,8 +11,8 @@ exports.getConsultants = async (req, res, next) => {
         if (req.user.role === 'team_lead') {
             // Team lead can only see their own consultants
             query = Consultant.find({ teamLead: req.user.id, isActive: true });
-        } else if (req.user.role === 'admin') {
-            // Admin can see all consultants
+        } else if (req.user.role === 'admin' || req.user.role === 'manager') {
+            // Admin/manager can see all consultants
             query = Consultant.find();
         } else {
             return res.status(403).json({
