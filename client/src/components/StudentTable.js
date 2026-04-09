@@ -354,14 +354,16 @@ const StudentTable = ({
                             >
                                 Export
                             </Button>
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleAddStudent}
-                                size="large"
-                            >
-                                Add Student
-                            </Button>
+                            {currentUserRole !== 'manager' && (
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleAddStudent}
+                                    size="large"
+                                >
+                                    Add Student
+                                </Button>
+                            )}
                         </Box>
                     </Box>
 
@@ -767,6 +769,11 @@ const StudentTable = ({
                                                     }}
                                                 >
                                                     <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                        {currentUserRole === 'manager' && (
+                                                            <Typography variant="caption" color="text.secondary">View only</Typography>
+                                                        )}
+                                                        {currentUserRole !== 'manager' && (
+                                                        <>
                                                         <Tooltip title="Edit Student">
                                                             <IconButton
                                                                 size="small"
@@ -785,6 +792,8 @@ const StudentTable = ({
                                                                 <DeleteIcon fontSize="small" />
                                                             </IconButton>
                                                         </Tooltip>
+                                                        </>
+                                                        )}
                                                     </Box>
                                                 </TableCell>
                                             </TableRow>
