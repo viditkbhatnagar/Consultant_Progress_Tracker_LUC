@@ -51,6 +51,8 @@ const Login = () => {
                 navigate('/admin/dashboard');
             } else if (user.role === 'team_lead') {
                 navigate('/team-lead/dashboard');
+            } else if (user.role === 'manager') {
+                navigate('/student-database');
             } else if (user.role === 'consultant') {
                 navigate('/consultant/dashboard');
             }
