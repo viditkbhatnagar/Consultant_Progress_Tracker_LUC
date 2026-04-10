@@ -138,6 +138,7 @@ const SOURCES = [
     'Open Day',
     'Instagram',
     'Reference',
+    'Re-Registration',
 ];
 
 // Gender options
