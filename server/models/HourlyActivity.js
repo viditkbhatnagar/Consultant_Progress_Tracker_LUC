@@ -45,6 +45,7 @@ const HourlyActivitySchema = new mongoose.Schema(
                 'outmeet',
                 'teammeet',
                 'tlmeet',
+                'reference',
             ],
         },
         count: {

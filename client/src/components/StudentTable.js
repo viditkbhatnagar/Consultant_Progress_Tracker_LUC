@@ -57,7 +57,7 @@ const MONTHS = [
 const SOURCES = [
     'Google Ads', 'Facebook', 'Tik Tok', 'Call-In', 'Old Crm',
     'Linkedin', 'Whatsapp', 'Alumni', 'Seo', 'B2C', 'Open Day',
-    'Instagram', 'Reference',
+    'Instagram', 'Reference', 'Re-Registration',
 ];
 
 const COMMON_PROGRAMS = [

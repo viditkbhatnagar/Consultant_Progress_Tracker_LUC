@@ -75,6 +75,7 @@ const StudentSchema = new mongoose.Schema({
             'Reference',
             'B2C',
             'Open Day',
+            'Re-Registration',
         ],
         required: [true, 'Please select source'],
     },

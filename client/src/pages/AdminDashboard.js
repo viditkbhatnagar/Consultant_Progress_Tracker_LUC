@@ -1063,14 +1063,24 @@ const AdminDashboard = () => {
 
                                                             {/* Actions */}
                                                             <TableCell align="center">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="primary"
-                                                                    onClick={() => handleOpenAdminComment(commitment)}
-                                                                    title="Edit/Add Admin Comment"
-                                                                >
-                                                                    <EditIcon fontSize="small" />
-                                                                </IconButton>
+                                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="primary"
+                                                                        onClick={() => handleOpenAdminComment(commitment)}
+                                                                        title="Edit/Add Admin Comment"
+                                                                    >
+                                                                        <EditIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="error"
+                                                                        onClick={() => handleDeleteCommitment(commitment._id)}
+                                                                        title="Delete Commitment"
+                                                                    >
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Box>
                                                             </TableCell>
                                                         </TableRow>
                                                     );

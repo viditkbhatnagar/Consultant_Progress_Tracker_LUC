@@ -307,7 +307,7 @@ const TeamLeadDashboard = () => {
             setEditingCommitment(null);
         } catch (err) {
             console.error('Error saving commitment:', err);
-            setError('Failed to save commitment');
+            throw err;
         }
     };
     const handleLogout = () => {

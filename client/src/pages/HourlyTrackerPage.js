@@ -58,6 +58,7 @@ const ACTIVITY_TYPES = [
     { id: 'outmeet', icon: '🚗', lbl: 'Out Meeting', hasCount: false, hasDur: true, color: '#7c3aed', bg: '#f5f3ff' },
     { id: 'teammeet', icon: '👥', lbl: 'Team Meeting', hasCount: false, hasDur: true, color: '#be185d', bg: '#fdf2f8' },
     { id: 'tlmeet', icon: '👔', lbl: "TL's Team Meeting", hasCount: false, hasDur: true, color: '#0d9488', bg: '#f0fdfa' },
+    { id: 'reference', icon: '📋', lbl: 'Reference', hasCount: false, hasDur: false, color: '#ea580c', bg: '#fff7ed' },
 ];
 
 // Display info for combined type (not shown in picker grid)
@@ -275,7 +276,7 @@ const HourlyTrackerPage = () => {
     const getAct = (consultantId, slotId) => activities.get(`${consultantId}_${slotId}`) || null;
 
     const getStats = (consultantId) => {
-        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, tlMtgs = 0, meetHrs = 0;
+        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, tlMtgs = 0, references = 0, meetHrs = 0;
         WORK_SLOTS.forEach((s) => {
             const d = getAct(consultantId, s.id);
             if (!d || d.isContinuation) return;
@@ -294,12 +295,13 @@ const HourlyTrackerPage = () => {
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
             if (d.activityType === 'tlmeet') { tlMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'reference') references++;
         });
-        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, meetHrs: +meetHrs.toFixed(1) };
+        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, references, meetHrs: +meetHrs.toFixed(1) };
     };
 
     const getTeamTotals = () => {
-        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0 };
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, meetHrs: 0 };
         consultants.forEach((c) => {
             const s = getStats(c._id);
             Object.keys(t).forEach((k) => (t[k] += s[k]));
@@ -544,6 +546,7 @@ const HourlyTrackerPage = () => {
                 row['Team Meeting'] = st.teamMtgs || '';
                 row["TL's Team Meeting"] = st.tlMtgs || '';
                 row['Meeting Hours'] = st.meetHrs ? `${st.meetHrs}h` : '';
+                row['Reference'] = st.references || '';
                 row['Admissions'] = getAdmission(c._id) || '';
                 return row;
             });
@@ -565,6 +568,7 @@ const HourlyTrackerPage = () => {
                 'Team Meeting': r.teamMtgs || '',
                 "TL's Team Meeting": r.tlMtgs || '',
                 'Meeting Hours': r.meetHrs ? `${r.meetHrs}h` : '',
+                'Reference': r.references || '',
                 'Admissions': r.admissions || '',
                 'Days Active': r.days || '',
             }));
@@ -617,7 +621,7 @@ const HourlyTrackerPage = () => {
     };
 
     const getOrgStats = (consultantId) => {
-        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, tlMtgs = 0, meetHrs = 0;
+        let calls = 0, followups = 0, noshows = 0, drips = 0, offlineMtgs = 0, zoomMtgs = 0, outMtgs = 0, teamMtgs = 0, tlMtgs = 0, references = 0, meetHrs = 0;
         orgActivities.forEach((d) => {
             if (String(d.consultant) !== String(consultantId) || d.isContinuation) return;
             const hrs = (d.duration || 60) / 60;
@@ -634,8 +638,9 @@ const HourlyTrackerPage = () => {
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
             if (d.activityType === 'tlmeet') { tlMtgs++; meetHrs += hrs; }
+            if (d.activityType === 'reference') references++;
         });
-        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, meetHrs: +meetHrs.toFixed(1) };
+        return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, references, meetHrs: +meetHrs.toFixed(1) };
     };
 
     // ─── DATE NAV ────────────────────────────────────
@@ -693,11 +698,11 @@ const HourlyTrackerPage = () => {
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
         const rows = displayConsultants.map((c) => {
-            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
+            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
             // Sum admissions for this consultant across the month
             monthAdmissions.filter((a) => String(a.consultant) === String(c._id)).forEach((a) => { r.admissions += a.count || 0; });
             for (let d = 1; d <= daysInMonth; d++) {
-                let dayCalls = 0, dayOffline = 0, dayZoom = 0, dayOut = 0, dayTeam = 0, dayTlMeet = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayActiveHrs = 0, dayMeetHrs = 0;
+                let dayCalls = 0, dayOffline = 0, dayZoom = 0, dayOut = 0, dayTeam = 0, dayTlMeet = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayRefs = 0, dayActiveHrs = 0, dayMeetHrs = 0;
                 const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 monthActivities.filter((a) => String(a.consultant) === String(c._id) && a.date && a.date.startsWith(dateStr) && !a.isContinuation).forEach((a) => {
                     const mins = a.duration || 60;
@@ -716,9 +721,10 @@ const HourlyTrackerPage = () => {
                     if (a.activityType === 'zoom') { dayZoom++; dayMeetHrs += hrs; }
                     if (a.activityType === 'teammeet') { dayTeam++; dayMeetHrs += hrs; }
                     if (a.activityType === 'tlmeet') { dayTlMeet++; dayMeetHrs += hrs; }
+                    if (a.activityType === 'reference') dayRefs++;
                 });
                 r.calls += dayCalls; r.followups += dayFollowups; r.noshows += dayNoshows;
-                r.drips += dayDrips; r.offlineMtgs += dayOffline; r.zoomMtgs += dayZoom; r.outMtgs += dayOut; r.teamMtgs += dayTeam; r.tlMtgs += dayTlMeet;
+                r.drips += dayDrips; r.offlineMtgs += dayOffline; r.zoomMtgs += dayZoom; r.outMtgs += dayOut; r.teamMtgs += dayTeam; r.tlMtgs += dayTlMeet; r.references += dayRefs;
                 r.activeHrs += dayActiveHrs; r.meetHrs += dayMeetHrs;
                 const dayMeetings = dayOffline + dayZoom + dayOut + dayTeam + dayTlMeet;
                 if (dayCalls + dayMeetings + dayFollowups + dayNoshows + dayDrips > 0) r.days++;
@@ -729,10 +735,10 @@ const HourlyTrackerPage = () => {
             return r;
         });
 
-        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0 };
+        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0 };
         rows.forEach((r) => {
             teamTot.calls += r.calls; teamTot.followups += r.followups; teamTot.noshows += r.noshows;
-            teamTot.drips += r.drips; teamTot.offlineMtgs += r.offlineMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.outMtgs += r.outMtgs; teamTot.teamMtgs += r.teamMtgs; teamTot.tlMtgs += r.tlMtgs;
+            teamTot.drips += r.drips; teamTot.offlineMtgs += r.offlineMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.outMtgs += r.outMtgs; teamTot.teamMtgs += r.teamMtgs; teamTot.tlMtgs += r.tlMtgs; teamTot.references += r.references;
             teamTot.activeHrs += r.activeHrs; teamTot.meetHrs += r.meetHrs; teamTot.admissions += r.admissions; teamTot.days += r.days;
         });
         teamTot.activeHrs = +teamTot.activeHrs.toFixed(1);
@@ -762,7 +768,7 @@ const HourlyTrackerPage = () => {
     };
 
     const teamTotals = currentView === 'daily' ? (() => {
-        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0 };
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, meetHrs: 0 };
         displayConsultants.forEach((c) => {
             const s = getStats(c._id);
             Object.keys(t).forEach((k) => (t[k] += s[k]));
@@ -951,6 +957,7 @@ const HourlyTrackerPage = () => {
                         {[
                             { v: teamTotals.calls, l: 'Calls', c: '#2563eb', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.calls / displayConsultants.length)}` : '' },
                             { v: teamTotals.followups, l: 'Follow-ups', c: '#0891b2', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.followups / displayConsultants.length)}` : '' },
+                            { v: teamTotals.references, l: 'Reference', c: '#be185d' },
                             { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d', wide: true, admList: true },
                             { v: teamTotals.noshows, l: 'Operations', c: '#dc2626' },
                             { v: teamTotals.drips, l: 'Drips', c: '#d97706' },
@@ -1008,7 +1015,7 @@ const HourlyTrackerPage = () => {
                                 <th colSpan={PM_SLOTS.length} style={{ background: '#1a3328', color: '#86efac', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center' }}>
                                     AFTERNOON 2:00-7:30
                                 </th>
-                                <th colSpan={11} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderLeft: '2px solid #dfd08a' }}>
+                                <th colSpan={12} style={{ background: '#2a2010', color: '#fcd34d', fontSize: 9, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', padding: '5px 3px', textAlign: 'center', borderLeft: '2px solid #dfd08a' }}>
                                     DAILY SUMMARY
                                 </th>
                             </tr>
@@ -1026,7 +1033,7 @@ const HourlyTrackerPage = () => {
                                 {[
                                     { l: 'CALLS', c: '#93c5fd' }, { l: 'FOLLOW-UPS', c: '#67e8f9' }, { l: 'OPERATIONS', c: '#fca5a5' },
                                     { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MEETING', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' }, { l: 'OUT MEETING', c: '#a78bfa' }, { l: 'TEAM MEETING', c: '#f472b6' }, { l: "TL'S TEAM MTG", c: '#5eead4' },
-                                    { l: 'MEETING HOURS', c: '#94a3b8' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
+                                    { l: 'MEETING HOURS', c: '#94a3b8' }, { l: 'REFERENCE', c: '#f9a8d4' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
                                 ].map((h) => (
                                     <th key={h.l} style={{ minWidth: 80, background: '#2a2010', color: h.c, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', padding: '8px 10px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap' }}>{h.l}</th>
                                 ))}
@@ -1130,6 +1137,11 @@ const HourlyTrackerPage = () => {
                                                 )}
                                             </td>
                                         ))}
+                                        <td style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc', background: '#fdf2f8', verticalAlign: 'middle' }}>
+                                            <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 15, fontWeight: 600, color: st.references === 0 ? '#d4c9a8' : '#be185d' }}>
+                                                {st.references === 0 ? '—' : st.references}
+                                            </span>
+                                        </td>
                                         <td style={{ minWidth: 80, width: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc', background: '#fdf2f8', verticalAlign: 'middle' }}>
                                             {canEdit ? (
                                                 <input
@@ -1174,6 +1186,9 @@ const HourlyTrackerPage = () => {
                                     </td>
                                 ))}
                                 <td style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
+                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: teamTotals.references === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{teamTotals.references || '—'}</span>
+                                </td>
+                                <td style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
                                     <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: getTotalAdmissions() === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{getTotalAdmissions() || '—'}</span>
                                 </td>
                             </tr>
@@ -1209,6 +1224,7 @@ const HourlyTrackerPage = () => {
                             {[
                                 { v: teamTot.calls, l: 'Total Calls', sub: `Average ${displayConsultants.length ? Math.round(teamTot.calls / displayConsultants.length) : 0} / Consultant`, c: '#2563eb', bc: '#2563eb', wide: true },
                                 { v: teamTot.followups, l: 'Follow-Ups', sub: `Average ${displayConsultants.length ? Math.round(teamTot.followups / displayConsultants.length) : 0} / Consultant`, c: '#0891b2', bc: '#0891b2', wide: true },
+                                { v: teamTot.references, l: 'Reference', sub: 'Total References', c: '#be185d', bc: '#be185d' },
                                 { v: teamTot.admissions, l: 'Admissions', sub: 'Total Conversions', c: '#be185d', bc: '#be185d', wide: true },
                                 { v: teamTot.noshows, l: 'Operations', sub: 'Total Logged', c: '#dc2626', bc: '#dc2626' },
                                 { v: teamTot.drips, l: 'Drip Steps', sub: 'Campaigns Executed', c: '#d97706', bc: '#d97706' },
@@ -1235,7 +1251,7 @@ const HourlyTrackerPage = () => {
                                             { l: 'Consultant', c: 'rgba(255,255,255,.7)', align: 'left', w: 160 },
                                             { l: 'Calls', c: '#93c5fd' }, { l: 'Follow-ups', c: '#67e8f9' }, { l: 'Operations', c: '#fca5a5' },
                                             { l: 'Drips', c: '#fcd34d' }, { l: 'Offline Meeting', c: '#86efac' }, { l: 'Zoom', c: '#818cf8' }, { l: 'Out Meeting', c: '#a78bfa' }, { l: 'Team Meeting', c: '#f472b6' }, { l: "TL's Team Mtg", c: '#5eead4' },
-                                            { l: 'Meeting Hrs', c: '#94a3b8' }, { l: 'Admissions', c: '#f9a8d4' }, { l: 'Days Active', c: '#e2e8f0' },
+                                            { l: 'Meeting Hrs', c: '#94a3b8' }, { l: 'Reference', c: '#f9a8d4' }, { l: 'Admissions', c: '#f9a8d4' }, { l: 'Days Active', c: '#e2e8f0' },
                                             { l: 'Activity Heatmap', c: '#c084fc', w: 140 },
                                         ].map((h) => (
                                             <th key={h.l} style={{ padding: '9px 10px', textAlign: h.align || 'center', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: h.c, borderRight: '1px solid rgba(255,255,255,.07)', whiteSpace: 'nowrap', width: h.w || 'auto' }}>{h.l}</th>
@@ -1251,7 +1267,7 @@ const HourlyTrackerPage = () => {
                                                 {[
                                                     { v: r.calls, c: '#2563eb' }, { v: r.followups, c: '#0891b2' }, { v: r.noshows, c: '#dc2626' },
                                                     { v: r.drips, c: '#d97706' }, { v: r.offlineMtgs, c: '#16a34a' }, { v: r.zoomMtgs, c: '#4f46e5' }, { v: r.outMtgs, c: '#7c3aed' }, { v: r.teamMtgs, c: '#be185d' }, { v: r.tlMtgs, c: '#0d9488' },
-                                                    { v: r.meetHrs, c: '#44556a', suf: 'h' }, { v: r.admissions, c: '#be185d' },
+                                                    { v: r.meetHrs, c: '#44556a', suf: 'h' }, { v: r.references, c: '#be185d' }, { v: r.admissions, c: '#be185d' },
                                                     { v: r.days, c: '#44556a' },
                                                 ].map((sv, j) => (
                                                     <td key={j} style={{ padding: '8px 10px', textAlign: 'center', fontSize: 12, borderRight: '1px solid #dde3ed' }}>
@@ -1278,7 +1294,7 @@ const HourlyTrackerPage = () => {
                                         {[
                                             { v: teamTot.calls, c: '#93c5fd' }, { v: teamTot.followups, c: '#67e8f9' }, { v: teamTot.noshows, c: '#fca5a5' },
                                             { v: teamTot.drips, c: '#fcd34d' }, { v: teamTot.offlineMtgs, c: '#86efac' }, { v: teamTot.zoomMtgs, c: '#818cf8' }, { v: teamTot.outMtgs, c: '#a78bfa' }, { v: 0, c: '#f472b6', hide: true }, { v: 0, c: '#5eead4', hide: true },
-                                            { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.admissions, c: '#f9a8d4' },
+                                            { v: teamTot.meetHrs, c: '#94a3b8', suf: 'h' }, { v: teamTot.references, c: '#f9a8d4' }, { v: teamTot.admissions, c: '#f9a8d4' },
                                             { v: teamTot.days, c: '#e2e8f0' },
                                         ].map((sv, i) => (
                                             <td key={i} style={{ padding: '9px 10px', textAlign: 'center', borderRight: '1px solid rgba(255,255,255,.07)', fontFamily: '"JetBrains Mono",monospace', fontSize: 12, fontWeight: 700, color: sv.v > 0 ? sv.c : 'rgba(255,255,255,.2)' }}>
