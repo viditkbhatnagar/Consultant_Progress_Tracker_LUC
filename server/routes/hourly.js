@@ -30,5 +30,4 @@ router.get('/month', getMonthActivities);
 router.get('/admissions', getDayAdmissions);
 router.put('/admissions', upsertAdmission);
 router.get('/admissions/month', getMonthAdmissions);
-
 module.exports = router;

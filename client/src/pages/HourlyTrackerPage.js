@@ -58,7 +58,7 @@ const ACTIVITY_TYPES = [
     { id: 'outmeet', icon: '🚗', lbl: 'Out Meeting', hasCount: false, hasDur: true, color: '#7c3aed', bg: '#f5f3ff' },
     { id: 'teammeet', icon: '👥', lbl: 'Team Meeting', hasCount: false, hasDur: true, color: '#be185d', bg: '#fdf2f8' },
     { id: 'tlmeet', icon: '👔', lbl: "TL's Team Meeting", hasCount: false, hasDur: true, color: '#0d9488', bg: '#f0fdfa' },
-    { id: 'reference', icon: '📋', lbl: 'Reference', hasCount: false, hasDur: false, color: '#ea580c', bg: '#fff7ed' },
+    { id: 'reference', icon: '📋', lbl: 'Reference', hasCount: true, hasDur: false, color: '#be185d', bg: '#fdf2f8', unit: 'references' },
 ];
 
 // Display info for combined type (not shown in picker grid)
@@ -235,6 +235,7 @@ const HourlyTrackerPage = () => {
         }
     }, []);
 
+
     const loadTeamLeads = useCallback(async () => {
         if (!isAdmin) return;
         try {
@@ -290,12 +291,12 @@ const HourlyTrackerPage = () => {
             }
             if (d.activityType === 'noshow') noshows++;
             if (d.activityType === 'drip') drips++;
+            if (d.activityType === 'reference') references += d.count || 1;
             if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
             if (d.activityType === 'outmeet') { outMtgs++; meetHrs += hrs; }
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
             if (d.activityType === 'tlmeet') { tlMtgs++; meetHrs += hrs; }
-            if (d.activityType === 'reference') references++;
         });
         return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, references, meetHrs: +meetHrs.toFixed(1) };
     };
@@ -473,6 +474,7 @@ const HourlyTrackerPage = () => {
         return total;
     };
 
+
     const handleAddConsultant = async () => {
         if (!newConsultantName.trim()) { showToast('Enter consultant name'); return; }
         if (!selectedTeamLead) { showToast('Select a team lead'); return; }
@@ -633,12 +635,12 @@ const HourlyTrackerPage = () => {
             }
             if (d.activityType === 'noshow') noshows++;
             if (d.activityType === 'drip') drips++;
+            if (d.activityType === 'reference') references += d.count || 1;
             if (d.activityType === 'meeting') { offlineMtgs++; meetHrs += hrs; }
             if (d.activityType === 'outmeet') { outMtgs++; meetHrs += hrs; }
             if (d.activityType === 'zoom') { zoomMtgs++; meetHrs += hrs; }
             if (d.activityType === 'teammeet') { teamMtgs++; meetHrs += hrs; }
             if (d.activityType === 'tlmeet') { tlMtgs++; meetHrs += hrs; }
-            if (d.activityType === 'reference') references++;
         });
         return { calls, followups, noshows, drips, offlineMtgs, zoomMtgs, outMtgs, teamMtgs, tlMtgs, references, meetHrs: +meetHrs.toFixed(1) };
     };
@@ -698,8 +700,8 @@ const HourlyTrackerPage = () => {
         const daysInMonth = new Date(y, m + 1, 0).getDate();
 
         const rows = displayConsultants.map((c) => {
-            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, meetHrs: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
-            // Sum admissions for this consultant across the month
+            const r = { consultant: c, calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0, references: 0, admissions: 0, days: 0, heatmap: [], activeHrs: 0 };
+            // Sum admissions and references for this consultant across the month
             monthAdmissions.filter((a) => String(a.consultant) === String(c._id)).forEach((a) => { r.admissions += a.count || 0; });
             for (let d = 1; d <= daysInMonth; d++) {
                 let dayCalls = 0, dayOffline = 0, dayZoom = 0, dayOut = 0, dayTeam = 0, dayTlMeet = 0, dayFollowups = 0, dayNoshows = 0, dayDrips = 0, dayRefs = 0, dayActiveHrs = 0, dayMeetHrs = 0;
@@ -721,7 +723,7 @@ const HourlyTrackerPage = () => {
                     if (a.activityType === 'zoom') { dayZoom++; dayMeetHrs += hrs; }
                     if (a.activityType === 'teammeet') { dayTeam++; dayMeetHrs += hrs; }
                     if (a.activityType === 'tlmeet') { dayTlMeet++; dayMeetHrs += hrs; }
-                    if (a.activityType === 'reference') dayRefs++;
+                    if (a.activityType === 'reference') dayRefs += a.count || 1;
                 });
                 r.calls += dayCalls; r.followups += dayFollowups; r.noshows += dayNoshows;
                 r.drips += dayDrips; r.offlineMtgs += dayOffline; r.zoomMtgs += dayZoom; r.outMtgs += dayOut; r.teamMtgs += dayTeam; r.tlMtgs += dayTlMeet; r.references += dayRefs;
@@ -735,11 +737,11 @@ const HourlyTrackerPage = () => {
             return r;
         });
 
-        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, references: 0, activeHrs: 0, meetHrs: 0, admissions: 0, days: 0 };
+        const teamTot = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, activeHrs: 0, meetHrs: 0, references: 0, admissions: 0, days: 0 };
         rows.forEach((r) => {
             teamTot.calls += r.calls; teamTot.followups += r.followups; teamTot.noshows += r.noshows;
-            teamTot.drips += r.drips; teamTot.offlineMtgs += r.offlineMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.outMtgs += r.outMtgs; teamTot.teamMtgs += r.teamMtgs; teamTot.tlMtgs += r.tlMtgs; teamTot.references += r.references;
-            teamTot.activeHrs += r.activeHrs; teamTot.meetHrs += r.meetHrs; teamTot.admissions += r.admissions; teamTot.days += r.days;
+            teamTot.drips += r.drips; teamTot.offlineMtgs += r.offlineMtgs; teamTot.zoomMtgs += r.zoomMtgs; teamTot.outMtgs += r.outMtgs; teamTot.teamMtgs += r.teamMtgs; teamTot.tlMtgs += r.tlMtgs;
+            teamTot.activeHrs += r.activeHrs; teamTot.meetHrs += r.meetHrs; teamTot.admissions += r.admissions; teamTot.references += r.references; teamTot.days += r.days;
         });
         teamTot.activeHrs = +teamTot.activeHrs.toFixed(1);
         teamTot.meetHrs = +teamTot.meetHrs.toFixed(1);
@@ -1137,7 +1139,7 @@ const HourlyTrackerPage = () => {
                                                 )}
                                             </td>
                                         ))}
-                                        <td style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc', background: '#fdf2f8', verticalAlign: 'middle' }}>
+                                        <td style={{ minWidth: 80, padding: '8px 10px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc', background: '#fdf2f8' }}>
                                             <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 15, fontWeight: 600, color: st.references === 0 ? '#d4c9a8' : '#be185d' }}>
                                                 {st.references === 0 ? '—' : st.references}
                                             </span>
