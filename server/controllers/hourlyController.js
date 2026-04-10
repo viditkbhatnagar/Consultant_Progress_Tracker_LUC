@@ -1,5 +1,6 @@
 const HourlyActivity = require('../models/HourlyActivity');
 const DailyAdmission = require('../models/DailyAdmission');
+const DailyReference = require('../models/DailyReference');
 const Consultant = require('../models/Consultant');
 const AIUsage = require('../models/AIUsage');
 const { SLOTS, getContinuationSlots } = require('../utils/hourlyConstants');
@@ -401,6 +402,78 @@ exports.getMonthAdmissions = async (req, res, next) => {
             date: { $gte: startDate, $lte: endDate },
         });
         res.status(200).json({ success: true, data: admissions });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Get references for a day
+// @route   GET /api/hourly/references?date=YYYY-MM-DD
+// @access  Private
+exports.getDayReferences = async (req, res, next) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ success: false, message: 'Date is required' });
+        }
+        const dateObj = parseDate(date);
+        const references = await DailyReference.find({ date: dateObj }).populate('consultant', 'name');
+        res.status(200).json({ success: true, data: references });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Upsert reference count for a consultant on a day
+// @route   PUT /api/hourly/references
+// @access  Private
+exports.upsertReference = async (req, res, next) => {
+    try {
+        const { consultantId, date, count } = req.body;
+
+        if (!consultantId || !date) {
+            return res.status(400).json({ success: false, message: 'consultantId and date are required' });
+        }
+
+        if (req.user.role !== 'admin' && !isTodayStr(date)) {
+            return res.status(403).json({ success: false, message: 'References can only be entered for today' });
+        }
+
+        const dateObj = parseDate(date);
+        const refCount = parseInt(count) || 0;
+
+        if (refCount === 0) {
+            await DailyReference.deleteOne({ consultant: consultantId, date: dateObj });
+        } else {
+            await DailyReference.findOneAndUpdate(
+                { consultant: consultantId, date: dateObj },
+                { consultant: consultantId, date: dateObj, count: refCount, loggedBy: req.user.id },
+                { upsert: true, new: true, runValidators: true }
+            );
+        }
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Get references for a month
+// @route   GET /api/hourly/references/month?year=YYYY&month=MM
+// @access  Private
+exports.getMonthReferences = async (req, res, next) => {
+    try {
+        const { year, month } = req.query;
+        if (!year || !month) {
+            return res.status(400).json({ success: false, message: 'year and month are required' });
+        }
+        const y = parseInt(year);
+        const m = parseInt(month);
+        const startDate = new Date(Date.UTC(y, m, 1));
+        const endDate = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
+
+        const references = await DailyReference.find({ date: { $gte: startDate, $lte: endDate } });
+        res.status(200).json({ success: true, data: references });
     } catch (error) {
         next(error);
     }
