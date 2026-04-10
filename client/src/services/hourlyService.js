@@ -57,6 +57,21 @@ const getMonthAdmissions = async (year, month) => {
     return response.data;
 };
 
+const getDayReferences = async (date) => {
+    const response = await axios.get(`${API_URL}/references`, { params: { date } });
+    return response.data;
+};
+
+const upsertReference = async (data) => {
+    const response = await axios.put(`${API_URL}/references`, data);
+    return response.data;
+};
+
+const getMonthReferences = async (year, month) => {
+    const response = await axios.get(`${API_URL}/references/month`, { params: { year, month } });
+    return response.data;
+};
+
 const getAIAnalysis = async (date) => {
     const response = await axios.get(`${API_URL}/ai-analysis`, { params: { date } });
     return response.data;
@@ -82,6 +97,9 @@ const hourlyService = {
     getDayAdmissions,
     upsertAdmission,
     getMonthAdmissions,
+    getDayReferences,
+    upsertReference,
+    getMonthReferences,
     getAIAnalysis,
     getTeamLeads,
     getLeaderboard,

@@ -9,6 +9,9 @@ const {
     getDayAdmissions,
     upsertAdmission,
     getMonthAdmissions,
+    getDayReferences,
+    upsertReference,
+    getMonthReferences,
     getAIAnalysis,
     getLeaderboard,
 } = require('../controllers/hourlyController');
@@ -30,4 +33,8 @@ router.get('/month', getMonthActivities);
 router.get('/admissions', getDayAdmissions);
 router.put('/admissions', upsertAdmission);
 router.get('/admissions/month', getMonthAdmissions);
+router.get('/references', getDayReferences);
+router.put('/references', upsertReference);
+router.get('/references/month', getMonthReferences);
+
 module.exports = router;
