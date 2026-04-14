@@ -1,23 +1,22 @@
 const Student = require('../models/Student');
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
+const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
+const { isSkillhub } = require('../config/organizations');
 
 // @desc    Get all students
 // @route   GET /api/students
-// @access  Private (Admin/Team Lead)
+// @access  Private (Admin/Team Lead/Manager/Skillhub)
 exports.getStudents = async (req, res, next) => {
     try {
         let query;
-        const { startDate, endDate, consultant, university, team, month, program, source, conversionOperator, conversionDays } = req.query;
+        const { startDate, endDate, consultant, university, team, month, program, source, conversionOperator, conversionDays, studentStatus } = req.query;
 
-        // Build filter based on role
-        let filter = {};
+        const filter = buildScopeFilter(req);
 
-        if (req.user.role === 'team_lead') {
-            // Team lead can only see students from their team
-            filter.teamLead = req.user.id;
+        if (studentStatus) {
+            filter.studentStatus = studentStatus;
         }
-        // Admin sees all students
 
         // Date range filter on closing date
         if (startDate && endDate) {
@@ -102,8 +101,7 @@ exports.getStudent = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'team_lead' && student.teamLead._id.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, student)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to view this student',
@@ -152,18 +150,18 @@ exports.createStudent = async (req, res, next) => {
             teamLeadId,
         } = req.body;
 
-        // Determine team lead
+        // Determine team lead and organization
         let teamLead;
         let teamLeadName;
         let teamName;
+        let organization;
 
-        if (req.user.role === 'team_lead') {
-            // Team lead creates for their own team
+        if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             teamLead = req.user.id;
             teamLeadName = req.user.name;
             teamName = req.user.teamName;
+            organization = req.user.organization;
         } else if (req.user.role === 'admin') {
-            // Admin must provide team lead ID
             if (!teamLeadId) {
                 return res.status(400).json({
                     success: false,
@@ -180,6 +178,7 @@ exports.createStudent = async (req, res, next) => {
             teamLead = teamLeadId;
             teamLeadName = teamLeadUser.name;
             teamName = teamLeadUser.teamName;
+            organization = teamLeadUser.organization || resolveOrganization(req);
         } else {
             return res.status(403).json({
                 success: false,
@@ -187,11 +186,13 @@ exports.createStudent = async (req, res, next) => {
             });
         }
 
-        // Get next SNO for this team
-        const sno = await Student.getNextSno(teamLead);
+        // Get next SNO scoped by org for Skillhub, by team for LUC
+        const sno = await Student.getNextSno(teamLead, organization);
 
-        // Create student
+        // Create student — allow Skillhub-specific fields to pass through
         const student = await Student.create({
+            ...req.body,
+            organization,
             sno,
             studentName,
             gender,
@@ -250,8 +251,7 @@ exports.updateStudent = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'team_lead' && student.teamLead.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, student)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to update this student',
@@ -350,8 +350,7 @@ exports.deleteStudent = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'team_lead' && student.teamLead.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, student)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to delete this student',
@@ -370,16 +369,72 @@ exports.deleteStudent = async (req, res, next) => {
     }
 };
 
+// @desc    Mark a Skillhub New Admission as Active
+// @route   PATCH /api/students/:id/activate
+// @access  Private (Admin/Skillhub)
+exports.activateStudent = async (req, res, next) => {
+    try {
+        const student = await Student.findById(req.params.id);
+
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                message: 'Student not found',
+            });
+        }
+
+        if (!canAccessDoc(req.user, student)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to activate this student',
+            });
+        }
+
+        if (!isSkillhub(student.organization)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only Skillhub students can be activated',
+            });
+        }
+
+        if (student.studentStatus === 'active') {
+            return res.status(400).json({
+                success: false,
+                message: 'Student is already active',
+            });
+        }
+
+        // Capture extra fields collected at activation time
+        const {
+            addressEmirate,
+            registrationFee,
+            dateOfEnrollment,
+            emis,
+        } = req.body;
+
+        if (addressEmirate !== undefined) student.addressEmirate = addressEmirate;
+        if (registrationFee !== undefined) student.registrationFee = registrationFee;
+        if (dateOfEnrollment !== undefined) student.dateOfEnrollment = dateOfEnrollment;
+        if (Array.isArray(emis)) student.emis = emis;
+
+        student.studentStatus = 'active';
+        await student.save();
+
+        res.status(200).json({
+            success: true,
+            data: student,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get student statistics
 // @route   GET /api/students/stats
 // @access  Private (Admin/Team Lead)
 exports.getStudentStats = async (req, res, next) => {
     try {
-        let matchStage = {};
-
-        if (req.user.role === 'team_lead') {
-            matchStage.teamLead = req.user._id;
-        }
+        const matchStage = buildScopeFilter(req);
 
         const stats = await Student.aggregate([
             { $match: matchStage },

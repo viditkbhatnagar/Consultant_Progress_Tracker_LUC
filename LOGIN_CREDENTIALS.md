@@ -45,3 +45,18 @@
 - **Email:** tony@learnerseducation.com
 - **Password:** B8bqGFTGkDyh
 
+
+## Skillhub — Branch Logins
+
+_Regenerated: 2026-04-14T16:51:29.685Z_
+
+### Skillhub Training
+- **Email:** training@skillhub.com
+- **Password:** jDVe8Se8psSi
+- **Organization:** skillhub_training
+
+### Skillhub Institute
+- **Email:** institute@skillhub.com
+- **Password:** gm3YvNrEm3VW
+- **Organization:** skillhub_institute
+

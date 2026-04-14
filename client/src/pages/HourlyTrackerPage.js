@@ -29,6 +29,8 @@ import { useAuth } from '../context/AuthContext';
 import hourlyService from '../services/hourlyService';
 import consultantService from '../services/consultantService';
 import { exportToExcel, exportToCSV } from '../services/exportService';
+import AdminOrgTabs from '../components/AdminOrgTabs';
+import { useAdminOrgScope } from '../utils/adminOrgScope';
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const SLOTS = [
@@ -844,6 +846,12 @@ const HourlyTrackerPage = () => {
     // ─── RENDER ──────────────────────────────────────
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f3f8', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>
+            {/* Admin-only: LUC / Skillhub scope switcher */}
+            {user?.role === 'admin' && (
+                <Box sx={{ px: 2, pt: 1.5, pb: 0.5, background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                    <AdminOrgTabs sx={{ mb: 0 }} onChange={() => window.location.reload()} />
+                </Box>
+            )}
             {/* ── HEADER ── */}
             <Box sx={S.hdrWrap}>
                 {/* Row 1: brand, tabs, date nav */}

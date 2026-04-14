@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.use(protect);
 
-router.post('/analysis', authorize('admin', 'team_lead'), generateDashboardAnalysis);
+router.post('/analysis', authorize('admin', 'team_lead', 'skillhub'), generateDashboardAnalysis);
 router.get('/usage', authorize('admin'), getUsageStats);
 
 module.exports = router;

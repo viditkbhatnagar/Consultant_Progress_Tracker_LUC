@@ -1,7 +1,15 @@
 const mongoose = require('mongoose');
+const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 
 const HourlyActivitySchema = new mongoose.Schema(
     {
+        organization: {
+            type: String,
+            enum: ORGANIZATIONS,
+            default: ORG_LUC,
+            required: true,
+            index: true,
+        },
         consultant: {
             type: mongoose.Schema.ObjectId,
             ref: 'Consultant',

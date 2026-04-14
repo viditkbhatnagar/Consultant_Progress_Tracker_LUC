@@ -5,6 +5,7 @@ const {
     createStudent,
     updateStudent,
     deleteStudent,
+    activateStudent,
     getStudentStats,
 } = require('../controllers/studentController');
 
@@ -16,17 +17,20 @@ const { protect, authorize } = require('../middleware/auth');
 router.use(protect);
 
 // Stats route (must be before /:id to prevent conflict)
-router.get('/stats', authorize('admin', 'team_lead', 'manager'), getStudentStats);
+router.get('/stats', authorize('admin', 'team_lead', 'manager', 'skillhub'), getStudentStats);
 
 router
     .route('/')
-    .get(authorize('admin', 'team_lead', 'manager'), getStudents)
-    .post(authorize('admin', 'team_lead'), createStudent);
+    .get(authorize('admin', 'team_lead', 'manager', 'skillhub'), getStudents)
+    .post(authorize('admin', 'team_lead', 'skillhub'), createStudent);
+
+// Skillhub: transition New Admission → Active (before /:id catch-all)
+router.patch('/:id/activate', authorize('admin', 'skillhub'), activateStudent);
 
 router
     .route('/:id')
-    .get(authorize('admin', 'team_lead', 'manager'), getStudent)
-    .put(authorize('admin', 'team_lead'), updateStudent)
-    .delete(authorize('admin', 'team_lead'), deleteStudent);
+    .get(authorize('admin', 'team_lead', 'manager', 'skillhub'), getStudent)
+    .put(authorize('admin', 'team_lead', 'skillhub'), updateStudent)
+    .delete(authorize('admin', 'team_lead', 'skillhub'), deleteStudent);
 
 module.exports = router;

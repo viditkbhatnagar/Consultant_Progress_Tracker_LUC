@@ -61,3 +61,50 @@ exports.authorize = (...roles) => {
         next();
     };
 };
+
+// Build a Mongoose filter that scopes a query to the requesting user's
+// organization and ownership. Admin sees all orgs unless they opt into
+// ?organization=X. team_lead and skillhub roles are scoped to docs they own
+// via teamLead FK. manager is scoped to its own organization.
+exports.buildScopeFilter = (req) => {
+    const user = req.user;
+    const filter = {};
+
+    if (user.role === 'admin') {
+        if (req.query && req.query.organization) {
+            filter.organization = req.query.organization;
+        }
+    } else {
+        filter.organization = user.organization;
+    }
+
+    if (user.role === 'team_lead' || user.role === 'skillhub') {
+        filter.teamLead = user._id;
+    }
+
+    return filter;
+};
+
+// Check whether a user is allowed to read/write a given document.
+// Admin always allowed. Others must match org; team_lead/skillhub must also
+// match ownership (teamLead FK).
+exports.canAccessDoc = (user, doc) => {
+    if (!doc) return false;
+    if (user.role === 'admin') return true;
+    if (doc.organization && doc.organization !== user.organization) return false;
+    if (user.role === 'team_lead' || user.role === 'skillhub') {
+        const ownerId = doc.teamLead?._id || doc.teamLead;
+        if (!ownerId || ownerId.toString() !== user._id.toString()) return false;
+    }
+    return true;
+};
+
+// Resolve the organization to set on a new document.
+// Non-admin: uses user.organization (ignores body).
+// Admin: uses body.organization or defaults to 'luc'.
+exports.resolveOrganization = (req) => {
+    if (req.user.role === 'admin') {
+        return req.body.organization || 'luc';
+    }
+    return req.user.organization;
+};

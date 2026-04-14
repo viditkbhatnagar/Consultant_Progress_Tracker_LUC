@@ -4,7 +4,15 @@ const DailyReference = require('../models/DailyReference');
 const Consultant = require('../models/Consultant');
 const AIUsage = require('../models/AIUsage');
 const { SLOTS, getContinuationSlots } = require('../utils/hourlyConstants');
+const { buildScopeFilter } = require('../middleware/auth');
 const OpenAI = require('openai');
+
+// Hourly activity docs don't have teamLead FK, so strip it before using the
+// generic scope filter (keep only organization-level scoping for these collections).
+function hourlyScopeFilter(req) {
+    const { teamLead, ...rest } = buildScopeFilter(req);
+    return rest;
+}
 
 let openai;
 const getOpenAIClient = () => {
@@ -44,9 +52,10 @@ function isTodayStr(dateStr) {
 // @access  Private
 exports.getConsultants = async (req, res, next) => {
     try {
-        const filter = { isActive: true };
-        if (req.user.role === 'team_lead' && req.query.scope !== 'org') {
-            filter.teamLead = req.user.id;
+        const filter = { ...buildScopeFilter(req), isActive: true };
+        // team_lead may opt out of ownership filter via scope=org (legacy)
+        if (req.user.role === 'team_lead' && req.query.scope === 'org') {
+            delete filter.teamLead;
         }
 
         const consultants = await Consultant.find(filter)
@@ -72,7 +81,10 @@ exports.getDayActivities = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
-        const activities = await HourlyActivity.find({ date: dateObj });
+        const activities = await HourlyActivity.find({
+            ...hourlyScopeFilter(req),
+            date: dateObj,
+        });
 
         res.status(200).json({ success: true, data: activities });
     } catch (error) {
@@ -114,6 +126,16 @@ exports.upsertSlot = async (req, res, next) => {
 
         const dateObj = parseDate(date);
 
+        // Resolve organization from the target consultant (authoritative)
+        const consultantDoc = await Consultant.findById(consultantId);
+        if (!consultantDoc) {
+            return res.status(404).json({ success: false, message: 'Consultant not found' });
+        }
+        if (req.user.role !== 'admin' && consultantDoc.organization !== req.user.organization) {
+            return res.status(403).json({ success: false, message: 'Not authorized for this consultant' });
+        }
+        const organization = consultantDoc.organization;
+
         // Check if existing entry is locked (call/followup/call_followup cannot be changed — admin can override)
         if (req.user.role !== 'admin') {
             const existing = await HourlyActivity.findOne({
@@ -144,6 +166,7 @@ exports.upsertSlot = async (req, res, next) => {
         const activity = await HourlyActivity.findOneAndUpdate(
             { consultant: consultantId, date: dateObj, slotId },
             {
+                organization,
                 consultant: consultantId,
                 consultantName: consultantName || '',
                 date: dateObj,
@@ -167,6 +190,7 @@ exports.upsertSlot = async (req, res, next) => {
                 await HourlyActivity.findOneAndUpdate(
                     { consultant: consultantId, date: dateObj, slotId: csid },
                     {
+                        organization,
                         consultant: consultantId,
                         consultantName: consultantName || '',
                         date: dateObj,
@@ -269,11 +293,13 @@ exports.clearDay = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
+        const scope = hourlyScopeFilter(req);
         // Admin can clear everything; others skip locked entries
         if (req.user.role === 'admin') {
-            await HourlyActivity.deleteMany({ date: dateObj });
+            await HourlyActivity.deleteMany({ ...scope, date: dateObj });
         } else {
             await HourlyActivity.deleteMany({
+                ...scope,
                 date: dateObj,
                 activityType: { $nin: LOCKED_TYPES },
             });
@@ -304,6 +330,7 @@ exports.getMonthActivities = async (req, res, next) => {
         const endDate = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
 
         const activities = await HourlyActivity.find({
+            ...hourlyScopeFilter(req),
             date: { $gte: startDate, $lte: endDate },
         });
 
@@ -325,8 +352,10 @@ exports.getDayAdmissions = async (req, res, next) => {
                 .json({ success: false, message: 'Date is required' });
         }
         const dateObj = parseDate(date);
-        const admissions = await DailyAdmission.find({ date: dateObj })
-            .populate('consultant', 'name');
+        const admissions = await DailyAdmission.find({
+            ...hourlyScopeFilter(req),
+            date: dateObj,
+        }).populate('consultant', 'name');
         res.status(200).json({ success: true, data: admissions });
     } catch (error) {
         next(error);
@@ -357,6 +386,14 @@ exports.upsertAdmission = async (req, res, next) => {
         const dateObj = parseDate(date);
         const admCount = parseInt(count) || 0;
 
+        const consultantDoc = await Consultant.findById(consultantId);
+        if (!consultantDoc) {
+            return res.status(404).json({ success: false, message: 'Consultant not found' });
+        }
+        if (req.user.role !== 'admin' && consultantDoc.organization !== req.user.organization) {
+            return res.status(403).json({ success: false, message: 'Not authorized for this consultant' });
+        }
+
         if (admCount === 0) {
             await DailyAdmission.deleteOne({
                 consultant: consultantId,
@@ -366,6 +403,7 @@ exports.upsertAdmission = async (req, res, next) => {
             await DailyAdmission.findOneAndUpdate(
                 { consultant: consultantId, date: dateObj },
                 {
+                    organization: consultantDoc.organization,
                     consultant: consultantId,
                     date: dateObj,
                     count: admCount,
@@ -399,6 +437,7 @@ exports.getMonthAdmissions = async (req, res, next) => {
         const endDate = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
 
         const admissions = await DailyAdmission.find({
+            ...hourlyScopeFilter(req),
             date: { $gte: startDate, $lte: endDate },
         });
         res.status(200).json({ success: true, data: admissions });
@@ -417,7 +456,10 @@ exports.getDayReferences = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Date is required' });
         }
         const dateObj = parseDate(date);
-        const references = await DailyReference.find({ date: dateObj }).populate('consultant', 'name');
+        const references = await DailyReference.find({
+            ...hourlyScopeFilter(req),
+            date: dateObj,
+        }).populate('consultant', 'name');
         res.status(200).json({ success: true, data: references });
     } catch (error) {
         next(error);
@@ -442,12 +484,26 @@ exports.upsertReference = async (req, res, next) => {
         const dateObj = parseDate(date);
         const refCount = parseInt(count) || 0;
 
+        const consultantDoc = await Consultant.findById(consultantId);
+        if (!consultantDoc) {
+            return res.status(404).json({ success: false, message: 'Consultant not found' });
+        }
+        if (req.user.role !== 'admin' && consultantDoc.organization !== req.user.organization) {
+            return res.status(403).json({ success: false, message: 'Not authorized for this consultant' });
+        }
+
         if (refCount === 0) {
             await DailyReference.deleteOne({ consultant: consultantId, date: dateObj });
         } else {
             await DailyReference.findOneAndUpdate(
                 { consultant: consultantId, date: dateObj },
-                { consultant: consultantId, date: dateObj, count: refCount, loggedBy: req.user.id },
+                {
+                    organization: consultantDoc.organization,
+                    consultant: consultantId,
+                    date: dateObj,
+                    count: refCount,
+                    loggedBy: req.user.id,
+                },
                 { upsert: true, new: true, runValidators: true }
             );
         }
@@ -472,7 +528,10 @@ exports.getMonthReferences = async (req, res, next) => {
         const startDate = new Date(Date.UTC(y, m, 1));
         const endDate = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59));
 
-        const references = await DailyReference.find({ date: { $gte: startDate, $lte: endDate } });
+        const references = await DailyReference.find({
+            ...hourlyScopeFilter(req),
+            date: { $gte: startDate, $lte: endDate },
+        });
         res.status(200).json({ success: true, data: references });
     } catch (error) {
         next(error);
@@ -490,15 +549,17 @@ exports.getAIAnalysis = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
+        const scope = hourlyScopeFilter(req);
+        const consultantScope = buildScopeFilter(req);
 
         // Get all non-continuation activities for the date
-        const activities = await HourlyActivity.find({ date: dateObj, isContinuation: { $ne: true } });
+        const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
 
         // Get all admissions for the date
-        const dayAdmissions = await DailyAdmission.find({ date: dateObj });
+        const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
 
-        // Get all active consultants
-        const consultants = await Consultant.find({ isActive: true }).populate('teamLead', 'name teamName');
+        // Get all active consultants in scope
+        const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
 
         // Build per-consultant stats
         const consultantStats = {};
@@ -706,9 +767,11 @@ exports.getLeaderboard = async (req, res, next) => {
         }
 
         const dateObj = parseDate(date);
-        const activities = await HourlyActivity.find({ date: dateObj, isContinuation: { $ne: true } });
-        const dayAdmissions = await DailyAdmission.find({ date: dateObj });
-        const consultants = await Consultant.find({ isActive: true }).populate('teamLead', 'name teamName');
+        const scope = hourlyScopeFilter(req);
+        const consultantScope = buildScopeFilter(req);
+        const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
+        const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
+        const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
 
         const consultantStats = {};
         for (const c of consultants) {

@@ -3,9 +3,12 @@ import { API_BASE_URL } from '../utils/constants';
 
 const API_URL = `${API_BASE_URL}/consultants`;
 
-// Get all consultants (filtered by team for TL)
-const getConsultants = async () => {
-    const response = await axios.get(API_URL);
+// Get all consultants (filtered by team for TL, or by organization for admin if passed)
+const getConsultants = async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.organization) params.append('organization', filters.organization);
+    const qs = params.toString();
+    const response = await axios.get(qs ? `${API_URL}?${qs}` : API_URL);
     return response.data;
 };
 

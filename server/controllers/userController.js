@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { buildScopeFilter } = require('../middleware/auth');
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -7,13 +8,22 @@ exports.getUsers = async (req, res, next) => {
     try {
         let query;
 
-        // Role-based filtering
         if (req.user.role === 'team_lead') {
-            // Team leads can see all team leads and admins (for organizational view)
-            query = User.find({ role: { $in: ['team_lead', 'admin'] } });
+            // Team leads can see all team leads and admins within their org
+            query = User.find({
+                organization: req.user.organization,
+                role: { $in: ['team_lead', 'admin'] },
+            });
+        } else if (req.user.role === 'skillhub') {
+            // Skillhub branch logins see peers in their org (self-service listing)
+            query = User.find({
+                organization: req.user.organization,
+                role: { $in: ['skillhub', 'admin'] },
+            });
         } else if (req.user.role === 'admin') {
-            // Admin can see all users
-            query = User.find();
+            const filter = {};
+            if (req.query.organization) filter.organization = req.query.organization;
+            query = User.find(filter);
         } else {
             return res.status(403).json({
                 success: false,

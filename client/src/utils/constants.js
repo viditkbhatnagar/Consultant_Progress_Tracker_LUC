@@ -24,8 +24,61 @@ export const COMMITMENT_STATUS = [
 export const USER_ROLES = {
     ADMIN: 'admin',
     TEAM_LEAD: 'team_lead',
+    MANAGER: 'manager',
     CONSULTANT: 'consultant',
+    SKILLHUB: 'skillhub',
 };
+
+// Organizations (tenancy)
+export const ORGANIZATIONS = {
+    LUC: 'luc',
+    SKILLHUB_TRAINING: 'skillhub_training',
+    SKILLHUB_INSTITUTE: 'skillhub_institute',
+};
+
+export const ORGANIZATION_LABELS = {
+    luc: 'LUC',
+    skillhub_training: 'Skillhub Training',
+    skillhub_institute: 'Skillhub Institute',
+};
+
+export const isSkillhubOrg = (org) =>
+    org === ORGANIZATIONS.SKILLHUB_TRAINING ||
+    org === ORGANIZATIONS.SKILLHUB_INSTITUTE;
+
+// Skillhub domain enums (mirror server/config/ + models/Student.js)
+export const SKILLHUB_CURRICULA = [
+    'CBSE',
+    'IGCSE-Cambridge',
+    'IGCSE-Edexcel',
+    'IGCSE-AQA',
+];
+export const SKILLHUB_SUBJECTS = [
+    'Math',
+    'Science',
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'Accounting',
+    'Business Studies',
+    'Economics',
+    'English',
+];
+export const SKILLHUB_MODES = ['Online', 'Offline', 'Hybrid', 'OneToOne'];
+export const SKILLHUB_COURSE_DURATIONS = ['Monthly', 'OneYear', 'TwoYears'];
+export const SKILLHUB_LEAD_SOURCES = [
+    'Google',
+    'FacebookMeta',
+    'Instagram',
+    'School',
+    'Reference',
+];
+export const SKILLHUB_STREAMS = ['Science', 'Commerce'];
+export const STUDENT_STATUSES = [
+    { value: 'new_admission', label: 'New Admission', color: '#FF9800' },
+    { value: 'active', label: 'Active', color: '#4CAF50' },
+    { value: 'inactive', label: 'Inactive', color: '#9E9E9E' },
+];
 
 // Days of week
 export const DAYS_OF_WEEK = [

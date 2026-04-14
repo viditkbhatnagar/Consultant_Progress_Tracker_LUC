@@ -1,22 +1,14 @@
 const Commitment = require('../models/Commitment');
 const User = require('../models/User');
+const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 
 // @desc    Get commitments
 // @route   GET /api/commitments
 // @access  Private
 exports.getCommitments = async (req, res, next) => {
     try {
-        let query;
         const { weekNumber, year, status } = req.query;
-
-        // Role-based filtering (only team_lead and admin remain)
-        if (req.user.role === 'team_lead') {
-            // Team leads can see their team's commitments
-            query = { teamLead: req.user.id };
-        } else if (req.user.role === 'admin') {
-            // Admin can see all commitments
-            query = {};
-        }
+        const query = buildScopeFilter(req);
 
         // Filter by week if provided
         if (weekNumber && year) {
@@ -58,8 +50,7 @@ exports.getCommitment = async (req, res, next) => {
             });
         }
 
-        // Authorization check (only team_lead and admin now)
-        if (req.user.role === 'team_lead' && commitment.teamLead._id.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, commitment)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to view this commitment',
@@ -80,21 +71,21 @@ exports.getCommitment = async (req, res, next) => {
 // @access  Private/Consultant
 exports.createCommitment = async (req, res, next) => {
     try {
-        // Team leads create commitments for their consultants
-        if (req.user.role === 'team_lead') {
-            // Team lead is creating commitment, set team info from their profile
+        // Team leads and skillhub branch logins create commitments owned by themselves
+        if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             req.body.teamLead = req.user.id;
             req.body.teamName = req.user.teamName;
+            req.body.organization = req.user.organization;
             req.body.createdBy = req.user.id;
             req.body.lastUpdatedBy = req.user.id;
         } else if (req.user.role === 'admin') {
-            // Admin can create commitments, need to verify team lead exists
             if (!req.body.teamLead || !req.body.teamName) {
                 return res.status(400).json({
                     success: false,
                     message: 'Team lead and team name are required',
                 });
             }
+            req.body.organization = resolveOrganization(req);
             req.body.createdBy = req.user.id;
             req.body.lastUpdatedBy = req.user.id;
         }
@@ -131,17 +122,12 @@ exports.updateCommitment = async (req, res, next) => {
             });
         }
 
-        // Authorization check (no consultant role anymore)
-        if (req.user.role === 'team_lead') {
-            // Team lead can only update their team's commitments
-            if (commitment.teamLead.toString() !== req.user.id) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Not authorized to update this commitment',
-                });
-            }
+        if (!canAccessDoc(req.user, commitment)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this commitment',
+            });
         }
-        // Admin can update anything (no check needed)
 
         // Auto-set fields when closing admission (only if not already closed)
         if (req.body.admissionClosed === true && !commitment.admissionClosed) {
@@ -223,8 +209,7 @@ exports.closeAdmission = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'consultant' && commitment.consultant.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, commitment)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to update this commitment',
@@ -267,8 +252,7 @@ exports.updateMeetings = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'consultant' && commitment.consultant.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, commitment)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to update this commitment',
@@ -298,15 +282,11 @@ exports.getWeekCommitments = async (req, res, next) => {
     try {
         const { weekNumber, year } = req.params;
 
-        let query = {
+        const query = {
+            ...buildScopeFilter(req),
             weekNumber: parseInt(weekNumber),
             year: parseInt(year),
         };
-
-        // Role-based filtering
-        if (req.user.role === 'team_lead') {
-            query.teamLead = req.user.id;
-        }
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email')
@@ -336,15 +316,10 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
             });
         }
 
-        let query = {
+        const query = {
+            ...buildScopeFilter(req),
             weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
         };
-
-        // Role-based filtering (only team_lead and admin)
-        if (req.user.role === 'team_lead') {
-            query.teamLead = req.user.id;
-        }
-        // Admin sees all by default
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email')
@@ -379,15 +354,11 @@ exports.getConsultantPerformance = async (req, res, next) => {
             startDate.setMonth(startDate.getMonth() - parseInt(months));
         }
 
-        let query = {
+        const query = {
+            ...buildScopeFilter(req),
             consultantName: consultantName,
             weekStartDate: { $gte: startDate, $lte: endDate },
         };
-
-        // Team lead can only view their team members
-        if (req.user.role === 'team_lead') {
-            query.teamLead = req.user.id;
-        }
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email teamName')

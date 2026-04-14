@@ -9,6 +9,7 @@ import TeamLeadDashboard from './pages/TeamLeadDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDatabasePage from './pages/StudentDatabasePage';
 import HourlyTrackerPage from './pages/HourlyTrackerPage';
+import SkillhubDashboard from './pages/SkillhubDashboard';
 import theme from './theme';
 
 // Home redirect component
@@ -19,13 +20,15 @@ const HomeRedirect = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect based on role (only admin and team_lead)
+  // Redirect based on role
   if (user.role === 'admin') {
     return <Navigate to="/admin/dashboard" replace />;
   } else if (user.role === 'team_lead') {
     return <Navigate to="/team-lead/dashboard" replace />;
   } else if (user.role === 'manager') {
     return <Navigate to="/student-database" replace />;
+  } else if (user.role === 'skillhub') {
+    return <Navigate to="/skillhub/dashboard" replace />;
   }
 
   return <Navigate to="/login" replace />;
@@ -71,12 +74,22 @@ function App() {
               }
             />
 
-            {/* Hourly Tracker - accessible by both admin and team_lead */}
+            {/* Hourly Tracker - accessible by admin, team_lead, and skillhub */}
             <Route
               path="/hourly-tracker"
               element={
-                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'skillhub']}>
                   <HourlyTrackerPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Skillhub Dashboard */}
+            <Route
+              path="/skillhub/dashboard"
+              element={
+                <PrivateRoute allowedRoles={['skillhub']}>
+                  <SkillhubDashboard />
                 </PrivateRoute>
               }
             />

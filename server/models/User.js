@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 
 const UserSchema = new mongoose.Schema(
     {
@@ -28,8 +29,15 @@ const UserSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['admin', 'team_lead', 'manager'],
+            enum: ['admin', 'team_lead', 'manager', 'skillhub'],
             required: [true, 'Please specify a role'],
+        },
+        organization: {
+            type: String,
+            enum: ORGANIZATIONS,
+            default: ORG_LUC,
+            required: true,
+            index: true,
         },
 
         // Hierarchical relationship

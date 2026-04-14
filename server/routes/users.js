@@ -17,11 +17,11 @@ router.use(protect);
 
 router
     .route('/')
-    .get(authorize('admin', 'team_lead'), getUsers);
+    .get(authorize('admin', 'team_lead', 'skillhub'), getUsers);
 
 router
     .route('/team/:teamLeadId')
-    .get(authorize('admin', 'team_lead'), getConsultantsByTeamLead);
+    .get(authorize('admin', 'team_lead', 'skillhub'), getConsultantsByTeamLead);
 
 router
     .route('/:id')
