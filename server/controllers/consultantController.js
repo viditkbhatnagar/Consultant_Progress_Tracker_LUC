@@ -1,27 +1,21 @@
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
+const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 
 // @desc    Get all consultants
 // @route   GET /api/consultants
-// @access  Private (Admin/Team Lead)
+// @access  Private (Admin/Team Lead/Manager/Skillhub)
 exports.getConsultants = async (req, res, next) => {
     try {
-        let query;
-
-        if (req.user.role === 'team_lead') {
-            // Team lead can only see their own consultants
-            query = Consultant.find({ teamLead: req.user.id, isActive: true });
-        } else if (req.user.role === 'admin' || req.user.role === 'manager') {
-            // Admin/manager can see all consultants
-            query = Consultant.find();
-        } else {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to view consultants',
-            });
+        const filter = buildScopeFilter(req);
+        // team_lead/skillhub view should hide deactivated consultants by default
+        if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
+            filter.isActive = true;
         }
 
-        const consultants = await query.populate('teamLead', 'name email').sort('name');
+        const consultants = await Consultant.find(filter)
+            .populate('teamLead', 'name email')
+            .sort('name');
 
         res.status(200).json({
             success: true,
@@ -48,16 +42,16 @@ exports.createConsultant = async (req, res, next) => {
             });
         }
 
-        // Determine team lead ID and team name
+        // Determine team lead ID, team name, and organization
         let teamLeadId;
         let finalTeamName;
+        let organization;
 
-        if (req.user.role === 'team_lead') {
-            // Team lead can only create for their own team
+        if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             teamLeadId = req.user.id;
             finalTeamName = req.user.teamName;
+            organization = req.user.organization;
         } else if (req.user.role === 'admin') {
-            // Admin must provide team lead ID
             if (!teamLead) {
                 return res.status(400).json({
                     success: false,
@@ -65,7 +59,9 @@ exports.createConsultant = async (req, res, next) => {
                 });
             }
             teamLeadId = teamLead;
-            finalTeamName = teamName; // Use provided team name
+            finalTeamName = teamName;
+            const tlUser = await User.findById(teamLead);
+            organization = tlUser?.organization || resolveOrganization(req);
         } else {
             return res.status(403).json({
                 success: false,
@@ -79,6 +75,7 @@ exports.createConsultant = async (req, res, next) => {
             phone,
             teamName: finalTeamName,
             teamLead: teamLeadId,
+            organization,
         });
 
         res.status(201).json({
@@ -108,8 +105,7 @@ exports.updateConsultant = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'team_lead' && consultant.teamLead.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, consultant)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to update this consultant',
@@ -162,8 +158,7 @@ exports.deleteConsultant = async (req, res, next) => {
             });
         }
 
-        // Check authorization
-        if (req.user.role === 'team_lead' && consultant.teamLead.toString() !== req.user.id) {
+        if (!canAccessDoc(req.user, consultant)) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to delete this consultant',

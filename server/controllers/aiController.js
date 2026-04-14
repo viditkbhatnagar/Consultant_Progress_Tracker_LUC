@@ -33,7 +33,9 @@ exports.generateDashboardAnalysis = async (req, res, next) => {
                 });
             }
             messages = buildAdminPrompt(data);
-        } else if (req.user.role === 'team_lead') {
+        } else if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
+            // Skillhub branch logins use the same aggregation as a team lead —
+            // they own their branch's commitments/students via teamLead FK.
             data = await aggregateTeamLeadData(req.user.id, startDate, endDate);
             if (!data) {
                 return res.status(200).json({

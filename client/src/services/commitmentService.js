@@ -24,6 +24,7 @@ const getCommitments = async (filters = {}) => {
     if (filters.weekNumber) params.append('weekNumber', filters.weekNumber);
     if (filters.year) params.append('year', filters.year);
     if (filters.status) params.append('status', filters.status);
+    if (filters.organization) params.append('organization', filters.organization);
 
     const response = await axios.get(`${API_URL}?${params.toString()}`);
     return response.data;
@@ -94,9 +95,10 @@ const getWeekNumber = (date) => {
 };
 
 // Get commitments by date range
-const getCommitmentsByDateRange = async (startDate, endDate, consultantId = null) => {
+const getCommitmentsByDateRange = async (startDate, endDate, consultantId = null, organization = null) => {
     const params = { startDate, endDate };
     if (consultantId) params.consultantId = consultantId;
+    if (organization) params.organization = organization;
 
     const response = await axios.get(`${API_URL}/date-range`, { params });
     return response.data;

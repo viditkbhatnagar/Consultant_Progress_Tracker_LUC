@@ -23,13 +23,13 @@ router.use(protect);
 router
     .route('/')
     .get(getCommitments)
-    .post(authorize('team_lead'), createCommitment);
+    .post(authorize('team_lead', 'skillhub', 'admin'), createCommitment);
 
 // IMPORTANT: Specific routes MUST come BEFORE parameterized routes like /:id
 // Otherwise /:id will match everything
 
 // Date range queries (BEFORE /:id)
-router.get('/date-range', authorize('team_lead', 'admin'), getCommitmentsByDateRange);
+router.get('/date-range', authorize('team_lead', 'admin', 'skillhub'), getCommitmentsByDateRange);
 
 // Week-specific route (BEFORE /:id)
 router.route('/week/:weekNumber/:year').get(getWeekCommitments);
@@ -37,19 +37,19 @@ router.route('/week/:weekNumber/:year').get(getWeekCommitments);
 // Consultant performance details (BEFORE /:id)
 router.get(
     '/consultant/:consultantName/performance',
-    authorize('team_lead', 'admin'),
+    authorize('team_lead', 'admin', 'skillhub'),
     getConsultantPerformance
 );
 
 // Specific actions (BEFORE /:id)
-router.put('/:id/close-admission', authorize('team_lead', 'admin'), closeAdmission);
-router.put('/:id/meetings', authorize('team_lead', 'admin'), updateMeetings);
+router.put('/:id/close-admission', authorize('team_lead', 'admin', 'skillhub'), closeAdmission);
+router.put('/:id/meetings', authorize('team_lead', 'admin', 'skillhub'), updateMeetings);
 
 // Single commitment operations (This /:id route MUST come LAST)
 router
     .route('/:id')
     .get(getCommitment)
-    .put(authorize('team_lead', 'admin'), updateCommitment)
+    .put(authorize('team_lead', 'admin', 'skillhub'), updateCommitment)
     .delete(authorize('admin'), deleteCommitment);
 
 module.exports = router;

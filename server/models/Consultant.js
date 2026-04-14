@@ -1,6 +1,14 @@
 const mongoose = require('mongoose');
+const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 
 const ConsultantSchema = new mongoose.Schema({
+    organization: {
+        type: String,
+        enum: ORGANIZATIONS,
+        default: ORG_LUC,
+        required: true,
+        index: true,
+    },
     name: {
         type: String,
         required: [true, 'Please add consultant name'],

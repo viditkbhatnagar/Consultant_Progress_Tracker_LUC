@@ -16,13 +16,13 @@ router.use(protect);
 
 router
     .route('/')
-    .get(authorize('admin', 'team_lead', 'manager'), getConsultants)
-    .post(authorize('admin', 'team_lead'), createConsultant);
+    .get(authorize('admin', 'team_lead', 'manager', 'skillhub'), getConsultants)
+    .post(authorize('admin', 'team_lead', 'skillhub'), createConsultant);
 
 router
     .route('/:id')
-    .put(authorize('admin', 'team_lead'), updateConsultant)
-    .delete(authorize('admin', 'team_lead'), deleteConsultant);
+    .put(authorize('admin', 'team_lead', 'skillhub'), updateConsultant)
+    .delete(authorize('admin', 'team_lead', 'skillhub'), deleteConsultant);
 
 router
     .route('/:id/permanent')

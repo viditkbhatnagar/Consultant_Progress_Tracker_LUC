@@ -56,6 +56,7 @@ import ConsultantManagementDialog from '../components/ConsultantManagementDialog
 import AdminSidebar, { DRAWER_WIDTH } from '../components/AdminSidebar';
 import AISummaryCard from '../components/AISummaryCard';
 import APICostPanel from '../components/APICostPanel';
+import AdminSkillhubView from '../components/skillhub/AdminSkillhubView';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
@@ -71,6 +72,8 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [tabValue, setTabValue] = useState(0);
+    // Top-level org section: 'luc' (existing dashboard) or 'skillhub' (AdminSkillhubView)
+    const [orgSection, setOrgSection] = useState('luc');
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
     const [filters, setFilters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
@@ -105,13 +108,16 @@ const AdminDashboard = () => {
     const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
     // Reusing selectedConsultant state from line 85
 
-    // Load commitments by date range
+    // Load commitments by date range (LUC section only — Skillhub data shown
+    // separately under the Skillhub top-level tab)
     const loadCommitments = useCallback(async () => {
         try {
             setLoading(true);
             const data = await commitmentService.getCommitmentsByDateRange(
                 dateRange.startDate,
-                dateRange.endDate
+                dateRange.endDate,
+                null,
+                'luc'
             );
             setCommitments(data.data || []);
             setError('');
@@ -132,10 +138,10 @@ const AdminDashboard = () => {
         }
     };
 
-    // Load consultants
+    // Load consultants — LUC only for the admin's LUC view
     const loadConsultants = useCallback(async () => {
         try {
-            const response = await consultantService.getConsultants();
+            const response = await consultantService.getConsultants({ organization: 'luc' });
             setConsultants(response.data || []);
         } catch (err) {
             console.error('Failed to load consultants:', err);
@@ -564,6 +570,27 @@ const AdminDashboard = () => {
                         </Typography>
                     </Box>
 
+                    {/* Top-level organization section switcher */}
+                    <Box sx={{ mb: 3 }}>
+                        <Tabs
+                            value={orgSection}
+                            onChange={(_, v) => setOrgSection(v)}
+                            sx={{
+                                bgcolor: 'background.paper',
+                                borderRadius: 2,
+                                boxShadow: 1,
+                                '& .MuiTab-root': { fontWeight: 600, px: 4 },
+                            }}
+                        >
+                            <Tab label="LUC" value="luc" />
+                            <Tab label="Skillhub" value="skillhub" />
+                        </Tabs>
+                    </Box>
+
+                    {orgSection === 'skillhub' ? (
+                        <AdminSkillhubView />
+                    ) : (
+                    <>
                     {/* Date Range Selector - hidden on AI Analysis and API Costs tabs */}
                     {tabValue <= 3 && (
                         <Card elevation={2} sx={{ mb: 3 }}>
@@ -1286,6 +1313,8 @@ const AdminDashboard = () => {
                     {/* API Costs Tab */}
                     {tabValue === 5 && (
                         <APICostPanel />
+                    )}
+                    </>
                     )}
                 </Container>
 

@@ -1,5 +1,4 @@
 const Notification = require('../models/Notification');
-const User = require('../models/User');
 const Commitment = require('../models/Commitment');
 
 // @desc    Get user notifications
@@ -7,10 +6,7 @@ const Commitment = require('../models/Commitment');
 // @access  Private
 exports.getNotifications = async (req, res, next) => {
     try {
-        const notifications = await Notification.find({
-            recipient: req.user.id,
-            isActive: true
-        })
+        const notifications = await Notification.find({ user: req.user.id })
             .sort('-createdAt')
             .limit(50);
 
@@ -38,7 +34,7 @@ exports.markAsRead = async (req, res, next) => {
             });
         }
 
-        if (notification.recipient.toString() !== req.user.id) {
+        if (notification.user.toString() !== req.user.id) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to update this notification',
@@ -46,6 +42,7 @@ exports.markAsRead = async (req, res, next) => {
         }
 
         notification.isRead = true;
+        notification.readAt = new Date();
         await notification.save();
 
         res.status(200).json({
@@ -63,8 +60,8 @@ exports.markAsRead = async (req, res, next) => {
 exports.markAllAsRead = async (req, res, next) => {
     try {
         await Notification.updateMany(
-            { recipient: req.user.id, isRead: false },
-            { isRead: true }
+            { user: req.user.id, isRead: false },
+            { isRead: true, readAt: new Date() }
         );
 
         res.status(200).json({
@@ -76,14 +73,16 @@ exports.markAllAsRead = async (req, res, next) => {
     }
 };
 
-// @desc    Create notification (Internal use)
-exports.createNotification = async (recipientId, type, message, relatedCommitment = null) => {
+// @desc    Create notification (internal helper)
+exports.createNotification = async (userId, type, title, message, relatedCommitment = null, priority = 'medium') => {
     try {
         const notification = await Notification.create({
-            recipient: recipientId,
+            user: userId,
             type,
+            title,
             message,
             relatedCommitment,
+            priority,
         });
         return notification;
     } catch (error) {
@@ -103,30 +102,36 @@ exports.generateFollowUpReminders = async (req, res, next) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        // Find commitments with follow-up dates today or overdue
+        // Find commitments with follow-up dates today or overdue that are still open
         const commitments = await Commitment.find({
             followUpDate: { $lte: tomorrow },
             admissionClosed: false,
             isActive: true,
-        }).populate('consultant');
+        }).populate('teamLead', 'name');
 
         let notificationsCreated = 0;
 
         for (const commitment of commitments) {
-            // Check if notification already exists for this commitment today
-            const existingNotification = await Notification.findOne({
-                recipient: commitment.consultant._id,
+            if (!commitment.teamLead) continue;
+
+            // Skip if a reminder for this commitment has already been created today
+            const existing = await Notification.findOne({
+                user: commitment.teamLead._id,
                 relatedCommitment: commitment._id,
-                type: 'follow_up',
+                type: 'follow_up_reminder',
                 createdAt: { $gte: today },
             });
 
-            if (!existingNotification) {
+            if (!existing) {
+                const title = `Follow-up: ${commitment.studentName || 'Lead'}`;
+                const snippet = (commitment.commitmentMade || '').substring(0, 80);
                 await exports.createNotification(
-                    commitment.consultant._id,
-                    'follow_up',
-                    `Follow-up reminder: ${commitment.studentName || 'Student'} - ${commitment.commitmentMade.substring(0, 50)}...`,
-                    commitment._id
+                    commitment.teamLead._id,
+                    'follow_up_reminder',
+                    title,
+                    `Follow-up reminder: ${snippet}`,
+                    commitment._id,
+                    'high'
                 );
                 notificationsCreated++;
             }
@@ -155,15 +160,14 @@ exports.deleteNotification = async (req, res, next) => {
             });
         }
 
-        if (notification.recipient.toString() !== req.user.id) {
+        if (notification.user.toString() !== req.user.id) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to delete this notification',
             });
         }
 
-        notification.isActive = false;
-        await notification.save();
+        await notification.deleteOne();
 
         res.status(200).json({
             success: true,

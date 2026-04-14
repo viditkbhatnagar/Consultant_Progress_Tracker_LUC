@@ -19,6 +19,8 @@ const getStudents = async (filters = {}) => {
         params.append('conversionOperator', filters.conversionOperator);
         params.append('conversionDays', filters.conversionDays);
     }
+    if (filters.studentStatus) params.append('studentStatus', filters.studentStatus);
+    if (filters.organization) params.append('organization', filters.organization);
 
     const queryString = params.toString();
     const url = queryString ? `${API_URL}?${queryString}` : API_URL;
@@ -51,6 +53,12 @@ const deleteStudent = async (id) => {
     return response.data;
 };
 
+// Skillhub: mark New Admission as Active
+const activateStudent = async (id, activationData = {}) => {
+    const response = await axios.patch(`${API_URL}/${id}/activate`, activationData);
+    return response.data;
+};
+
 // Get student statistics
 const getStudentStats = async () => {
     const response = await axios.get(`${API_URL}/stats`);
@@ -63,6 +71,7 @@ const studentService = {
     createStudent,
     updateStudent,
     deleteStudent,
+    activateStudent,
     getStudentStats,
 };
 

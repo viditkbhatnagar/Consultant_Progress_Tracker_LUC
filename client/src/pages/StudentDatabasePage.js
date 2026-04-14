@@ -16,15 +16,20 @@ import { useAuth } from '../context/AuthContext';
 import consultantService from '../services/consultantService';
 import { getUsers } from '../services/authService';
 import StudentTable from '../components/StudentTable';
+import AdminOrgTabs from '../components/AdminOrgTabs';
+import { useAdminOrgScope } from '../utils/adminOrgScope';
 
 const StudentDatabasePage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    
+    const [adminOrg] = useAdminOrgScope();
+
     const [consultants, setConsultants] = useState([]);
     const [teamLeads, setTeamLeads] = useState([]);
 
-    // Load consultants
+    // Load consultants — for admin, the global axios interceptor auto-filters
+    // by the current LUC/Skillhub scope. For team_lead/manager, scoping is
+    // implicit via their organization.
     const loadConsultants = useCallback(async () => {
         try {
             const response = await consultantService.getConsultants();
@@ -32,7 +37,7 @@ const StudentDatabasePage = () => {
         } catch (err) {
             console.error('Failed to load consultants:', err);
         }
-    }, []);
+    }, [adminOrg]);
 
     // Load team leads
     const loadTeamLeads = useCallback(async () => {
@@ -121,7 +126,11 @@ const StudentDatabasePage = () => {
 
             {/* Main Content */}
             <Container maxWidth="xl" sx={{ py: 4 }}>
+                <AdminOrgTabs />
+                {/* `key` remounts StudentTable when admin switches orgs so its
+                    internal state (filters, cached students) fully resets. */}
                 <StudentTable
+                    key={user?.role === 'admin' ? `org:${adminOrg}` : 'fixed'}
                     consultants={consultants}
                     teamLeads={teamLeads}
                     currentUserRole={user?.role}

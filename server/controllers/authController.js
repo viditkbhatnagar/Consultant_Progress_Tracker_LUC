@@ -164,6 +164,7 @@ const sendTokenResponse = (user, statusCode, res) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            organization: user.organization,
             teamName: user.teamName,
             teamLead: user.teamLead,
         },

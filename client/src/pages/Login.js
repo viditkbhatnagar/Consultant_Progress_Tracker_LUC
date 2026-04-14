@@ -53,8 +53,12 @@ const Login = () => {
                 navigate('/team-lead/dashboard');
             } else if (user.role === 'manager') {
                 navigate('/student-database');
+            } else if (user.role === 'skillhub') {
+                navigate('/skillhub/dashboard');
             } else if (user.role === 'consultant') {
                 navigate('/consultant/dashboard');
+            } else {
+                navigate('/');
             }
         } else {
             setError(result.message || 'Login failed');
@@ -80,9 +84,7 @@ const Login = () => {
                 <Grid container spacing={0} alignItems="center" sx={{ minHeight: '600px' }}>
                     {/* Logo Side - Left */}
                     <Grid
-                        item
-                        xs={12}
-                        md={6}
+                        size={{ xs: 12, md: 6 }}
                         sx={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -92,17 +94,63 @@ const Login = () => {
                         }}
                     >
                         <Box sx={{ textAlign: 'center', width: '100%' }}>
-                            <img
-                                src="/LUC-new-logo-svg-1.svg"
-                                alt="LUC Logo"
-                                style={{
-                                    width: '100%',
-                                    maxWidth: '500px',
-                                    height: 'auto',
-                                    marginBottom: '2rem',
-                                    filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.1))',
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: { xs: 3, md: 5 },
+                                    mb: '2.5rem',
+                                    flexWrap: 'nowrap',
                                 }}
-                            />
+                            >
+                                <Box
+                                    sx={{
+                                        flex: '0 0 auto',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <img
+                                        src="/LUC-new-logo-svg-1.svg"
+                                        alt="LUC Logo"
+                                        style={{
+                                            height: 'auto',
+                                            width: 'clamp(210px, 28vw, 400px)',
+                                            objectFit: 'contain',
+                                            filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.1))',
+                                        }}
+                                    />
+                                </Box>
+                                <Box
+                                    sx={{
+                                        width: '1px',
+                                        alignSelf: 'stretch',
+                                        minHeight: { xs: 80, md: 120 },
+                                        bgcolor: 'rgba(0,0,0,0.12)',
+                                        display: { xs: 'none', sm: 'block' },
+                                    }}
+                                />
+                                <Box
+                                    sx={{
+                                        flex: '0 0 auto',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <img
+                                        src="/skillhub-logo.jpeg"
+                                        alt="Skillhub Logo"
+                                        style={{
+                                            height: 'auto',
+                                            width: 'clamp(140px, 18vw, 220px)',
+                                            objectFit: 'contain',
+                                            borderRadius: '16px',
+                                            filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.1))',
+                                        }}
+                                    />
+                                </Box>
+                            </Box>
                             <Typography
                                 variant="h3"
                                 sx={{
@@ -135,17 +183,25 @@ const Login = () => {
 
                     {/* Login Form Side - Right */}
                     <Grid
-                        item
-                        xs={12}
-                        md={6}
+                        size={{ xs: 12, md: 6 }}
                         sx={{
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'center',
-                            p: { xs: 3, md: 6 },
+                            pt: { xs: 3, md: 6 },
+                            pb: { xs: 3, md: 6 },
+                            pl: { xs: 3, md: 6 },
+                            pr: { xs: 3, md: 0 },
                         }}
                     >
-                        <Box sx={{ maxWidth: '450px', mx: 'auto', width: '100%' }}>
+                        <Box
+                            sx={{
+                                maxWidth: '450px',
+                                width: '100%',
+                                mr: { xs: 'auto', md: 0 },
+                                ml: { xs: 'auto', md: 'auto' },
+                            }}
+                        >
                             <Box sx={{ mb: 4 }}>
                                 <Typography
                                     variant="h4"
