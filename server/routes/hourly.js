@@ -14,6 +14,7 @@ const {
     getMonthReferences,
     getAIAnalysis,
     getLeaderboard,
+    getWeeklyLeaderboard,
 } = require('../controllers/hourlyController');
 const { protect } = require('../middleware/auth');
 
@@ -24,6 +25,7 @@ router.use(protect);
 
 router.get('/ai-analysis', getAIAnalysis);
 router.get('/leaderboard', getLeaderboard);
+router.get('/leaderboard/weekly', getWeeklyLeaderboard);
 router.get('/consultants', getConsultants);
 router.get('/day', getDayActivities);
 router.put('/slot', upsertSlot);

@@ -116,6 +116,13 @@ const getLeaderboard = async (date) => {
     return response.data;
 };
 
+const getWeeklyLeaderboard = async (date) => {
+    const response = await axios.get(`${API_URL}/leaderboard/weekly`, {
+        params: { date, ...adminOrgParam() },
+    });
+    return response.data;
+};
+
 const hourlyService = {
     getConsultants,
     getDayActivities,
@@ -132,6 +139,7 @@ const hourlyService = {
     getAIAnalysis,
     getTeamLeads,
     getLeaderboard,
+    getWeeklyLeaderboard,
 };
 
 export default hourlyService;
