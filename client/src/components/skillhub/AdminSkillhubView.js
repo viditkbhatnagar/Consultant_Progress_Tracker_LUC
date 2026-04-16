@@ -55,8 +55,44 @@ const AdminSkillhubView = () => {
     const [counselors, setCounselors] = useState([]);
     const [commitments, setCommitments] = useState([]);
     const [stats, setStats] = useState({ newAdmissions: 0, activeStudents: 0 });
+    const [branchTotals, setBranchTotals] = useState({});
+    const [autoPickDone, setAutoPickDone] = useState(false);
 
     const activeBranch = BRANCHES[branchTab].key;
+
+    // Fetch per-branch commitment + student counts once so the tab labels and
+    // KPIs make it obvious where the data is. Admin used to default to the
+    // Training tab and wrongly conclude "no Skillhub data" when the
+    // records were under Institute.
+    const loadBranchTotals = useCallback(async () => {
+        try {
+            const results = await Promise.all(
+                BRANCHES.flatMap((b) => [
+                    commitmentService.getCommitments({ organization: b.key }),
+                    studentService.getStudents({ organization: b.key }),
+                ])
+            );
+            const totals = {};
+            BRANCHES.forEach((b, i) => {
+                const commits = results[i * 2]?.data || [];
+                const students = results[i * 2 + 1]?.data || [];
+                totals[b.key] = { commitments: commits.length, students: students.length };
+            });
+            setBranchTotals(totals);
+
+            // Auto-pick the first branch with data on first render only, so
+            // admin lands on the branch that actually has records.
+            if (!autoPickDone) {
+                setAutoPickDone(true);
+                const firstWithData = BRANCHES.findIndex(
+                    (b) => (totals[b.key]?.commitments || 0) + (totals[b.key]?.students || 0) > 0
+                );
+                if (firstWithData > 0) setBranchTab(firstWithData);
+            }
+        } catch {
+            // non-fatal — branch data below still loads
+        }
+    }, [autoPickDone]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -81,6 +117,7 @@ const AdminSkillhubView = () => {
         }
     }, [activeBranch]);
 
+    useEffect(() => { loadBranchTotals(); }, [loadBranchTotals]);
     useEffect(() => { load(); }, [load]);
 
     return (
@@ -91,9 +128,19 @@ const AdminSkillhubView = () => {
                 </Typography>
                 <Paper>
                     <Tabs value={branchTab} onChange={(_, v) => setBranchTab(v)}>
-                        {BRANCHES.map((b) => (
-                            <Tab key={b.key} label={ORGANIZATION_LABELS[b.key]} />
-                        ))}
+                        {BRANCHES.map((b) => {
+                            const t = branchTotals[b.key];
+                            const badge =
+                                t
+                                    ? ` · ${t.commitments || 0}C · ${t.students || 0}S`
+                                    : '';
+                            return (
+                                <Tab
+                                    key={b.key}
+                                    label={`${ORGANIZATION_LABELS[b.key]}${badge}`}
+                                />
+                            );
+                        })}
                     </Tabs>
                 </Paper>
             </Box>
