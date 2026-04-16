@@ -29,7 +29,13 @@ import studentService from '../../services/studentService';
 import SkillhubStudentFormDialog from './SkillhubStudentFormDialog';
 import ActivateStudentDialog from './ActivateStudentDialog';
 
-const SkillhubStudentTable = ({ counselors, onChange }) => {
+// `organization` prop is used when this table is rendered by the admin inside
+// the Skillhub view — it forces the read/write scope to the selected branch
+// (skillhub_training or skillhub_institute) regardless of the admin's global
+// LUC/Skillhub scope. When the table is rendered on a skillhub user's own
+// dashboard, the prop is omitted and the server scopes to their organization
+// implicitly.
+const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
     const [statusTab, setStatusTab] = useState('new_admission');
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -44,14 +50,17 @@ const SkillhubStudentTable = ({ counselors, onChange }) => {
         setLoading(true);
         setError('');
         try {
-            const res = await studentService.getStudents({ studentStatus: statusTab });
+            const res = await studentService.getStudents({
+                studentStatus: statusTab,
+                ...(organization ? { organization } : {}),
+            });
             setStudents(res.data || []);
         } catch (e) {
             setError(e.response?.data?.message || 'Failed to load students');
         } finally {
             setLoading(false);
         }
-    }, [statusTab]);
+    }, [statusTab, organization]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -66,10 +75,25 @@ const SkillhubStudentTable = ({ counselors, onChange }) => {
     };
 
     const handleSave = async (formData) => {
+        // When admin creates from inside a branch, the backend requires a
+        // teamLeadId. Derive it from the chosen counselor (whose teamLead FK
+        // points to the branch's skillhub login). Skillhub users don't need
+        // to send this — the server uses req.user.id.
+        let payload = formData;
+        if (organization && !editingStudent) {
+            const chosen = counselors.find((c) => c._id === formData.consultantId);
+            const teamLeadId =
+                chosen?.teamLead?._id || chosen?.teamLead || undefined;
+            payload = {
+                ...formData,
+                organization,
+                ...(teamLeadId ? { teamLeadId } : {}),
+            };
+        }
         if (editingStudent) {
-            await studentService.updateStudent(editingStudent._id, formData);
+            await studentService.updateStudent(editingStudent._id, payload);
         } else {
-            await studentService.createStudent(formData);
+            await studentService.createStudent(payload);
         }
         await load();
         onChange?.();

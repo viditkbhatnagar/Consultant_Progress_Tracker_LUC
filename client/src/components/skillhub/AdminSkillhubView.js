@@ -128,7 +128,12 @@ const AdminSkillhubView = () => {
                     </Paper>
 
                     {subTab === 0 ? (
-                        <SkillhubStudentTable counselors={counselors} onChange={load} />
+                        <SkillhubStudentTable
+                            key={activeBranch}
+                            counselors={counselors}
+                            organization={activeBranch}
+                            onChange={load}
+                        />
                     ) : (
                         <Paper sx={{ p: 2 }}>
                             {commitments.length === 0 ? (

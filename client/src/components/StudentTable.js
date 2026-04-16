@@ -38,6 +38,7 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import studentService from '../services/studentService';
 import exportService from '../services/exportService';
 import StudentFormDialog from './StudentFormDialog';
+import { getAdminOrgScope } from '../utils/adminOrgScope';
 
 // University options for filter
 const UNIVERSITIES = [
@@ -132,10 +133,14 @@ const StudentTable = ({
     });
     const [showFilters, setShowFilters] = useState(true);
 
-    // Load students
+    // Load students. Admins must scope to their currently selected org
+    // (LUC vs Skillhub) — explicit pass-through so bifurcation is guaranteed
+    // regardless of axios interceptor state.
     const loadStudents = useCallback(async () => {
         try {
             setLoading(true);
+            const organization =
+                currentUserRole === 'admin' ? getAdminOrgScope() : undefined;
             const response = await studentService.getStudents({
                 startDate: filters.startDate ? format(filters.startDate, 'yyyy-MM-dd') : undefined,
                 endDate: filters.endDate ? format(filters.endDate, 'yyyy-MM-dd') : undefined,
@@ -147,6 +152,7 @@ const StudentTable = ({
                 source: filters.source || undefined,
                 conversionOperator: filters.conversionOperator || undefined,
                 conversionDays: filters.conversionDays || undefined,
+                organization,
             });
             setStudents(response.data || []);
             setError('');
@@ -155,7 +161,7 @@ const StudentTable = ({
         } finally {
             setLoading(false);
         }
-    }, [filters.startDate, filters.endDate, filters.consultant, filters.university, filters.team, filters.month, filters.program, filters.source, filters.conversionOperator, filters.conversionDays]);
+    }, [filters.startDate, filters.endDate, filters.consultant, filters.university, filters.team, filters.month, filters.program, filters.source, filters.conversionOperator, filters.conversionDays, currentUserRole]);
 
     useEffect(() => {
         loadStudents();
