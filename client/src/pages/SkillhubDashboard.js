@@ -31,7 +31,7 @@ import studentService from '../services/studentService';
 import SkillhubSidebar, { DRAWER_WIDTH } from '../components/skillhub/SkillhubSidebar';
 import SkillhubStudentTable from '../components/skillhub/SkillhubStudentTable';
 import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFormDialog';
-import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
+import SkillhubCommitmentDialog from '../components/skillhub/SkillhubCommitmentDialog';
 import AISummaryCard from '../components/AISummaryCard';
 import {
     LeadStageChart,
@@ -236,12 +236,17 @@ const SkillhubDashboard = () => {
                                     <TableCell>Commitment</TableCell>
                                     <TableCell>Stage</TableCell>
                                     <TableCell>Status</TableCell>
+                                    <TableCell align="center">Demos</TableCell>
                                     <TableCell align="right">%</TableCell>
                                     <TableCell align="center">Actions</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {commitments.map((c) => (
+                                {commitments.map((c) => {
+                                    const demos = c.demos || [];
+                                    const scheduled = demos.filter((d) => d.scheduledAt).length;
+                                    const done = demos.filter((d) => d.done).length;
+                                    return (
                                     <TableRow hover key={c._id}>
                                         <TableCell>W{c.weekNumber}/{c.year}</TableCell>
                                         <TableCell>{c.consultantName}</TableCell>
@@ -259,6 +264,49 @@ const SkillhubDashboard = () => {
                                             />
                                         </TableCell>
                                         <TableCell>{c.status}</TableCell>
+                                        <TableCell align="center">
+                                            <Tooltip
+                                                arrow
+                                                title={
+                                                    demos.length === 0 ? (
+                                                        'No demos'
+                                                    ) : (
+                                                        <Box sx={{ p: 0.5, minWidth: 220 }}>
+                                                            {['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].map((slot) => {
+                                                                const d = demos.find((x) => x.slot === slot);
+                                                                return (
+                                                                    <Box key={slot} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, fontSize: 12, py: 0.2 }}>
+                                                                        <span style={{ fontWeight: 700 }}>{slot}</span>
+                                                                        <span>
+                                                                            {d?.scheduledAt
+                                                                                ? new Date(d.scheduledAt).toLocaleString([], {
+                                                                                      month: 'short',
+                                                                                      day: 'numeric',
+                                                                                      hour: '2-digit',
+                                                                                      minute: '2-digit',
+                                                                                  })
+                                                                                : '—'}
+                                                                            {d?.done && ' ✓'}
+                                                                        </span>
+                                                                    </Box>
+                                                                );
+                                                            })}
+                                                        </Box>
+                                                    )
+                                                }
+                                            >
+                                                <Chip
+                                                    label={`${scheduled}/4 · ${done} done`}
+                                                    size="small"
+                                                    sx={{
+                                                        bgcolor: done > 0 ? '#dcfce7' : scheduled > 0 ? '#dbeafe' : 'rgba(0,0,0,0.05)',
+                                                        color: done > 0 ? '#14532d' : scheduled > 0 ? '#1e3a8a' : '#64748b',
+                                                        fontWeight: 600,
+                                                        cursor: 'help',
+                                                    }}
+                                                />
+                                            </Tooltip>
+                                        </TableCell>
                                         <TableCell align="right">{c.achievementPercentage || 0}%</TableCell>
                                         <TableCell align="center">
                                             <Tooltip title="Edit">
@@ -268,7 +316,8 @@ const SkillhubDashboard = () => {
                                             </Tooltip>
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </TableContainer>
@@ -372,7 +421,7 @@ const SkillhubDashboard = () => {
                 counselors={counselors}
             />
 
-            <TeamLeadCommitmentDialog
+            <SkillhubCommitmentDialog
                 open={commitmentDialogOpen}
                 onClose={() => setCommitmentDialogOpen(false)}
                 onSave={handleSaveCommitment}

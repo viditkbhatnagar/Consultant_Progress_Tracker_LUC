@@ -1,6 +1,58 @@
 const Commitment = require('../models/Commitment');
 const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
+const { isSkillhub } = require('../config/organizations');
+
+// Sanitize + validate Skillhub demo slots before save.
+// Rules:
+//   • `done: true` requires a `scheduledAt`.
+//   • `doneAt` is server-set to `now` whenever `done` flips to true and no
+//     doneAt is present (or existing doneAt was cleared).
+//   • Clearing `done` also clears `doneAt`.
+//   • Only 4 distinct slot labels allowed: Demo 1, Demo 2, Demo 3, Demo 4.
+function normalizeDemos(input, existing = []) {
+    if (!Array.isArray(input)) return { ok: true, demos: [] };
+    const byLabel = new Map();
+    for (const e of existing) byLabel.set(e.slot, e);
+
+    const cleaned = [];
+    const seen = new Set();
+    for (const raw of input) {
+        if (!raw || !raw.slot) continue;
+        if (!['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].includes(raw.slot)) continue;
+        if (seen.has(raw.slot)) continue;
+        seen.add(raw.slot);
+
+        const prev = byLabel.get(raw.slot) || {};
+        const scheduledAt = raw.scheduledAt || null;
+        const done = !!raw.done;
+
+        if (done && !scheduledAt) {
+            return {
+                ok: false,
+                error: `${raw.slot}: cannot be marked Done without a scheduled time.`,
+            };
+        }
+
+        let doneAt = null;
+        if (done) {
+            // Preserve prior doneAt if still done; else stamp now.
+            doneAt = prev.done && prev.doneAt ? prev.doneAt : new Date();
+            if (doneAt > new Date()) doneAt = new Date();
+        }
+
+        cleaned.push({
+            slot: raw.slot,
+            scheduledAt,
+            done,
+            doneAt,
+            notes: (raw.notes || '').toString().trim(),
+        });
+    }
+    // Stable sort by slot number so the stored order matches the UI
+    cleaned.sort((a, b) => a.slot.localeCompare(b.slot));
+    return { ok: true, demos: cleaned };
+}
 
 // @desc    Get commitments
 // @route   GET /api/commitments
@@ -97,6 +149,18 @@ exports.createCommitment = async (req, res, next) => {
             req.body.achievementPercentage = 100;
         }
 
+        // Skillhub-only: validate + normalize demo slots
+        if (isSkillhub(req.body.organization) && req.body.demos !== undefined) {
+            const result = normalizeDemos(req.body.demos);
+            if (!result.ok) {
+                return res.status(400).json({ success: false, message: result.error });
+            }
+            req.body.demos = result.demos;
+        } else if (!isSkillhub(req.body.organization)) {
+            // Never store demos on LUC commitments
+            delete req.body.demos;
+        }
+
         const commitment = await Commitment.create(req.body);
 
         res.status(201).json({
@@ -146,6 +210,18 @@ exports.updateCommitment = async (req, res, next) => {
 
         // Update last modified info
         req.body.lastUpdatedBy = req.user.id;
+
+        // Skillhub-only: validate + normalize demo slots (preserves prior doneAt).
+        if (isSkillhub(commitment.organization) && req.body.demos !== undefined) {
+            const result = normalizeDemos(req.body.demos, commitment.demos || []);
+            if (!result.ok) {
+                return res.status(400).json({ success: false, message: result.error });
+            }
+            req.body.demos = result.demos;
+        } else if (!isSkillhub(commitment.organization)) {
+            // Never mutate demos on LUC commitments — strip if client sent any.
+            delete req.body.demos;
+        }
 
         commitment = await Commitment.findByIdAndUpdate(req.params.id, req.body, {
             new: true,
