@@ -27,39 +27,48 @@ const StudentDatabasePage = () => {
     const [consultants, setConsultants] = useState([]);
     const [teamLeads, setTeamLeads] = useState([]);
 
-    // Load consultants — for admin, the global axios interceptor auto-filters
-    // by the current LUC/Skillhub scope. For team_lead/manager, scoping is
-    // implicit via their organization.
+    // Load consultants scoped to the admin's current LUC/Skillhub selection
+    // (explicit — not reliant on the axios interceptor). Non-admin roles
+    // are auto-scoped server-side by their own organization.
     const loadConsultants = useCallback(async () => {
         try {
-            const response = await consultantService.getConsultants();
+            const filters =
+                user?.role === 'admin' ? { organization: adminOrg } : {};
+            const response = await consultantService.getConsultants(filters);
             setConsultants(response.data || []);
         } catch (err) {
             console.error('Failed to load consultants:', err);
         }
-    }, [adminOrg]);
+    }, [adminOrg, user?.role]);
 
-    // Load team leads
+    // Load team leads / branch owners — scoped by admin's current org.
+    // - LUC admin tab: shows team_lead users.
+    // - Skillhub admin tabs: shows the skillhub branch login for that org
+    //   (admin uses this to pick which branch a new student is assigned to).
     const loadTeamLeads = useCallback(async () => {
         if (user?.role === 'admin') {
-            // Admin can see all team leads
             try {
                 const data = await getUsers();
                 const users = data.data || data || [];
-                setTeamLeads(users.filter(u => u.role === 'team_lead'));
+                const filtered = users.filter((u) => {
+                    if (adminOrg === 'luc') return u.role === 'team_lead';
+                    return u.role === 'skillhub' && u.organization === adminOrg;
+                });
+                setTeamLeads(filtered);
             } catch (err) {
                 console.error('Failed to load team leads:', err);
             }
-        } else if (user?.role === 'team_lead') {
-            // Team lead can see themselves as an option
-            setTeamLeads([{
-                _id: user._id,
-                name: user.name,
-                teamName: user.teamName,
-                role: 'team_lead'
-            }]);
+        } else if (user?.role === 'team_lead' || user?.role === 'skillhub') {
+            setTeamLeads([
+                {
+                    _id: user._id || user.id,
+                    name: user.name,
+                    teamName: user.teamName,
+                    role: user.role,
+                },
+            ]);
         }
-    }, [user]);
+    }, [user, adminOrg]);
 
     useEffect(() => {
         loadConsultants();
