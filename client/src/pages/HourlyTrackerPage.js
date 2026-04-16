@@ -31,6 +31,8 @@ import consultantService from '../services/consultantService';
 import { exportToExcel, exportToCSV } from '../services/exportService';
 import AdminOrgTabs from '../components/AdminOrgTabs';
 import { useAdminOrgScope } from '../utils/adminOrgScope';
+import { resolveViewOrg, isSkillhubOrg } from '../utils/hourlyConfig';
+import SkillhubHourlyTrackerPage from './SkillhubHourlyTrackerPage';
 
 // ─── CONSTANTS ───────────────────────────────────────────────
 const SLOTS = [
@@ -108,8 +110,22 @@ function getCurrentSlotId() {
     return null;
 }
 
-// ─── COMPONENT ───────────────────────────────────────────────
+// ─── DISPATCHER ──────────────────────────────────────────────
+// Thin wrapper so hooks order is constant inside each real component.
+// Skillhub view rendered by SkillhubHourlyTrackerPage; LUC view by
+// LucHourlyTrackerPage below.
 const HourlyTrackerPage = () => {
+    const { user } = useAuth();
+    const [adminOrgScope] = useAdminOrgScope();
+    const viewOrg = resolveViewOrg(user, adminOrgScope);
+    if (isSkillhubOrg(viewOrg)) {
+        return <SkillhubHourlyTrackerPage />;
+    }
+    return <LucHourlyTrackerPage />;
+};
+
+// ─── LUC COMPONENT ───────────────────────────────────────────
+const LucHourlyTrackerPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const dateInputRef = useRef(null);

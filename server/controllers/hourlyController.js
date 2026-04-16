@@ -3,8 +3,14 @@ const DailyAdmission = require('../models/DailyAdmission');
 const DailyReference = require('../models/DailyReference');
 const Consultant = require('../models/Consultant');
 const AIUsage = require('../models/AIUsage');
-const { SLOTS, getContinuationSlots } = require('../utils/hourlyConstants');
+const {
+    SLOTS,
+    getContinuationSlots,
+    getSlotsForOrg,
+    SKILLHUB_ACTIVITY_TYPES,
+} = require('../utils/hourlyConstants');
 const { buildScopeFilter } = require('../middleware/auth');
+const { isSkillhub } = require('../config/organizations');
 const OpenAI = require('openai');
 
 // Hourly activity docs don't have teamLead FK, so strip it before using the
@@ -37,8 +43,14 @@ function isTodayOrFutureStr(dateStr) {
     return dateStr >= todayStr;
 }
 
-// Activity types that are locked once saved (cannot be edited or deleted)
+// LUC activity types that are locked once saved (cannot be edited or deleted).
+// Skillhub has no locked types for now — all 7 Skillhub activities stay editable.
 const LOCKED_TYPES = ['call', 'followup', 'call_followup'];
+
+// Helper: true if this activity slug is a Skillhub activity (sh_* prefix).
+function isSkillhubActivity(activityType) {
+    return SKILLHUB_ACTIVITY_TYPES.includes(activityType);
+}
 
 // Helper: check if date is exactly today (for strict validation)
 function isTodayStr(dateStr) {
@@ -136,8 +148,8 @@ exports.upsertSlot = async (req, res, next) => {
         }
         const organization = consultantDoc.organization;
 
-        // Check if existing entry is locked (call/followup/call_followup cannot be changed — admin can override)
-        if (req.user.role !== 'admin') {
+        // LUC: some activity types are locked once saved. Skillhub has no locks.
+        if (req.user.role !== 'admin' && !isSkillhub(organization)) {
             const existing = await HourlyActivity.findOne({
                 consultant: consultantId,
                 date: dateObj,
@@ -159,8 +171,10 @@ exports.upsertSlot = async (req, res, next) => {
             parentSlotId: slotId,
         });
 
-        // Upsert the main slot
-        const slotDef = SLOTS.find((s) => s.id === slotId);
+        // Upsert the main slot — use the org's slot list so continuation math
+        // correctly skips each org's lunch gap (LUC 1-2 PM, Skillhub 2-3 PM).
+        const orgSlots = getSlotsForOrg(organization);
+        const slotDef = orgSlots.find((s) => s.id === slotId);
         const dur = duration || (slotDef ? slotDef.mins : 60);
 
         const activity = await HourlyActivity.findOneAndUpdate(
@@ -185,7 +199,7 @@ exports.upsertSlot = async (req, res, next) => {
 
         // Create continuation slots if duration exceeds slot time
         if (slotDef && dur > slotDef.mins) {
-            const contSlots = getContinuationSlots(slotId, dur);
+            const contSlots = getContinuationSlots(slotId, dur, organization);
             for (const csid of contSlots) {
                 await HourlyActivity.findOneAndUpdate(
                     { consultant: consultantId, date: dateObj, slotId: csid },
@@ -538,6 +552,285 @@ exports.getMonthReferences = async (req, res, next) => {
     }
 };
 
+// Determine the org whose data is being viewed (admin with ?organization=X
+// overrides their own role's org; non-admin uses their own org).
+function resolveViewOrg(req) {
+    if (req.user.role === 'admin') {
+        return req.query.organization || 'luc';
+    }
+    return req.user.organization || 'luc';
+}
+
+// Skillhub-specific AI analysis: aggregates the 7 Skillhub activity types
+// (sh_call, sh_followup_admission, sh_schedule, sh_break, sh_demo_meeting,
+// sh_payment_followup, sh_operations) and uses a coaching-institute-specific
+// prompt instead of the LUC one.
+async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, consultants }) {
+    const stats = {};
+    for (const c of consultants) {
+        stats[c._id.toString()] = {
+            name: c.name,
+            team: c.teamLead?.teamName || 'Unknown',
+            calls: 0,
+            followupAdmissions: 0,
+            schedules: 0,
+            breaks: 0,
+            demoMeetings: 0,
+            demoMinutes: 0,
+            paymentFollowups: 0,
+            operations: [],
+            activeSlots: 0,
+            admissions: 0,
+        };
+    }
+
+    for (const act of activities) {
+        const s = stats[act.consultant.toString()];
+        if (!s) continue;
+        s.activeSlots++;
+        switch (act.activityType) {
+            case 'sh_call':
+                s.calls += act.count || 1;
+                break;
+            case 'sh_followup_admission':
+                s.followupAdmissions += act.count || 1;
+                break;
+            case 'sh_schedule':
+                s.schedules++;
+                break;
+            case 'sh_break':
+                s.breaks++;
+                break;
+            case 'sh_demo_meeting':
+                s.demoMeetings++;
+                s.demoMinutes += act.duration || 60;
+                break;
+            case 'sh_payment_followup':
+                s.paymentFollowups += act.count || 1;
+                break;
+            case 'sh_operations':
+                s.operations.push(act.note || 'No note');
+                break;
+            default:
+                break;
+        }
+    }
+
+    for (const adm of dayAdmissions) {
+        const s = stats[adm.consultant.toString()];
+        if (s) s.admissions += adm.count || 0;
+    }
+
+    const totals = {
+        calls: 0, followupAdmissions: 0, schedules: 0, demoMeetings: 0,
+        demoMinutes: 0, paymentFollowups: 0, operations: 0,
+        admissions: 0, active: 0,
+    };
+    const summaries = [];
+    for (const s of Object.values(stats)) {
+        if (s.activeSlots === 0 && s.admissions === 0) continue;
+        totals.active++;
+        totals.calls += s.calls;
+        totals.followupAdmissions += s.followupAdmissions;
+        totals.schedules += s.schedules;
+        totals.demoMeetings += s.demoMeetings;
+        totals.demoMinutes += s.demoMinutes;
+        totals.paymentFollowups += s.paymentFollowups;
+        totals.operations += s.operations.length;
+        totals.admissions += s.admissions;
+        summaries.push(s);
+    }
+
+    if (summaries.length === 0) {
+        return res.status(200).json({ success: true, data: 'No activity data found for this date.' });
+    }
+
+    // Weight: admissions >> demo meetings >> follow-up admissions >
+    // payment follow-ups > calling > schedule; break/operations don't score.
+    summaries.sort((a, b) => {
+        const score = (s) =>
+            s.admissions * 15 + s.demoMeetings * 6 + s.followupAdmissions * 4 +
+            s.paymentFollowups * 3 + s.calls * 1 + s.schedules * 0.5;
+        return score(a) - score(b);
+    });
+
+    const prompt = `Analyze the following Skillhub counselor daily performance data for ${date}.
+
+TEAM TOTALS:
+- Active counselors: ${totals.active} out of ${consultants.length}
+- Calling sessions: ${totals.calls}
+- Follow up — Admission: ${totals.followupAdmissions}
+- Schedule slots: ${totals.schedules}
+- Demo Meetings: ${totals.demoMeetings} (${(totals.demoMinutes / 60).toFixed(1)} hours)
+- Payment follow-ups: ${totals.paymentFollowups}
+- Operations (non-productive): ${totals.operations}
+- Admissions closed: ${totals.admissions}
+
+PER-COUNSELOR BREAKDOWN (worst to best):
+${summaries.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations.length} operations${s.operations.length > 0 ? ' [Notes: ' + s.operations.join('; ') + ']' : ''}, ${s.admissions} admissions`).join('\n')}
+
+INACTIVE COUNSELORS:
+${consultants.filter(c => !summaries.find(s => s.name === c.name)).map(c => `- ${c.name}`).join('\n') || 'None'}
+
+Structure your response EXACTLY as follows using markdown:
+
+## Daily Performance Overview
+Brief 2-3 line team summary with key metrics.
+
+## Personalised Counselor Recommendations
+Go through EACH counselor from WORST to BEST. For each:
+### [Counselor Name] — [Rating: Needs Improvement / Average / Good / Excellent]
+- What they did today (1 line summary)
+- Specific recommendation for them (actionable, tailored to coaching-institute workflow)
+
+## Operations Issues
+List any operations entries with their notes and what action should be taken.
+
+## Top 3 Action Items for Tomorrow
+Numbered list of the most impactful things the team should focus on — prioritize demo meetings, follow-up admissions, and payment collection.`;
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: 'You are a senior performance analyst for a coaching institute (Skillhub) handling IGCSE/CBSE student admissions. Provide structured, data-driven analysis with personalised recommendations for each counselor. Use markdown formatting with headers, bold, and bullet points.' },
+            { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 3000,
+    });
+
+    const analysis = completion.choices[0]?.message?.content || 'No analysis generated';
+    const usage = completion.usage || {};
+    const promptTokens = usage.prompt_tokens || 0;
+    const completionTokens = usage.completion_tokens || 0;
+    const cost = (promptTokens * 0.00000015) + (completionTokens * 0.0000006);
+
+    await AIUsage.create({
+        user: req.user.id,
+        role: req.user.role,
+        model: 'gpt-4o-mini',
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        cost,
+        dateRangeQueried: { startDate: date, endDate: date },
+    });
+
+    return res.status(200).json({ success: true, data: analysis });
+}
+
+// Skillhub leaderboard: same weighting as the analysis scoring above.
+async function runSkillhubLeaderboard(req, res, { date, activities, dayAdmissions, consultants }) {
+    const stats = {};
+    for (const c of consultants) {
+        stats[c._id.toString()] = {
+            name: c.name,
+            team: c.teamLead?.teamName || 'Unknown',
+            calls: 0, followupAdmissions: 0, schedules: 0,
+            demoMeetings: 0, demoMinutes: 0,
+            paymentFollowups: 0, operations: 0, admissions: 0, activeSlots: 0,
+        };
+    }
+    for (const act of activities) {
+        const s = stats[act.consultant.toString()];
+        if (!s) continue;
+        s.activeSlots++;
+        switch (act.activityType) {
+            case 'sh_call': s.calls += act.count || 1; break;
+            case 'sh_followup_admission': s.followupAdmissions += act.count || 1; break;
+            case 'sh_schedule': s.schedules++; break;
+            case 'sh_demo_meeting':
+                s.demoMeetings++;
+                s.demoMinutes += act.duration || 60;
+                break;
+            case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
+            case 'sh_operations': s.operations++; break;
+            default: break;
+        }
+    }
+    for (const adm of dayAdmissions) {
+        const s = stats[adm.consultant.toString()];
+        if (s) s.admissions += adm.count || 0;
+    }
+    const active = Object.values(stats).filter(s => s.activeSlots > 0 || s.admissions > 0);
+    if (active.length === 0) {
+        return res.status(200).json({ success: true, data: 'No activity data found for this date.' });
+    }
+
+    const prompt = `You are ranking Skillhub counselors for a daily leaderboard on ${date}.
+
+Here is each counselor's data for today:
+${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
+
+RANKING CRITERIA (weights):
+- Admissions closed are the highest value — most weight
+- Demo Meetings convert students — high weight
+- Follow-up Admission pushes deals forward — medium-high weight
+- Payment follow-up is important for cashflow — medium weight
+- Calling drives pipeline volume — medium weight
+- Schedule is lower weight (planning, not execution)
+- Operations are non-productive — lowers rank
+- Reward balance across activities over single-metric dominance
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+## 🏆 Daily Leaderboard
+
+### 🥇 1st Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary in 1 line]
+- [Why they earned 1st place]
+
+### 🥈 2nd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 2nd]
+
+### 🥉 3rd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 3rd]
+
+## Full Rankings
+4. **[Name]** — Score: [X]/100 — [brief reason]
+5. **[Name]** — Score: [X]/100 — [brief reason]
+(continue for all active counselors)
+
+## Key Takeaway
+One sentence about what the top performers did differently today.`;
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: 'You are a fair and data-driven performance ranker for a coaching institute. Rank counselors based on their daily activity using weighted scoring. Be concise. Use markdown.' },
+            { role: 'user', content: prompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 2000,
+    });
+
+    const leaderboard = completion.choices[0]?.message?.content || 'No leaderboard generated';
+    const usage = completion.usage || {};
+    const promptTokens = usage.prompt_tokens || 0;
+    const completionTokens = usage.completion_tokens || 0;
+    const cost = (promptTokens * 0.00000015) + (completionTokens * 0.0000006);
+
+    await AIUsage.create({
+        user: req.user.id,
+        role: req.user.role,
+        model: 'gpt-4o-mini',
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        cost,
+        dateRangeQueried: { startDate: date, endDate: date },
+    });
+
+    return res.status(200).json({ success: true, data: leaderboard });
+}
+
 // @desc    Get AI analysis of hourly tracker data for a given date
 // @route   GET /api/hourly/ai-analysis
 // @access  Private
@@ -551,17 +844,22 @@ exports.getAIAnalysis = async (req, res, next) => {
         const dateObj = parseDate(date);
         const scope = hourlyScopeFilter(req);
         const consultantScope = buildScopeFilter(req);
+        const viewOrg = resolveViewOrg(req);
 
-        // Get all non-continuation activities for the date
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
-
-        // Get all admissions for the date
         const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
-
-        // Get all active consultants in scope
         const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
 
-        // Build per-consultant stats
+        if (isSkillhub(viewOrg)) {
+            return await runSkillhubAnalysis(req, res, {
+                date,
+                activities,
+                dayAdmissions,
+                consultants,
+            });
+        }
+
+        // ── LUC flow (original) ──────────────────────────────────────
         const consultantStats = {};
 
         for (const c of consultants) {
@@ -769,9 +1067,16 @@ exports.getLeaderboard = async (req, res, next) => {
         const dateObj = parseDate(date);
         const scope = hourlyScopeFilter(req);
         const consultantScope = buildScopeFilter(req);
+        const viewOrg = resolveViewOrg(req);
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
         const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
         const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
+
+        if (isSkillhub(viewOrg)) {
+            return await runSkillhubLeaderboard(req, res, {
+                date, activities, dayAdmissions, consultants,
+            });
+        }
 
         const consultantStats = {};
         for (const c of consultants) {
