@@ -1,6 +1,24 @@
 const mongoose = require('mongoose');
 const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 
+// Skillhub-only: a commitment can carry up to 4 scheduled demo slots.
+// Each slot tracks when the demo is scheduled, whether it has been completed,
+// and when it was marked complete. LUC commitments ignore this field.
+const DemoSlotSchema = new mongoose.Schema(
+    {
+        slot: {
+            type: String,
+            enum: ['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'],
+            required: true,
+        },
+        scheduledAt: { type: Date, default: null },
+        done: { type: Boolean, default: false },
+        doneAt: { type: Date, default: null },
+        notes: { type: String, default: '', trim: true },
+    },
+    { _id: false }
+);
+
 const CommitmentSchema = new mongoose.Schema(
     {
         organization: {
@@ -98,6 +116,11 @@ const CommitmentSchema = new mongoose.Schema(
             type: Number,
             default: 0,
             min: 0,
+        },
+        // Skillhub-only: up to 4 demo slots. Ignored for LUC.
+        demos: {
+            type: [DemoSlotSchema],
+            default: [],
         },
         achievementPercentage: {
             type: Number,
