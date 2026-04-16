@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
+const {
+    ALL_SLOT_IDS,
+    ALL_ACTIVITY_TYPES,
+} = require('../utils/hourlyConstants');
 
 const HourlyActivitySchema = new mongoose.Schema(
     {
@@ -26,34 +30,12 @@ const HourlyActivitySchema = new mongoose.Schema(
         slotId: {
             type: String,
             required: [true, 'Slot ID is required'],
-            enum: [
-                's0930',
-                's1030',
-                's1130',
-                's1230',
-                's1400',
-                's1500',
-                's1600',
-                's1700',
-                's1800',
-                's1900',
-            ],
+            enum: ALL_SLOT_IDS,
         },
         activityType: {
             type: String,
             required: [true, 'Activity type is required'],
-            enum: [
-                'call',
-                'followup',
-                'call_followup',
-                'noshow',
-                'drip',
-                'meeting',
-                'zoom',
-                'outmeet',
-                'teammeet',
-                'tlmeet',
-            ],
+            enum: ALL_ACTIVITY_TYPES,
         },
         count: {
             type: Number,
