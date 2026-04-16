@@ -22,6 +22,8 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import Tooltip from '@mui/material/Tooltip';
 import {
     SKILLHUB_CURRICULA,
     SKILLHUB_SUBJECTS,
@@ -50,7 +52,6 @@ const blankForm = {
     mode: 'Online',
     courseDuration: 'OneYear',
     courseFee: 0,
-    admissionFeePaid: 0,
     registrationFee: 0,
     emis: [],
     leadSource: 'Google',
@@ -297,19 +298,46 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                 </Grid>
 
                 <Divider sx={{ my: 3 }} />
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Fees & Payments</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                    <Typography variant="subtitle2">Fees & Payments</Typography>
+                    <Tooltip
+                        placement="right"
+                        arrow
+                        title={
+                            <Box sx={{ p: 0.5, fontSize: 12, lineHeight: 1.6 }}>
+                                <Box sx={{ fontWeight: 700, mb: 0.5 }}>
+                                    Outstanding Amount Formula
+                                </Box>
+                                <Box sx={{ fontFamily: 'monospace', mb: 1 }}>
+                                    Outstanding = max(0, Course Fee − Registration Fee − Σ(EMI Paid Amount))
+                                </Box>
+                                <Box sx={{ mb: 0.5 }}>
+                                    • <b>Course Fee</b> — total fee for the course
+                                </Box>
+                                <Box sx={{ mb: 0.5 }}>
+                                    • <b>Registration Fee</b> — one-time enrollment fee
+                                </Box>
+                                <Box sx={{ mb: 0.5 }}>
+                                    • <b>EMI Paid Amount</b> — what the student actually paid on each installment (not the scheduled amount)
+                                </Box>
+                                <Box sx={{ mt: 1, opacity: 0.85 }}>
+                                    Outstanding is clamped to 0 — overpayment never goes negative.
+                                </Box>
+                            </Box>
+                        }
+                    >
+                        <InfoOutlinedIcon
+                            sx={{ fontSize: 16, color: 'text.secondary', cursor: 'help' }}
+                        />
+                    </Tooltip>
+                </Box>
                 <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, sm: 4 }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField fullWidth type="number" label="Course Fee"
                             value={formData.courseFee}
                             onChange={(e) => set('courseFee', Number(e.target.value))} />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth type="number" label="Admission Fee Paid"
-                            value={formData.admissionFeePaid}
-                            onChange={(e) => set('admissionFeePaid', Number(e.target.value))} />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField fullWidth type="number" label="Registration Fee"
                             value={formData.registrationFee}
                             onChange={(e) => set('registrationFee', Number(e.target.value))} />
@@ -352,6 +380,60 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             </Grid>
                         </Grid>
                     ))}
+
+                    {/* Live outstanding — mirrors the server-side virtual */}
+                    {(() => {
+                        const emiPaid = (formData.emis || []).reduce(
+                            (s, e) => s + (Number(e.paidAmount) || 0),
+                            0
+                        );
+                        const emiDue = (formData.emis || []).reduce(
+                            (s, e) => s + (Number(e.amount) || 0),
+                            0
+                        );
+                        const courseFee = Number(formData.courseFee) || 0;
+                        const regFee = Number(formData.registrationFee) || 0;
+                        const outstanding = Math.max(0, courseFee - regFee - emiPaid);
+                        const totalPaid = regFee + emiPaid;
+                        return (
+                            <Box
+                                sx={{
+                                    mt: 2,
+                                    p: 1.5,
+                                    borderRadius: 1,
+                                    bgcolor: 'rgba(160, 210, 235, 0.15)',
+                                    border: '1px solid rgba(44, 62, 80, 0.1)',
+                                    display: 'flex',
+                                    gap: 3,
+                                    flexWrap: 'wrap',
+                                    fontSize: 13,
+                                }}
+                            >
+                                <Box>
+                                    Total EMI Scheduled:{' '}
+                                    <b>{emiDue.toLocaleString()}</b>
+                                </Box>
+                                <Box>
+                                    Total EMI Paid:{' '}
+                                    <b>{emiPaid.toLocaleString()}</b>
+                                </Box>
+                                <Box>
+                                    Total Paid (Reg + EMI):{' '}
+                                    <b>{totalPaid.toLocaleString()}</b>
+                                </Box>
+                                <Box sx={{ ml: 'auto' }}>
+                                    Outstanding:{' '}
+                                    <b
+                                        style={{
+                                            color: outstanding > 0 ? '#d32f2f' : '#2e7d32',
+                                        }}
+                                    >
+                                        {outstanding.toLocaleString()}
+                                    </b>
+                                </Box>
+                            </Box>
+                        );
+                    })()}
                 </Box>
 
                 <Divider sx={{ my: 3 }} />
