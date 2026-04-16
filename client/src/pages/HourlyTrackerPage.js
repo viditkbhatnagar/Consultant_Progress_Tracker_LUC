@@ -189,6 +189,7 @@ const LucHourlyTrackerPage = () => {
     const [lbOpen, setLbOpen] = useState(false);
     const [lbLoading, setLbLoading] = useState(false);
     const [lbData, setLbData] = useState('');
+    const [lbKind, setLbKind] = useState('daily'); // 'daily' | 'weekly'
 
     // Toast
     const [toast, setToast] = useState({ open: false, msg: '' });
@@ -757,11 +758,26 @@ const LucHourlyTrackerPage = () => {
         setLbLoading(true);
         setLbOpen(true);
         setLbData('');
+        setLbKind('daily');
         try {
             const res = await hourlyService.getLeaderboard(formatDateStr(currentDate));
             setLbData(res.data || 'No data available');
         } catch (err) {
             setLbData(err.response?.data?.message || 'Failed to generate leaderboard');
+        }
+        setLbLoading(false);
+    };
+
+    const handleWeeklyLeaderboard = async () => {
+        setLbLoading(true);
+        setLbOpen(true);
+        setLbData('');
+        setLbKind('weekly');
+        try {
+            const res = await hourlyService.getWeeklyLeaderboard(formatDateStr(currentDate));
+            setLbData(res.data || 'No data available');
+        } catch (err) {
+            setLbData(err.response?.data?.message || 'Failed to generate weekly leaderboard');
         }
         setLbLoading(false);
     };
@@ -971,6 +987,7 @@ const LucHourlyTrackerPage = () => {
                     {[
                         { label: '🤖 AI Analysis', onClick: handleAIAnalysis },
                         { label: '🏆 Leaderboard', onClick: handleLeaderboard },
+                        { label: '📅 Weekly Leaderboard', onClick: handleWeeklyLeaderboard },
                         { label: '📥 Export XLSX', onClick: () => handleExport('xlsx') },
                         { label: '📄 Export CSV', onClick: () => handleExport('csv') },
                         ...(isAdmin ? [{ label: '👥 Manage Consultants', onClick: () => setManageOpen(true) }] : []),
@@ -1717,9 +1734,22 @@ const LucHourlyTrackerPage = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box sx={{ width: 36, height: 36, borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏆</Box>
                             <Box>
-                                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#0d1520' }}>Daily Leaderboard</Typography>
+                                <Typography sx={{ fontSize: 17, fontWeight: 700, color: '#0d1520' }}>
+                                    {lbKind === 'weekly' ? 'Weekly Leaderboard' : 'Daily Leaderboard'}
+                                </Typography>
                                 <Typography sx={{ fontSize: 11, color: '#8a9ab0', mt: 0.2 }}>
-                                    {`${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`} · AI-powered ranking
+                                    {lbKind === 'weekly'
+                                        ? (() => {
+                                              const d = new Date(currentDate);
+                                              const day = d.getDay();
+                                              const diffToMon = day === 0 ? -6 : 1 - day;
+                                              const mon = new Date(d);
+                                              mon.setDate(d.getDate() + diffToMon);
+                                              const sun = new Date(mon);
+                                              sun.setDate(mon.getDate() + 6);
+                                              return `${MONTHS[mon.getMonth()]} ${mon.getDate()} – ${MONTHS[sun.getMonth()]} ${sun.getDate()}, ${sun.getFullYear()} · AI-powered ranking`;
+                                          })()
+                                        : `${DAYS[currentDate.getDay()]}, ${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()} · AI-powered ranking`}
                                 </Typography>
                             </Box>
                         </Box>

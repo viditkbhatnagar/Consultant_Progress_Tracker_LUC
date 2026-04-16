@@ -308,17 +308,31 @@ const SkillhubHourlyTrackerPage = () => {
         setAiLoading(true);
         setAiContent('');
         try {
-            const res =
-                kind === 'analysis'
-                    ? await hourlyService.getAIAnalysis(dateStr)
-                    : await hourlyService.getLeaderboard(dateStr);
-            setAiContent(res.data || 'No data.');
+            let res;
+            if (kind === 'analysis') res = await hourlyService.getAIAnalysis(dateStr);
+            else if (kind === 'leaderboard') res = await hourlyService.getLeaderboard(dateStr);
+            else if (kind === 'weekly') res = await hourlyService.getWeeklyLeaderboard(dateStr);
+            setAiContent(res?.data || 'No data.');
         } catch (e) {
             setAiContent(e.response?.data?.message || 'Failed to generate.');
         } finally {
             setAiLoading(false);
         }
     };
+
+    // Human-readable Mon–Sun range for the weekly leaderboard title.
+    const weekRangeLabel = (() => {
+        const d = new Date(currentDate);
+        const day = d.getDay();
+        const diffToMon = day === 0 ? -6 : 1 - day;
+        const mon = new Date(d);
+        mon.setDate(d.getDate() + diffToMon);
+        const sun = new Date(mon);
+        sun.setDate(mon.getDate() + 6);
+        const fmt = (x) =>
+            x.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return `${fmt(mon)} – ${fmt(sun)}, ${sun.getFullYear()}`;
+    })();
 
     const branchLabel = ORGANIZATION_LABELS[viewOrg] || 'Skillhub';
     const activityMap = useMemo(
@@ -517,6 +531,13 @@ const SkillhubHourlyTrackerPage = () => {
                     onClick={() => runAI('leaderboard')}
                 >
                     Leaderboard
+                </Button>
+                <Button
+                    size="small"
+                    startIcon={<EmojiEventsIcon />}
+                    onClick={() => runAI('weekly')}
+                >
+                    Weekly
                 </Button>
                 <IconButton onClick={logout} size="small">
                     <LogoutIcon />
@@ -1086,7 +1107,11 @@ const SkillhubHourlyTrackerPage = () => {
             {/* AI Analysis / Leaderboard Dialog */}
             <Dialog open={aiOpen} onClose={() => setAiOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
-                    {aiKind === 'analysis' ? '🤖 Daily AI Analysis' : '🏆 Daily Leaderboard'}
+                    {aiKind === 'analysis'
+                        ? '🤖 Daily AI Analysis'
+                        : aiKind === 'weekly'
+                        ? `🏆 Weekly Leaderboard — ${weekRangeLabel}`
+                        : '🏆 Daily Leaderboard'}
                 </DialogTitle>
                 <DialogContent dividers>
                     {aiLoading ? (

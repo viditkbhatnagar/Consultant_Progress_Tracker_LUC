@@ -35,6 +35,27 @@ function parseDate(dateStr) {
     return new Date(Date.UTC(y, m - 1, d));
 }
 
+// Helper: given any date, return the Monday (start) and Sunday (end, end of
+// day) of the week containing it — mirrors the LUC commitment-week convention
+// (weekStartsOn: 1 / ISO weeks).
+function getWeekRange(dateStr) {
+    const d = parseDate(dateStr);
+    const day = d.getUTCDay(); // 0 (Sun) ... 6 (Sat)
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const mon = new Date(d);
+    mon.setUTCDate(d.getUTCDate() + diffToMon);
+    mon.setUTCHours(0, 0, 0, 0);
+    const sun = new Date(mon);
+    sun.setUTCDate(mon.getUTCDate() + 6);
+    sun.setUTCHours(23, 59, 59, 999);
+    return { start: mon, end: sun };
+}
+
+function fmtDayShort(d) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
 // Helper: check if a YYYY-MM-DD string is today or in the future (rejects only backdated entries)
 // Uses the date sent by the client (their local laptop time) — only rejects past dates
 function isTodayOrFutureStr(dateStr) {
@@ -1187,6 +1208,262 @@ One sentence about what the top performers did differently today.`;
             totalTokens: promptTokens + completionTokens,
             cost,
             dateRangeQueried: { startDate: date, endDate: date },
+        });
+
+        res.status(200).json({ success: true, data: leaderboard });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// Skillhub weekly leaderboard — same weighting as the daily one but framed
+// over a Mon–Sun window. Kept close to runSkillhubLeaderboard so prompts
+// stay consistent.
+async function runSkillhubWeeklyLeaderboard(req, res, { weekLabel, activities, weekAdmissions, consultants }) {
+    const stats = {};
+    for (const c of consultants) {
+        stats[c._id.toString()] = {
+            name: c.name,
+            team: c.teamLead?.teamName || 'Unknown',
+            calls: 0, followupAdmissions: 0, schedules: 0,
+            demoMeetings: 0, demoMinutes: 0,
+            paymentFollowups: 0, operations: 0, admissions: 0, activeSlots: 0,
+        };
+    }
+    for (const act of activities) {
+        const s = stats[act.consultant.toString()];
+        if (!s) continue;
+        s.activeSlots++;
+        switch (act.activityType) {
+            case 'sh_call': s.calls += act.count || 1; break;
+            case 'sh_followup_admission': s.followupAdmissions += act.count || 1; break;
+            case 'sh_schedule': s.schedules++; break;
+            case 'sh_demo_meeting':
+                s.demoMeetings++;
+                s.demoMinutes += act.duration || 60;
+                break;
+            case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
+            case 'sh_operations': s.operations++; break;
+            default: break;
+        }
+    }
+    for (const adm of weekAdmissions) {
+        const s = stats[adm.consultant.toString()];
+        if (s) s.admissions += adm.count || 0;
+    }
+    const active = Object.values(stats).filter(s => s.activeSlots > 0 || s.admissions > 0);
+    if (active.length === 0) {
+        return res.status(200).json({ success: true, data: 'No activity data found for this week.' });
+    }
+
+    const prompt = `You are ranking Skillhub counselors for a weekly leaderboard covering ${weekLabel}.
+
+Here is each counselor's 7-day total:
+${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
+
+RANKING CRITERIA (weights):
+- Admissions closed are the highest value — most weight
+- Demo Meetings convert students — high weight
+- Follow-up Admission pushes deals forward — medium-high weight
+- Payment follow-up is important for cashflow — medium weight
+- Calling drives pipeline volume — medium weight
+- Schedule is lower weight (planning, not execution)
+- Operations are non-productive — lowers rank
+- Reward consistency across the week over single-day spikes
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+## 🏆 Weekly Leaderboard (${weekLabel})
+
+### 🥇 1st Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary in 1 line]
+- [Why they earned 1st place this week]
+
+### 🥈 2nd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 2nd]
+
+### 🥉 3rd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 3rd]
+
+## Full Rankings
+4. **[Name]** — Score: [X]/100 — [brief reason]
+5. **[Name]** — Score: [X]/100 — [brief reason]
+(continue for all active counselors)
+
+## Key Takeaway
+One sentence about what the top performers did differently this week.`;
+
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: 'You are a fair and data-driven weekly performance ranker for a coaching institute. Rank counselors across a 7-day window using weighted scoring. Be concise. Use markdown.' },
+            { role: 'user', content: prompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 2200,
+    });
+
+    const leaderboard = completion.choices[0]?.message?.content || 'No leaderboard generated';
+    const usage = completion.usage || {};
+    const cost = ((usage.prompt_tokens || 0) * 0.00000015) + ((usage.completion_tokens || 0) * 0.0000006);
+    await AIUsage.create({
+        user: req.user.id,
+        role: req.user.role,
+        model: 'gpt-4o-mini',
+        promptTokens: usage.prompt_tokens || 0,
+        completionTokens: usage.completion_tokens || 0,
+        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+        cost,
+        dateRangeQueried: { startDate: weekLabel, endDate: weekLabel },
+    });
+
+    return res.status(200).json({ success: true, data: leaderboard });
+}
+
+// @desc    Get AI-powered weekly leaderboard (Mon–Sun of the given date)
+// @route   GET /api/hourly/leaderboard/weekly?date=YYYY-MM-DD
+// @access  Private
+exports.getWeeklyLeaderboard = async (req, res, next) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ success: false, message: 'Date is required' });
+        }
+
+        const { start, end } = getWeekRange(date);
+        const weekLabel = `${fmtDayShort(start)} – ${fmtDayShort(end)} ${end.getUTCFullYear()}`;
+        const scope = hourlyScopeFilter(req);
+        const consultantScope = buildScopeFilter(req);
+        const viewOrg = resolveViewOrg(req);
+
+        const activities = await HourlyActivity.find({
+            ...scope,
+            date: { $gte: start, $lte: end },
+            isContinuation: { $ne: true },
+        });
+        const weekAdmissions = await DailyAdmission.find({
+            ...scope,
+            date: { $gte: start, $lte: end },
+        });
+        const consultants = await Consultant.find({
+            ...consultantScope,
+            isActive: true,
+        }).populate('teamLead', 'name teamName');
+
+        if (isSkillhub(viewOrg)) {
+            return await runSkillhubWeeklyLeaderboard(req, res, {
+                weekLabel, activities, weekAdmissions, consultants,
+            });
+        }
+
+        // ── LUC weekly flow ──────────────────────────────────────────
+        const stats = {};
+        for (const c of consultants) {
+            stats[c._id.toString()] = {
+                name: c.name,
+                team: c.teamLead?.teamName || 'Unknown',
+                calls: 0, followups: 0, operations: 0, drips: 0,
+                meetings: { offline: 0, zoom: 0, out: 0, team: 0 },
+                activeSlots: 0, meetingMinutes: 0, admissions: 0,
+            };
+        }
+        for (const act of activities) {
+            const s = stats[act.consultant.toString()];
+            if (!s) continue;
+            s.activeSlots++;
+            if (act.activityType === 'call') s.calls += act.count || 1;
+            else if (act.activityType === 'followup') s.followups += act.count || 1;
+            else if (act.activityType === 'call_followup') { s.calls += act.count || 1; s.followups += act.count || 1; }
+            else if (act.activityType === 'noshow') s.operations++;
+            else if (act.activityType === 'drip') s.drips++;
+            else if (act.activityType === 'meeting') { s.meetings.offline++; s.meetingMinutes += act.duration || 60; }
+            else if (act.activityType === 'zoom') { s.meetings.zoom++; s.meetingMinutes += act.duration || 60; }
+            else if (act.activityType === 'outmeet') { s.meetings.out++; s.meetingMinutes += act.duration || 60; }
+            else if (act.activityType === 'teammeet') { s.meetings.team++; s.meetingMinutes += act.duration || 60; }
+        }
+        for (const adm of weekAdmissions) {
+            const s = stats[adm.consultant.toString()];
+            if (s) s.admissions += adm.count || 0;
+        }
+
+        const active = Object.values(stats).filter(s => s.activeSlots > 0 || s.admissions > 0);
+        if (active.length === 0) {
+            return res.status(200).json({ success: true, data: 'No activity data found for this week.' });
+        }
+
+        const prompt = `You are ranking consultants for a weekly leaderboard covering ${weekLabel}.
+
+Here is each consultant's 7-day total:
+${active.map(c => {
+    const totalMtgs = c.meetings.offline + c.meetings.zoom + c.meetings.out + c.meetings.team;
+    return `- ${c.name} (${c.team}): ${c.calls} calls, ${c.followups} follow-ups, ${c.drips} drips, ${totalMtgs} meetings (${(c.meetingMinutes/60).toFixed(1)}h), ${c.operations} operations, ${c.admissions} admissions, ${c.activeSlots} active slots`;
+}).join('\n')}
+
+RANKING CRITERIA (weights):
+- Admissions are the most valuable (actual conversions) — highest weight
+- Meetings indicate direct client engagement — high weight
+- Follow-ups show persistence and pipeline nurturing — medium weight
+- Calls are important for volume but quality matters more — medium weight
+- Drips show marketing effort — lower weight
+- Operations are non-productive time — should lower rank
+- Consider overall balance across the 7-day window
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+## 🏆 Weekly Leaderboard (${weekLabel})
+
+### 🥇 1st Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary in 1 line]
+- [Why they earned 1st place this week]
+
+### 🥈 2nd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 2nd]
+
+### 🥉 3rd Place — [Name]
+**Score: [X]/100** | Team: [Team Name]
+- [Key stats summary]
+- [Why they earned 3rd]
+
+## Full Rankings
+4. **[Name]** — Score: [X]/100 — [brief reason]
+5. **[Name]** — Score: [X]/100 — [brief reason]
+(continue for all active consultants)
+
+## Key Takeaway
+One sentence about what the top performers did differently this week.`;
+
+        const client = getOpenAIClient();
+        const completion = await client.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: 'You are a fair and data-driven weekly performance ranker for an education consultancy. Rank consultants across a 7-day window using weighted scoring. Be concise. Use markdown.' },
+                { role: 'user', content: prompt },
+            ],
+            temperature: 0.5,
+            max_tokens: 2200,
+        });
+
+        const leaderboard = completion.choices[0]?.message?.content || 'No leaderboard generated';
+        const usage = completion.usage || {};
+        const cost = ((usage.prompt_tokens || 0) * 0.00000015) + ((usage.completion_tokens || 0) * 0.0000006);
+        await AIUsage.create({
+            user: req.user.id,
+            role: req.user.role,
+            model: 'gpt-4o-mini',
+            promptTokens: usage.prompt_tokens || 0,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+            cost,
+            dateRangeQueried: { startDate: weekLabel, endDate: weekLabel },
         });
 
         res.status(200).json({ success: true, data: leaderboard });
