@@ -54,6 +54,7 @@ const SKILLHUB_ACTIVITY_TYPES = [
     'sh_schedule',
     'sh_break',
     'sh_demo_meeting',
+    'sh_meeting',
     'sh_payment_followup',
     'sh_operations',
 ];

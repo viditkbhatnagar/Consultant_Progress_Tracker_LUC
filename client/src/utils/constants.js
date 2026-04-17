@@ -74,6 +74,40 @@ export const SKILLHUB_LEAD_SOURCES = [
     'Reference',
 ];
 export const SKILLHUB_STREAMS = ['Science', 'Commerce'];
+export const SKILLHUB_BOARDS = ['CBSE', 'IGCSE'];
+export const SKILLHUB_IGCSE_VARIANTS = ['Cambridge', 'Edexcel', 'AQA'];
+export const SKILLHUB_ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
+
+// Helpers to split / combine the stored `curriculum` value (e.g. "IGCSE-AQA")
+// into board + IGCSE variant pieces for the cascading UI dropdowns.
+export const splitCurriculum = (curriculum) => {
+    if (!curriculum) return { board: '', variant: '' };
+    if (curriculum === 'CBSE') return { board: 'CBSE', variant: '' };
+    if (curriculum.startsWith('IGCSE-')) {
+        return { board: 'IGCSE', variant: curriculum.slice('IGCSE-'.length) };
+    }
+    return { board: '', variant: '' };
+};
+
+export const composeCurriculum = (board, variant) => {
+    if (board === 'CBSE') return 'CBSE';
+    if (board === 'IGCSE' && variant) return `IGCSE-${variant}`;
+    return '';
+};
+
+// Default academic year based on today's date.
+// India/Gulf academic year typically starts ~April; we pick the band that
+// contains the current month as a sensible form default.
+export const getCurrentAcademicYear = () => {
+    const d = new Date();
+    const month = d.getMonth(); // 0 = Jan
+    const startYear = month >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+    const endShort = String(startYear + 1).slice(-2);
+    const candidate = `${startYear}-${endShort}`;
+    return SKILLHUB_ACADEMIC_YEARS.includes(candidate)
+        ? candidate
+        : SKILLHUB_ACADEMIC_YEARS[SKILLHUB_ACADEMIC_YEARS.length - 1];
+};
 export const STUDENT_STATUSES = [
     { value: 'new_admission', label: 'New Admission', color: '#FF9800' },
     { value: 'active', label: 'Active', color: '#4CAF50' },

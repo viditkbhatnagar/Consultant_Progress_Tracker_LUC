@@ -5,7 +5,6 @@ const {
     isSkillhub,
     isLuc,
 } = require('../config/organizations');
-const Counter = require('./Counter');
 
 const SKILLHUB_SUBJECTS = [
     'Math',
@@ -35,6 +34,7 @@ const SKILLHUB_LEAD_SOURCES = [
 ];
 const SKILLHUB_STREAMS = ['Science', 'Commerce'];
 const STUDENT_STATUSES = ['new_admission', 'active', 'inactive'];
+const ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
 
 const lucOnly = function () {
     return isLuc(this.organization);
@@ -119,11 +119,15 @@ const StudentSchema = new mongoose.Schema(
             default: 'new_admission',
             index: true,
         },
+        // Manually entered by the counselor on the New Admission form.
+        // Required + unique for Skillhub records.
         enrollmentNumber: {
             type: String,
             index: true,
             sparse: true,
             unique: true,
+            required: skillhubOnly,
+            trim: true,
         },
         curriculum: {
             type: String,
@@ -132,6 +136,11 @@ const StudentSchema = new mongoose.Schema(
         },
         curriculumSlug: { type: String, enum: ['IGCSE', 'CBSE'] },
         yearOrGrade: { type: String, required: skillhubOnly, trim: true },
+        academicYear: {
+            type: String,
+            enum: ACADEMIC_YEARS,
+            required: skillhubOnly,
+        },
         stream: { type: String, enum: [...SKILLHUB_STREAMS, null], default: null },
         subjects: {
             type: [{ type: String, enum: SKILLHUB_SUBJECTS }],
@@ -260,7 +269,8 @@ StudentSchema.pre('validate', async function () {
         }
     }
 
-    // Skillhub: derive curriculumSlug and generate enrollment number
+    // Skillhub: derive curriculumSlug from the chosen curriculum. Enrollment
+    // numbers are now entered manually by the counselor — no auto-generation.
     if (isSkillhub(this.organization)) {
         if (this.curriculum) {
             this.curriculumSlug = this.curriculum.startsWith('IGCSE')
@@ -273,17 +283,6 @@ StudentSchema.pre('validate', async function () {
                 new Date(this.closingDate) - new Date(this.enquiryDate)
             );
             this.conversionTime = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-        }
-
-        if (!this.enrollmentNumber && this.curriculumSlug && this.yearOrGrade) {
-            const anchor = this.dateOfEnrollment
-                ? new Date(this.dateOfEnrollment)
-                : new Date();
-            const year = anchor.getFullYear();
-            const yy = String(year).slice(-2);
-            const key = `enroll:${this.organization}:${this.curriculumSlug}:${year}`;
-            const seq = await Counter.increment(key);
-            this.enrollmentNumber = `SH/${this.curriculumSlug}/${yy}/${this.yearOrGrade}/${seq}`;
         }
     }
 });
