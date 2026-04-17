@@ -184,8 +184,10 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                                 <TableCell>Name</TableCell>
                                 <TableCell>Curriculum</TableCell>
                                 <TableCell>Year/Grade</TableCell>
+                                <TableCell>Acad. Year</TableCell>
                                 <TableCell>Counselor</TableCell>
                                 <TableCell>Mode</TableCell>
+                                <TableCell>Date of Enrollment</TableCell>
                                 <TableCell align="right">Course Fee</TableCell>
                                 <TableCell align="right">Outstanding</TableCell>
                                 <TableCell align="center">Actions</TableCell>
@@ -211,8 +213,14 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                                         <Chip label={s.curriculum || '-'} size="small" variant="outlined" />
                                     </TableCell>
                                     <TableCell>{s.yearOrGrade || '-'}</TableCell>
+                                    <TableCell>{s.academicYear || '-'}</TableCell>
                                     <TableCell>{s.consultantName || '-'}</TableCell>
                                     <TableCell>{s.mode || '-'}</TableCell>
+                                    <TableCell>
+                                        {s.dateOfEnrollment
+                                            ? new Date(s.dateOfEnrollment).toLocaleDateString([], { year: '2-digit', month: 'short', day: 'numeric' })
+                                            : '-'}
+                                    </TableCell>
                                     <TableCell align="right">
                                         {(s.courseFee || 0).toLocaleString()}
                                     </TableCell>

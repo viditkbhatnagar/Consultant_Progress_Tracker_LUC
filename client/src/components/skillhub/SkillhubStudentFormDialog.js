@@ -25,12 +25,17 @@ import AddIcon from '@mui/icons-material/Add';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import Tooltip from '@mui/material/Tooltip';
 import {
-    SKILLHUB_CURRICULA,
     SKILLHUB_SUBJECTS,
     SKILLHUB_MODES,
     SKILLHUB_COURSE_DURATIONS,
     SKILLHUB_LEAD_SOURCES,
     SKILLHUB_STREAMS,
+    SKILLHUB_BOARDS,
+    SKILLHUB_IGCSE_VARIANTS,
+    SKILLHUB_ACADEMIC_YEARS,
+    splitCurriculum,
+    composeCurriculum,
+    getCurrentAcademicYear,
 } from '../../utils/constants';
 
 const emptyEmi = () => ({ dueDate: '', amount: 0, paidOn: '', paidAmount: 0 });
@@ -45,7 +50,10 @@ const blankForm = {
     residence: '',
     addressEmirate: '',
     school: '',
-    curriculum: 'CBSE',
+    enrollmentNumber: '',
+    board: 'CBSE',
+    igcseVariant: '',
+    academicYear: getCurrentAcademicYear(),
     yearOrGrade: '',
     stream: '',
     subjects: [],
@@ -72,6 +80,7 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
     useEffect(() => {
         if (!open) return;
         if (student) {
+            const { board, variant } = splitCurriculum(student.curriculum);
             setFormData({
                 ...blankForm,
                 ...student,
@@ -82,6 +91,10 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                 enquiryDate: student.enquiryDate ? student.enquiryDate.substring(0, 10) : '',
                 closingDate: student.closingDate ? student.closingDate.substring(0, 10) : '',
                 dateOfEnrollment: student.dateOfEnrollment ? student.dateOfEnrollment.substring(0, 10) : '',
+                board,
+                igcseVariant: variant,
+                enrollmentNumber: student.enrollmentNumber || '',
+                academicYear: student.academicYear || getCurrentAcademicYear(),
                 emis: (student.emis || []).map((e) => ({
                     dueDate: e.dueDate ? e.dueDate.substring(0, 10) : '',
                     amount: e.amount || 0,
@@ -122,14 +135,29 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
         setError('');
         if (!formData.studentName.trim()) return setError('Student name is required');
         if (!formData.consultantId) return setError('Please assign a counselor');
-        if (!formData.curriculum) return setError('Curriculum is required');
+        if (!formData.enrollmentNumber.trim()) return setError('Enrollment number is required');
+        if (!formData.board) return setError('Board is required');
+        if (formData.board === 'IGCSE' && !formData.igcseVariant) {
+            return setError('Please pick an IGCSE variant (Cambridge / Edexcel / AQA)');
+        }
+        if (!formData.academicYear) return setError('Academic year is required');
         if (!formData.yearOrGrade) return setError('Year / Grade is required');
         if (!formData.mode) return setError('Mode is required');
         if (!formData.courseDuration) return setError('Course duration is required');
 
+        const curriculum = composeCurriculum(formData.board, formData.igcseVariant);
+        if (!curriculum) return setError('Curriculum could not be resolved.');
+
         setSaving(true);
         try {
-            await onSave(formData);
+            const payload = {
+                ...formData,
+                curriculum,
+                enrollmentNumber: formData.enrollmentNumber.trim(),
+            };
+            delete payload.board;
+            delete payload.igcseVariant;
+            await onSave(payload);
             onClose();
         } catch (e) {
             setError(e.response?.data?.message || e.message || 'Save failed');
@@ -234,18 +262,71 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
+                    <Grid size={{ xs: 12, sm: 3 }}>
                         <FormControl fullWidth required>
-                            <InputLabel>Curriculum</InputLabel>
-                            <Select label="Curriculum" value={formData.curriculum}
-                                onChange={(e) => set('curriculum', e.target.value)}>
-                                {SKILLHUB_CURRICULA.map((c) => (
-                                    <MenuItem key={c} value={c}>{c}</MenuItem>
+                            <InputLabel>Board</InputLabel>
+                            <Select
+                                label="Board"
+                                value={formData.board}
+                                onChange={(e) => {
+                                    const b = e.target.value;
+                                    setFormData((f) => ({
+                                        ...f,
+                                        board: b,
+                                        igcseVariant: b === 'IGCSE' ? f.igcseVariant : '',
+                                    }));
+                                }}
+                            >
+                                {SKILLHUB_BOARDS.map((b) => (
+                                    <MenuItem key={b} value={b}>{b}</MenuItem>
                                 ))}
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 8 }}>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <FormControl fullWidth disabled={formData.board !== 'IGCSE'} required={formData.board === 'IGCSE'}>
+                            <InputLabel>IGCSE Variant</InputLabel>
+                            <Select
+                                label="IGCSE Variant"
+                                value={formData.igcseVariant}
+                                onChange={(e) => set('igcseVariant', e.target.value)}
+                            >
+                                <MenuItem value=""><em>—</em></MenuItem>
+                                {SKILLHUB_IGCSE_VARIANTS.map((v) => (
+                                    <MenuItem key={v} value={v}>{v}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <FormControl fullWidth required>
+                            <InputLabel>Academic Year</InputLabel>
+                            <Select
+                                label="Academic Year"
+                                value={formData.academicYear}
+                                onChange={(e) => set('academicYear', e.target.value)}
+                            >
+                                {SKILLHUB_ACADEMIC_YEARS.map((y) => (
+                                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <TextField
+                            fullWidth required
+                            label="Enrollment No."
+                            value={formData.enrollmentNumber}
+                            onChange={(e) => set('enrollmentNumber', e.target.value)}
+                            helperText="e.g. SH/IGCSE/26/11/042 (manual entry)"
+                        />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                        <TextField fullWidth type="date" label="Date of Enrollment" InputLabelProps={{ shrink: true }}
+                            value={formData.dateOfEnrollment}
+                            onChange={(e) => set('dateOfEnrollment', e.target.value)} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 12 }}>
                         <FormControl fullWidth>
                             <InputLabel>Subjects</InputLabel>
                             <Select
@@ -265,7 +346,7 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth required>
                             <InputLabel>Mode</InputLabel>
                             <Select label="Mode" value={formData.mode}
@@ -276,7 +357,7 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                         <FormControl fullWidth required>
                             <InputLabel>Course Duration</InputLabel>
                             <Select label="Course Duration" value={formData.courseDuration}
@@ -286,14 +367,6 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                                 ))}
                             </Select>
                         </FormControl>
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField fullWidth type="date" label="Date of Enrollment" InputLabelProps={{ shrink: true }}
-                            value={formData.dateOfEnrollment}
-                            onChange={(e) => set('dateOfEnrollment', e.target.value)} />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <TextField fullWidth label="Enrollment No." value={student?.enrollmentNumber || '(auto-generated)'} disabled />
                     </Grid>
                 </Grid>
 

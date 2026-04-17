@@ -598,6 +598,8 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
             breaks: 0,
             demoMeetings: 0,
             demoMinutes: 0,
+            meetings: 0,
+            meetingMinutes: 0,
             paymentFollowups: 0,
             operations: [],
             activeSlots: 0,
@@ -626,6 +628,10 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
                 s.demoMeetings++;
                 s.demoMinutes += act.duration || 60;
                 break;
+            case 'sh_meeting':
+                s.meetings++;
+                s.meetingMinutes += act.duration || 60;
+                break;
             case 'sh_payment_followup':
                 s.paymentFollowups += act.count || 1;
                 break;
@@ -644,7 +650,8 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
 
     const totals = {
         calls: 0, followupAdmissions: 0, schedules: 0, demoMeetings: 0,
-        demoMinutes: 0, paymentFollowups: 0, operations: 0,
+        demoMinutes: 0, meetings: 0, meetingMinutes: 0,
+        paymentFollowups: 0, operations: 0,
         admissions: 0, active: 0,
     };
     const summaries = [];
@@ -656,6 +663,8 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
         totals.schedules += s.schedules;
         totals.demoMeetings += s.demoMeetings;
         totals.demoMinutes += s.demoMinutes;
+        totals.meetings += s.meetings;
+        totals.meetingMinutes += s.meetingMinutes;
         totals.paymentFollowups += s.paymentFollowups;
         totals.operations += s.operations.length;
         totals.admissions += s.admissions;
@@ -666,12 +675,13 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
         return res.status(200).json({ success: true, data: 'No activity data found for this date.' });
     }
 
-    // Weight: admissions >> demo meetings >> follow-up admissions >
-    // payment follow-ups > calling > schedule; break/operations don't score.
+    // Weight: admissions >> demo meetings >> follow-up admissions >>
+    // meetings (generic) >> payment follow-ups >> calling >> schedule;
+    // break/operations don't score.
     summaries.sort((a, b) => {
         const score = (s) =>
             s.admissions * 15 + s.demoMeetings * 6 + s.followupAdmissions * 4 +
-            s.paymentFollowups * 3 + s.calls * 1 + s.schedules * 0.5;
+            s.meetings * 3 + s.paymentFollowups * 3 + s.calls * 1 + s.schedules * 0.5;
         return score(a) - score(b);
     });
 
@@ -683,12 +693,13 @@ TEAM TOTALS:
 - Follow up — Admission: ${totals.followupAdmissions}
 - Schedule slots: ${totals.schedules}
 - Demo Meetings: ${totals.demoMeetings} (${(totals.demoMinutes / 60).toFixed(1)} hours)
+- Meetings: ${totals.meetings} (${(totals.meetingMinutes / 60).toFixed(1)} hours)
 - Payment follow-ups: ${totals.paymentFollowups}
 - Operations (non-productive): ${totals.operations}
 - Admissions closed: ${totals.admissions}
 
 PER-COUNSELOR BREAKDOWN (worst to best):
-${summaries.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations.length} operations${s.operations.length > 0 ? ' [Notes: ' + s.operations.join('; ') + ']' : ''}, ${s.admissions} admissions`).join('\n')}
+${summaries.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.meetings} meetings (${(s.meetingMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations.length} operations${s.operations.length > 0 ? ' [Notes: ' + s.operations.join('; ') + ']' : ''}, ${s.admissions} admissions`).join('\n')}
 
 INACTIVE COUNSELORS:
 ${consultants.filter(c => !summaries.find(s => s.name === c.name)).map(c => `- ${c.name}`).join('\n') || 'None'}
@@ -750,6 +761,7 @@ async function runSkillhubLeaderboard(req, res, { date, activities, dayAdmission
             team: c.teamLead?.teamName || 'Unknown',
             calls: 0, followupAdmissions: 0, schedules: 0,
             demoMeetings: 0, demoMinutes: 0,
+            meetings: 0, meetingMinutes: 0,
             paymentFollowups: 0, operations: 0, admissions: 0, activeSlots: 0,
         };
     }
@@ -764,6 +776,10 @@ async function runSkillhubLeaderboard(req, res, { date, activities, dayAdmission
             case 'sh_demo_meeting':
                 s.demoMeetings++;
                 s.demoMinutes += act.duration || 60;
+                break;
+            case 'sh_meeting':
+                s.meetings++;
+                s.meetingMinutes += act.duration || 60;
                 break;
             case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
             case 'sh_operations': s.operations++; break;
@@ -782,12 +798,13 @@ async function runSkillhubLeaderboard(req, res, { date, activities, dayAdmission
     const prompt = `You are ranking Skillhub counselors for a daily leaderboard on ${date}.
 
 Here is each counselor's data for today:
-${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
+${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.meetings} meetings (${(s.meetingMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
 
 RANKING CRITERIA (weights):
 - Admissions closed are the highest value — most weight
 - Demo Meetings convert students — high weight
 - Follow-up Admission pushes deals forward — medium-high weight
+- Meetings (general/internal) show engagement — medium weight
 - Payment follow-up is important for cashflow — medium weight
 - Calling drives pipeline volume — medium weight
 - Schedule is lower weight (planning, not execution)
@@ -1227,6 +1244,7 @@ async function runSkillhubWeeklyLeaderboard(req, res, { weekLabel, activities, w
             team: c.teamLead?.teamName || 'Unknown',
             calls: 0, followupAdmissions: 0, schedules: 0,
             demoMeetings: 0, demoMinutes: 0,
+            meetings: 0, meetingMinutes: 0,
             paymentFollowups: 0, operations: 0, admissions: 0, activeSlots: 0,
         };
     }
@@ -1241,6 +1259,10 @@ async function runSkillhubWeeklyLeaderboard(req, res, { weekLabel, activities, w
             case 'sh_demo_meeting':
                 s.demoMeetings++;
                 s.demoMinutes += act.duration || 60;
+                break;
+            case 'sh_meeting':
+                s.meetings++;
+                s.meetingMinutes += act.duration || 60;
                 break;
             case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
             case 'sh_operations': s.operations++; break;
@@ -1259,12 +1281,13 @@ async function runSkillhubWeeklyLeaderboard(req, res, { weekLabel, activities, w
     const prompt = `You are ranking Skillhub counselors for a weekly leaderboard covering ${weekLabel}.
 
 Here is each counselor's 7-day total:
-${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
+${active.map(s => `- ${s.name} (${s.team}): ${s.calls} calling, ${s.followupAdmissions} follow-up admissions, ${s.schedules} schedules, ${s.demoMeetings} demos (${(s.demoMinutes/60).toFixed(1)}h), ${s.meetings} meetings (${(s.meetingMinutes/60).toFixed(1)}h), ${s.paymentFollowups} payment follow-ups, ${s.operations} operations, ${s.admissions} admissions, ${s.activeSlots} active slots`).join('\n')}
 
 RANKING CRITERIA (weights):
 - Admissions closed are the highest value — most weight
 - Demo Meetings convert students — high weight
 - Follow-up Admission pushes deals forward — medium-high weight
+- Meetings (general/internal) show engagement — medium weight
 - Payment follow-up is important for cashflow — medium weight
 - Calling drives pipeline volume — medium weight
 - Schedule is lower weight (planning, not execution)

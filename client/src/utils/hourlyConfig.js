@@ -57,6 +57,7 @@ const SKILLHUB_ACTIVITIES = [
     { slug: 'sh_schedule', label: 'Schedule', color: '#4f46e5', allowsDuration: false, hasCount: false },
     { slug: 'sh_break', label: 'Break', color: '#64748b', allowsDuration: false, hasCount: false },
     { slug: 'sh_demo_meeting', label: 'Demo Meeting', color: '#16a34a', allowsDuration: true, hasCount: false },
+    { slug: 'sh_meeting', label: 'Meeting', color: '#0d9488', allowsDuration: true, hasCount: false },
     { slug: 'sh_payment_followup', label: 'Payment Follow-up', color: '#7c3aed', allowsDuration: false, hasCount: true },
     { slug: 'sh_operations', label: 'Operations', color: '#dc2626', allowsDuration: false, hasCount: false },
 ];

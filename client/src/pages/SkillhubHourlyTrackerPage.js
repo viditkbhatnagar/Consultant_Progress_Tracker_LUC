@@ -349,6 +349,8 @@ const SkillhubHourlyTrackerPage = () => {
             breaks: 0,
             demoMeetings: 0,
             demoMinutes: 0,
+            meetings: 0,
+            meetingMinutes: 0,
             paymentFollowups: 0,
             operations: 0,
             activeConsultants: new Set(),
@@ -372,6 +374,10 @@ const SkillhubHourlyTrackerPage = () => {
                 case 'sh_demo_meeting':
                     t.demoMeetings += 1;
                     t.demoMinutes += act.duration || 60;
+                    break;
+                case 'sh_meeting':
+                    t.meetings += 1;
+                    t.meetingMinutes += act.duration || 60;
                     break;
                 case 'sh_payment_followup':
                     t.paymentFollowups += act.count || 1;
@@ -403,6 +409,7 @@ const SkillhubHourlyTrackerPage = () => {
         sh_schedule: 'schedules',
         sh_break: 'breaks',
         sh_demo_meeting: 'demoMeetings',
+        sh_meeting: 'meetings',
         sh_payment_followup: 'paymentFollowups',
         sh_operations: 'operations',
     };
@@ -418,7 +425,7 @@ const SkillhubHourlyTrackerPage = () => {
     const perCounselor = useMemo(() => {
         const emptyNotes = () => ({
             calls: [], followupAdmissions: [], schedules: [], breaks: [],
-            demoMeetings: [], paymentFollowups: [], operations: [],
+            demoMeetings: [], meetings: [], paymentFollowups: [], operations: [],
         });
         const map = {};
         for (const c of consultants) {
@@ -429,6 +436,8 @@ const SkillhubHourlyTrackerPage = () => {
                 breaks: 0,
                 demoMeetings: 0,
                 demoMinutes: 0,
+                meetings: 0,
+                meetingMinutes: 0,
                 paymentFollowups: 0,
                 operations: 0,
                 admissions: admissions.get(c._id) || 0,
@@ -447,6 +456,10 @@ const SkillhubHourlyTrackerPage = () => {
                 case 'sh_demo_meeting':
                     s.demoMeetings += 1;
                     s.demoMinutes += act.duration || 60;
+                    break;
+                case 'sh_meeting':
+                    s.meetings += 1;
+                    s.meetingMinutes += act.duration || 60;
                     break;
                 case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
                 case 'sh_operations': s.operations += 1; break;
@@ -471,6 +484,7 @@ const SkillhubHourlyTrackerPage = () => {
         { key: 'followupAdmissions', label: 'F/Up Adm', color: '#0891b2' },
         { key: 'schedules', label: 'Schedule', color: '#4f46e5' },
         { key: 'demoMeetings', label: 'Demo', color: '#16a34a' },
+        { key: 'meetings', label: 'Meeting', color: '#0d9488' },
         { key: 'paymentFollowups', label: 'Pay F/Up', color: '#7c3aed' },
         { key: 'operations', label: 'Ops', color: '#dc2626' },
         { key: 'breaks', label: 'Break', color: '#64748b' },
@@ -586,6 +600,12 @@ const SkillhubHourlyTrackerPage = () => {
                         l: 'Demo Mtg',
                         c: '#16a34a',
                         sub: `${(totals.demoMinutes / 60).toFixed(1)}h`,
+                    },
+                    {
+                        v: totals.meetings,
+                        l: 'Meeting',
+                        c: '#0d9488',
+                        sub: `${(totals.meetingMinutes / 60).toFixed(1)}h`,
                     },
                     {
                         v: totals.paymentFollowups,
@@ -920,10 +940,13 @@ const SkillhubHourlyTrackerPage = () => {
                                             {SUMMARY_COLS.filter((col) => col.key !== 'admissions').map((col) => {
                                                 const val = perCounselor[cid]?.[col.key] || 0;
                                                 const colNotes = perCounselor[cid]?.notes?.[col.key] || [];
-                                                const sub =
-                                                    col.key === 'demoMeetings' && perCounselor[cid]?.demoMinutes
-                                                        ? `${(perCounselor[cid].demoMinutes / 60).toFixed(1)}h`
-                                                        : '';
+                                                const sub = (() => {
+                                                    if (col.key === 'demoMeetings' && perCounselor[cid]?.demoMinutes)
+                                                        return `${(perCounselor[cid].demoMinutes / 60).toFixed(1)}h`;
+                                                    if (col.key === 'meetings' && perCounselor[cid]?.meetingMinutes)
+                                                        return `${(perCounselor[cid].meetingMinutes / 60).toFixed(1)}h`;
+                                                    return '';
+                                                })();
                                                 return (
                                                     <td
                                                         key={col.key}
