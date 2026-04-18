@@ -21,6 +21,7 @@ const getStudents = async (filters = {}) => {
     }
     if (filters.studentStatus) params.append('studentStatus', filters.studentStatus);
     if (filters.organization) params.append('organization', filters.organization);
+    if (filters.curriculumSlug) params.append('curriculumSlug', filters.curriculumSlug);
 
     const queryString = params.toString();
     const url = queryString ? `${API_URL}?${queryString}` : API_URL;

@@ -36,6 +36,7 @@ import ActivateStudentDialog from './ActivateStudentDialog';
 // dashboard, the prop is omitted and the server scopes to their organization
 // implicitly.
 const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
+    const [curriculumTab, setCurriculumTab] = useState('CBSE');
     const [statusTab, setStatusTab] = useState('new_admission');
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
         try {
             const res = await studentService.getStudents({
                 studentStatus: statusTab,
+                curriculumSlug: curriculumTab,
                 ...(organization ? { organization } : {}),
             });
             setStudents(res.data || []);
@@ -60,7 +62,7 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
         } finally {
             setLoading(false);
         }
-    }, [statusTab, organization]);
+    }, [statusTab, curriculumTab, organization]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -131,10 +133,33 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
 
     return (
         <Paper sx={{ p: 2 }}>
+            {/* Top-level: curriculum filter. Manager wants CBSE and IGCSE
+                students listed strictly separately. */}
+            <Tabs
+                value={curriculumTab}
+                onChange={(_, v) => setCurriculumTab(v)}
+                sx={{
+                    mb: 1,
+                    borderBottom: '1px solid rgba(0,0,0,0.08)',
+                    '& .MuiTab-root': {
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                        textTransform: 'none',
+                        minWidth: 120,
+                    },
+                }}
+            >
+                <Tab label="CBSE" value="CBSE" />
+                <Tab label="IGCSE" value="IGCSE" />
+            </Tabs>
+
+            {/* Secondary: status filter within the selected curriculum. */}
             <Tabs
                 value={statusTab}
                 onChange={(_, v) => setStatusTab(v)}
                 sx={{ mb: 2 }}
+                textColor="secondary"
+                indicatorColor="secondary"
             >
                 <Tab label="New Admissions" value="new_admission" />
                 <Tab label="Active Students" value="active" />
