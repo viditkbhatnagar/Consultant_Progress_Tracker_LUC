@@ -33,12 +33,14 @@ import SkillhubStudentTable from '../components/skillhub/SkillhubStudentTable';
 import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFormDialog';
 import SkillhubCommitmentDialog from '../components/skillhub/SkillhubCommitmentDialog';
 import AISummaryCard from '../components/AISummaryCard';
+import DateRangeSelector from '../components/DateRangeSelector';
 import {
     LeadStageChart,
     AchievementChart,
     MeetingsChart,
     ConsultantPerformanceChart,
 } from '../components/Charts';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const KpiCard = ({ label, value, color, sub }) => (
     <Card elevation={2} sx={{ height: '100%', borderRadius: 3 }}>
@@ -66,9 +68,21 @@ const SkillhubDashboard = () => {
     const [view, setView] = useState('dashboard'); // dashboard | students | commitments
     const [counselors, setCounselors] = useState([]);
     const [commitments, setCommitments] = useState([]);
-    const [stats, setStats] = useState({ newAdmissions: 0, activeStudents: 0 });
+    const [stats, setStats] = useState({
+        newAdmissionsPeriod: 0,
+        activeStudents: 0,
+        commitmentsPeriod: 0,
+    });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+
+    // Date range filter — same semantics as LUC admin dashboard. Drives
+    // commitments list + "this period" KPIs. Active Students stays cumulative.
+    const [dateRange, setDateRange] = useState({
+        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        viewType: 'current-week',
+    });
 
     const [studentFormOpen, setStudentFormOpen] = useState(false);
     const [commitmentDialogOpen, setCommitmentDialogOpen] = useState(false);
@@ -80,22 +94,35 @@ const SkillhubDashboard = () => {
         try {
             const [consultantsRes, commitmentsRes, newRes, activeRes] = await Promise.all([
                 consultantService.getConsultants(),
-                commitmentService.getCommitments(),
-                studentService.getStudents({ studentStatus: 'new_admission' }),
+                // Date-range scoped commitments (uses /commitments/date-range)
+                commitmentService.getCommitmentsByDateRange(
+                    dateRange.startDate,
+                    dateRange.endDate
+                ),
+                // New Admissions in the selected period (backend uses createdAt
+                // when curriculumSlug or skillhub org is in scope).
+                studentService.getStudents({
+                    studentStatus: 'new_admission',
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                }),
+                // Active Students — cumulative, no date filter.
                 studentService.getStudents({ studentStatus: 'active' }),
             ]);
+            const commitList = commitmentsRes.data || [];
             setCounselors(consultantsRes.data || []);
-            setCommitments(commitmentsRes.data || []);
+            setCommitments(commitList);
             setStats({
-                newAdmissions: (newRes.data || []).length,
+                newAdmissionsPeriod: (newRes.data || []).length,
                 activeStudents: (activeRes.data || []).length,
+                commitmentsPeriod: commitList.length,
             });
         } catch (e) {
             setError(e.response?.data?.message || 'Failed to load dashboard');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [dateRange.startDate, dateRange.endDate]);
 
     useEffect(() => {
         loadAll();
@@ -130,13 +157,13 @@ const SkillhubDashboard = () => {
         <>
             <Grid container spacing={3} sx={{ mb: 3 }}>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="New Admissions" value={stats.newAdmissions} color="#FF9800" sub="Pending activation" />
+                    <KpiCard label="New Admissions" value={stats.newAdmissionsPeriod} color="#FF9800" sub="In selected period" />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="Active Students" value={stats.activeStudents} color="#4CAF50" sub="Currently enrolled" />
+                    <KpiCard label="Active Students" value={stats.activeStudents} color="#4CAF50" sub="Total enrolled" />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="Achieved" value={achieved} color="#2196F3" sub="Commitments this period" />
+                    <KpiCard label="Achieved" value={achieved} color="#2196F3" sub="Commitments in period" />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                     <KpiCard label="Pending" value={pending} color="#9C27B0" sub="In progress / pending" />
@@ -359,6 +386,20 @@ const SkillhubDashboard = () => {
                             )}
                         </Typography>
                     </Box>
+
+                    {/* Date range filter — drives commitments + "this period"
+                        KPIs. Hidden on the Student Database view (which has
+                        its own CBSE/IGCSE + status filters) and the AI views. */}
+                    {(view === 'dashboard' || view === 'commitments' || view === 'analytics') && (
+                        <Card elevation={2} sx={{ mb: 3, borderRadius: 3 }}>
+                            <CardContent>
+                                <DateRangeSelector
+                                    value={dateRange}
+                                    onChange={setDateRange}
+                                />
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {error && (
                         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>

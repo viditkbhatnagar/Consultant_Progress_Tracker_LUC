@@ -28,6 +28,8 @@ import studentService from '../../services/studentService';
 import consultantService from '../../services/consultantService';
 import commitmentService from '../../services/commitmentService';
 import SkillhubStudentTable from './SkillhubStudentTable';
+import DateRangeSelector from '../DateRangeSelector';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const BRANCHES = [
     { key: ORGANIZATIONS.SKILLHUB_TRAINING, label: 'Training' },
@@ -54,9 +56,14 @@ const AdminSkillhubView = () => {
     const [error, setError] = useState('');
     const [counselors, setCounselors] = useState([]);
     const [commitments, setCommitments] = useState([]);
-    const [stats, setStats] = useState({ newAdmissions: 0, activeStudents: 0 });
+    const [stats, setStats] = useState({ newAdmissionsPeriod: 0, activeStudents: 0, commitmentsPeriod: 0 });
     const [branchTotals, setBranchTotals] = useState({});
     const [autoPickDone, setAutoPickDone] = useState(false);
+    const [dateRange, setDateRange] = useState({
+        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        viewType: 'current-week',
+    });
 
     const activeBranch = BRANCHES[branchTab].key;
 
@@ -100,22 +107,37 @@ const AdminSkillhubView = () => {
         try {
             const [consultantsRes, commitmentsRes, newRes, activeRes] = await Promise.all([
                 consultantService.getConsultants({ organization: activeBranch }),
-                commitmentService.getCommitments({ organization: activeBranch }),
-                studentService.getStudents({ organization: activeBranch, studentStatus: 'new_admission' }),
+                // Date-range scoped commitments for this branch
+                commitmentService.getCommitmentsByDateRange(
+                    dateRange.startDate,
+                    dateRange.endDate,
+                    null,
+                    activeBranch
+                ),
+                // New admissions added during the selected period
+                studentService.getStudents({
+                    organization: activeBranch,
+                    studentStatus: 'new_admission',
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                }),
+                // Active students — cumulative
                 studentService.getStudents({ organization: activeBranch, studentStatus: 'active' }),
             ]);
+            const commitList = commitmentsRes.data || [];
             setCounselors(consultantsRes.data || []);
-            setCommitments(commitmentsRes.data || []);
+            setCommitments(commitList);
             setStats({
-                newAdmissions: (newRes.data || []).length,
+                newAdmissionsPeriod: (newRes.data || []).length,
                 activeStudents: (activeRes.data || []).length,
+                commitmentsPeriod: commitList.length,
             });
         } catch (e) {
             setError(e.response?.data?.message || 'Failed to load Skillhub data');
         } finally {
             setLoading(false);
         }
-    }, [activeBranch]);
+    }, [activeBranch, dateRange.startDate, dateRange.endDate]);
 
     useEffect(() => { loadBranchTotals(); }, [loadBranchTotals]);
     useEffect(() => { load(); }, [load]);
@@ -145,6 +167,15 @@ const AdminSkillhubView = () => {
                 </Paper>
             </Box>
 
+            {/* Date range filter — drives commitments + "this period" KPIs
+                for the currently selected Skillhub branch. Active Students
+                stays cumulative (lifetime total). */}
+            <Card elevation={1} sx={{ mb: 2, borderRadius: 2 }}>
+                <CardContent sx={{ py: 2 }}>
+                    <DateRangeSelector value={dateRange} onChange={setDateRange} />
+                </CardContent>
+            </Card>
+
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {loading ? (
@@ -155,16 +186,16 @@ const AdminSkillhubView = () => {
                 <>
                     <Grid container spacing={2} sx={{ mb: 3 }}>
                         <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="New Admissions" value={stats.newAdmissions} color="#FF9800" />
+                            <KpiMini label="New Admissions (period)" value={stats.newAdmissionsPeriod} color="#FF9800" />
                         </Grid>
                         <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="Active Students" value={stats.activeStudents} color="#4CAF50" />
+                            <KpiMini label="Active Students (total)" value={stats.activeStudents} color="#4CAF50" />
                         </Grid>
                         <Grid size={{ xs: 6, md: 3 }}>
                             <KpiMini label="Counselors" value={counselors.length} color="#2196F3" />
                         </Grid>
                         <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="Commitments" value={commitments.length} color="#9C27B0" />
+                            <KpiMini label="Commitments (period)" value={stats.commitmentsPeriod} color="#9C27B0" />
                         </Grid>
                     </Grid>
 
