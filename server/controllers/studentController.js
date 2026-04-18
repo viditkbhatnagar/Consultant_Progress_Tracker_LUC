@@ -10,12 +10,28 @@ const { isSkillhub } = require('../config/organizations');
 exports.getStudents = async (req, res, next) => {
     try {
         let query;
-        const { startDate, endDate, consultant, university, team, month, program, source, conversionOperator, conversionDays, studentStatus } = req.query;
+        const { startDate, endDate, consultant, university, team, month, program, source, conversionOperator, conversionDays, studentStatus, curriculumSlug } = req.query;
 
         const filter = buildScopeFilter(req);
 
         if (studentStatus) {
             filter.studentStatus = studentStatus;
+        }
+        if (curriculumSlug) {
+            // Skillhub-only filter: CBSE or IGCSE. Also match legacy records
+            // that stored only the full curriculum (e.g. "IGCSE-Cambridge")
+            // without the derived slug.
+            if (curriculumSlug === 'CBSE') {
+                filter.$or = [
+                    { curriculumSlug: 'CBSE' },
+                    { curriculum: 'CBSE' },
+                ];
+            } else if (curriculumSlug === 'IGCSE') {
+                filter.$or = [
+                    { curriculumSlug: 'IGCSE' },
+                    { curriculum: { $regex: '^IGCSE', $options: 'i' } },
+                ];
+            }
         }
 
         // Date range filter on closing date
