@@ -34,11 +34,23 @@ exports.getStudents = async (req, res, next) => {
             }
         }
 
-        // Date range filter on closing date
+        // Date range filter. For Skillhub (identified by curriculumSlug param
+        // or explicit skillhub organization scope) we filter by createdAt —
+        // Skillhub admissions don't always carry a closingDate. LUC keeps
+        // its existing closingDate semantics. endDate is pushed to end-of-day
+        // so records created later on that date are still included.
         if (startDate && endDate) {
-            filter.closingDate = {
+            const orgScope = filter.organization || req.query.organization;
+            const isSkillhubScope =
+                curriculumSlug ||
+                orgScope === 'skillhub_training' ||
+                orgScope === 'skillhub_institute';
+            const field = isSkillhubScope ? 'createdAt' : 'closingDate';
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filter[field] = {
                 $gte: new Date(startDate),
-                $lte: new Date(endDate),
+                $lte: end,
             };
         }
 
