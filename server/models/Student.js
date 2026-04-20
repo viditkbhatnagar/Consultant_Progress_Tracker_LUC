@@ -33,6 +33,8 @@ const SKILLHUB_LEAD_SOURCES = [
     'Instagram',
     'School',
     'Reference',
+    'Walk-In',
+    'Tele-Inquiry',
 ];
 const SKILLHUB_STREAMS = ['Science', 'Commerce'];
 const STUDENT_STATUSES = ['new_admission', 'active', 'inactive'];
