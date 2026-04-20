@@ -34,7 +34,6 @@ import AdminOrgTabs from '../components/AdminOrgTabs';
 import {
     getSlotsForOrg,
     getActivitiesForOrg,
-    getLunchGapForOrg,
     resolveViewOrg,
 } from '../utils/hourlyConfig';
 import { useAdminOrgScope } from '../utils/adminOrgScope';
@@ -161,19 +160,9 @@ const SkillhubHourlyTrackerPage = () => {
 
     const SLOTS = useMemo(() => getSlotsForOrg(viewOrg), [viewOrg]);
     const ACTIVITIES = useMemo(() => getActivitiesForOrg(viewOrg), [viewOrg]);
-    const LUNCH = useMemo(() => getLunchGapForOrg(viewOrg), [viewOrg]);
-    const lunchIdx = useMemo(() => {
-        // Lunch sits between slot index 4 (s1230) and the following slot for
-        // Skillhub (s1500), so we render a gap block at position 5 visually.
-        // For Skillhub: s0930, s1030, s1130, s1230, s1300 | LUNCH | s1500...
-        // Find the first gap in the slot list based on time.
-        for (let i = 0; i < SLOTS.length - 1; i++) {
-            // crude: if the next slot's label time is not contiguous
-            if (SLOTS[i].end === '2:00' && SLOTS[i + 1].lbl === '3:00') return i + 1;
-            if (SLOTS[i].end === '1:00' && SLOTS[i + 1].lbl === '2:00') return i + 1;
-        }
-        return -1;
-    }, [SLOTS]);
+    // Skillhub's 2:00–3:00 slot (s1400) is a real working slot now — flagged
+    // isLunch so counselors can still log activity when they work through lunch.
+    // The old time-gap based lunch block is no longer needed.
 
     const [currentDate, setCurrentDate] = useState(() => {
         const d = new Date();
@@ -729,43 +718,31 @@ const SkillhubHourlyTrackerPage = () => {
                                     >
                                         Counselor
                                     </th>
-                                    {SLOTS.map((s, i) => (
-                                        <React.Fragment key={s.id}>
-                                            {i === lunchIdx && (
-                                                <th
-                                                    style={{
-                                                        padding: '6px 4px',
-                                                        background: '#fef3c7',
-                                                        color: '#92400e',
-                                                        fontWeight: 700,
-                                                        fontSize: 10,
-                                                        textTransform: 'uppercase',
-                                                        textAlign: 'center',
-                                                        borderBottom: '1px solid rgba(0,0,0,0.08)',
-                                                        minWidth: 80,
-                                                    }}
-                                                >
-                                                    🍽️ {LUNCH.note}<br />
-                                                    <span style={{ fontSize: 9, opacity: 0.7 }}>{LUNCH.lbl}</span>
-                                                </th>
+                                    {SLOTS.map((s) => (
+                                        <th
+                                            key={s.id}
+                                            style={{
+                                                padding: '6px 4px',
+                                                background: s.isLunch ? '#fef3c7' : undefined,
+                                                borderBottom: '1px solid rgba(0,0,0,0.08)',
+                                                fontSize: 10,
+                                                color: s.isLunch ? '#92400e' : '#64748b',
+                                                fontWeight: s.isLunch ? 700 : undefined,
+                                                minWidth: 80,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            {s.isLunch && (
+                                                <Box sx={{ fontSize: 9, fontWeight: 700, letterSpacing: '.04em' }}>
+                                                    🍽️ LUNCH
+                                                </Box>
                                             )}
-                                            <th
-                                                style={{
-                                                    padding: '6px 4px',
-                                                    borderBottom: '1px solid rgba(0,0,0,0.08)',
-                                                    fontSize: 10,
-                                                    color: '#64748b',
-                                                    minWidth: 80,
-                                                    textAlign: 'center',
-                                                }}
-                                            >
-                                                {s.lbl}
-                                                <br />
-                                                <span style={{ fontSize: 9, opacity: 0.6 }}>
-                                                    –{s.end}
-                                                </span>
-                                            </th>
-                                        </React.Fragment>
+                                            {s.lbl}
+                                            <br />
+                                            <span style={{ fontSize: 9, opacity: 0.6 }}>
+                                                –{s.end}
+                                            </span>
+                                        </th>
                                     ))}
                                     {/* DAILY SUMMARY header group spanning the 7 per-counselor metric columns */}
                                     <th
@@ -802,13 +779,8 @@ const SkillhubHourlyTrackerPage = () => {
                                 {/* Second header row: per-metric labels under DAILY SUMMARY */}
                                 <tr style={{ background: '#fffbeb' }}>
                                     <th style={{ position: 'sticky', left: 0, background: '#fffbeb', borderBottom: '1px solid rgba(0,0,0,0.08)' }} />
-                                    {SLOTS.map((s, i) => (
-                                        <React.Fragment key={`sub-${s.id}`}>
-                                            {i === lunchIdx && (
-                                                <th style={{ background: '#fef3c7', borderBottom: '1px solid rgba(0,0,0,0.08)' }} />
-                                            )}
-                                            <th style={{ background: '#fffbeb', borderBottom: '1px solid rgba(0,0,0,0.08)' }} />
-                                        </React.Fragment>
+                                    {SLOTS.map((s) => (
+                                        <th key={`sub-${s.id}`} style={{ background: s.isLunch ? '#fef3c7' : '#fffbeb', borderBottom: '1px solid rgba(0,0,0,0.08)' }} />
                                     ))}
                                     {SUMMARY_COLS.filter((c) => c.key !== 'admissions').map((col) => (
                                         <th
@@ -866,22 +838,15 @@ const SkillhubHourlyTrackerPage = () => {
                                                     {c.teamName}
                                                 </div>
                                             </td>
-                                            {SLOTS.map((s, i) => {
+                                            {SLOTS.map((s) => {
                                                 const act = activities.get(`${cid}:${s.id}`);
                                                 const meta = act && activityMap[act.activityType];
                                                 return (
                                                     <React.Fragment key={s.id}>
-                                                        {i === lunchIdx && (
-                                                            <td
-                                                                style={{
-                                                                    background: '#fffbeb',
-                                                                    borderBottom: '1px solid rgba(0,0,0,0.06)',
-                                                                }}
-                                                            />
-                                                        )}
                                                         <td
                                                             style={{
                                                                 padding: 2,
+                                                                background: s.isLunch ? '#fffbeb' : undefined,
                                                                 borderBottom: '1px solid rgba(0,0,0,0.06)',
                                                                 verticalAlign: 'middle',
                                                                 textAlign: 'center',
