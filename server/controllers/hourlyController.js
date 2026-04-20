@@ -102,7 +102,11 @@ function isTodayStr(dateStr) {
 // @access  Private
 exports.getConsultants = async (req, res, next) => {
     try {
-        const filter = { ...buildScopeFilter(req), isActive: true };
+        const filter = {
+            ...buildScopeFilter(req),
+            isActive: true,
+            excludeFromHourly: { $ne: true },
+        };
         // team_lead may opt out of ownership filter via scope=org (legacy)
         if (req.user.role === 'team_lead' && req.query.scope === 'org') {
             delete filter.teamLead;
