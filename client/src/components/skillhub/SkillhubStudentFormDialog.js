@@ -71,7 +71,7 @@ const blankForm = {
     consultantId: '',
 };
 
-const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors = [] }) => {
+const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors = [], initialStatus = 'new_admission' }) => {
     const [formData, setFormData] = useState(blankForm);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -161,6 +161,12 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                 curriculum,
                 enrollmentNumber: formData.enrollmentNumber.trim(),
             };
+            // For new students, honor the button the counselor clicked
+            // (New Admission / New Active / New Inactive). On edit we never
+            // touch studentStatus here — moves happen via the row menu.
+            if (!student) {
+                payload.studentStatus = initialStatus;
+            }
             delete payload.board;
             delete payload.igcseVariant;
             await onSave(payload);
@@ -175,7 +181,13 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle>
-                {student ? 'Edit Student' : 'New Admission'}
+                {student
+                    ? 'Edit Student'
+                    : initialStatus === 'active'
+                    ? 'New Active Student'
+                    : initialStatus === 'inactive'
+                    ? 'New Inactive Student'
+                    : 'New Admission'}
             </DialogTitle>
             <DialogContent dividers>
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}

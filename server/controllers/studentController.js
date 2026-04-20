@@ -457,6 +457,57 @@ exports.activateStudent = async (req, res, next) => {
     }
 };
 
+// @desc    Move a Skillhub student to a different status tab.
+//          Generic version of /activate — handles any pair of transitions
+//          (active ↔ inactive, inactive → new_admission, etc.).
+//          The rich activation flow (collecting emirate / registrationFee /
+//          dateOfEnrollment / emis) still lives at /activate for the specific
+//          new_admission → active case.
+// @route   PATCH /api/students/:id/status
+// @access  Private (Admin/Skillhub)
+exports.changeStudentStatus = async (req, res, next) => {
+    try {
+        const { studentStatus } = req.body;
+        const allowed = ['new_admission', 'active', 'inactive'];
+        if (!allowed.includes(studentStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: `studentStatus must be one of: ${allowed.join(', ')}`,
+            });
+        }
+
+        const student = await Student.findById(req.params.id);
+        if (!student) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+
+        if (!canAccessDoc(req.user, student)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this student',
+            });
+        }
+
+        if (!isSkillhub(student.organization)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only Skillhub students support status transitions',
+            });
+        }
+
+        if (student.studentStatus === studentStatus) {
+            return res.status(200).json({ success: true, data: student });
+        }
+
+        student.studentStatus = studentStatus;
+        await student.save();
+
+        res.status(200).json({ success: true, data: student });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get student statistics
 // @route   GET /api/students/stats
 // @access  Private (Admin/Team Lead)

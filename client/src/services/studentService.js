@@ -60,6 +60,12 @@ const activateStudent = async (id, activationData = {}) => {
     return response.data;
 };
 
+// Skillhub: move a student between status tabs (new_admission / active / inactive)
+const changeStudentStatus = async (id, studentStatus) => {
+    const response = await axios.patch(`${API_URL}/${id}/status`, { studentStatus });
+    return response.data;
+};
+
 // Get student statistics
 const getStudentStats = async () => {
     const response = await axios.get(`${API_URL}/stats`);
@@ -73,6 +79,7 @@ const studentService = {
     updateStudent,
     deleteStudent,
     activateStudent,
+    changeStudentStatus,
     getStudentStats,
 };
 
