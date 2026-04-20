@@ -117,6 +117,16 @@ export const STUDENT_STATUSES = [
     { value: 'inactive', label: 'Inactive', color: '#9E9E9E' },
 ];
 
+// Title-case a string, preserving internal whitespace and punctuation.
+// Used by Skillhub student form on text-ish fields (names, school, address, etc.)
+// so stored values stay consistent regardless of how the counselor typed them.
+export const toTitleCase = (value) => {
+    if (typeof value !== 'string' || !value) return value;
+    return value
+        .toLowerCase()
+        .replace(/\b([a-z])/g, (_, ch) => ch.toUpperCase());
+};
+
 // Days of week
 export const DAYS_OF_WEEK = [
     'Monday',

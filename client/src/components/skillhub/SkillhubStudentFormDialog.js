@@ -35,6 +35,7 @@ import {
     splitCurriculum,
     composeCurriculum,
     getCurrentAcademicYear,
+    toTitleCase,
 } from '../../utils/constants';
 
 const emptyEmi = () => ({ dueDate: '', amount: 0, paidOn: '', paidAmount: 0 });
@@ -109,6 +110,13 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
     const set = (field, value) => setFormData((f) => ({ ...f, [field]: value }));
     const setContact = (group, who, value) =>
         setFormData((f) => ({ ...f, [group]: { ...f[group], [who]: value } }));
+
+    // Mobile autocapitalize hint + force Title Case on blur so stored values stay
+    // consistent regardless of how the counselor typed. Email/phone/numbers skip this.
+    const capProps = (field) => ({
+        inputProps: { autoCapitalize: 'words' },
+        onBlur: () => set(field, toTitleCase(formData[field])),
+    });
     const updateEmi = (idx, field, value) =>
         setFormData((f) => ({
             ...f,
@@ -179,6 +187,7 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             fullWidth required label="Student Name"
                             value={formData.studentName}
                             onChange={(e) => set('studentName', e.target.value)}
+                            {...capProps('studentName')}
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 3 }}>
@@ -224,15 +233,18 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
 
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth label="Nationality" value={formData.nationality}
-                            onChange={(e) => set('nationality', e.target.value)} />
+                            onChange={(e) => set('nationality', e.target.value)}
+                            {...capProps('nationality')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth label="Residence" value={formData.residence}
-                            onChange={(e) => set('residence', e.target.value)} />
+                            onChange={(e) => set('residence', e.target.value)}
+                            {...capProps('residence')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth label="Address / Emirate" value={formData.addressEmirate}
-                            onChange={(e) => set('addressEmirate', e.target.value)} />
+                            onChange={(e) => set('addressEmirate', e.target.value)}
+                            {...capProps('addressEmirate')} />
                     </Grid>
                 </Grid>
 
@@ -241,7 +253,8 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField fullWidth label="School" value={formData.school}
-                            onChange={(e) => set('school', e.target.value)} />
+                            onChange={(e) => set('school', e.target.value)}
+                            {...capProps('school')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 3 }}>
                         <TextField fullWidth required label="Year / Grade" value={formData.yearOrGrade}
@@ -511,11 +524,13 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth label="Referred By" value={formData.referredBy}
-                            onChange={(e) => set('referredBy', e.target.value)} />
+                            onChange={(e) => set('referredBy', e.target.value)}
+                            {...capProps('referredBy')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth label="Campaign Name" value={formData.campaignName}
-                            onChange={(e) => set('campaignName', e.target.value)} />
+                            onChange={(e) => set('campaignName', e.target.value)}
+                            {...capProps('campaignName')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth type="date" label="Enquiry Date" InputLabelProps={{ shrink: true }}
