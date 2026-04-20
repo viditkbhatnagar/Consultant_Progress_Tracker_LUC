@@ -799,10 +799,18 @@ const TeamLeadDashboard = () => {
                                                 {displayCommitments.map((commitment) => {
                                                     // Calculate achievement: 100% if achieved or admission closed, else 0%
                                                     const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
-                                                    const commitmentDate = new Date(commitment.weekStartDate);
-                                                    const dayOfWeek = format(commitmentDate, 'EEEE');
-                                                    const dateFormatted = format(commitmentDate, 'MMM dd, yyyy');
-                                                    const timeFormatted = format(commitment.createdAt ? new Date(commitment.createdAt) : commitmentDate, 'hh:mm a');
+                                                    // Date/Day from commitmentDate (the day the user picked for
+                                                    // this commitment). Time stays on createdAt.
+                                                    const dateSource = commitment.commitmentDate
+                                                        || commitment.createdAt
+                                                        || commitment.weekStartDate;
+                                                    const commitmentDateObj = new Date(dateSource);
+                                                    const timeSource = commitment.createdAt
+                                                        ? new Date(commitment.createdAt)
+                                                        : commitmentDateObj;
+                                                    const dayOfWeek = format(commitmentDateObj, 'EEEE');
+                                                    const dateFormatted = format(commitmentDateObj, 'MMM dd, yyyy');
+                                                    const timeFormatted = format(timeSource, 'hh:mm a');
 
                                                     return (
                                                         <TableRow key={commitment._id} hover>

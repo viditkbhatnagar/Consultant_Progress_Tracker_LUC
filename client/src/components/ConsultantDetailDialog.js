@@ -117,10 +117,13 @@ const ConsultantDetailDialog = ({
                                         </TableHead>
                                         <TableBody>
                                             {allCommitments.map((commitment) => {
-                                                // Calculate date, day, time formatting
-                                                const commitmentDate = new Date(commitment.weekStartDate);
-                                                const dayOfWeek = commitmentDate.toLocaleDateString('en-US', { weekday: 'long' });
-                                                const dateFormatted = commitmentDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+                                                // Date/Day from commitmentDate (the day the user picked). Time stays on createdAt.
+                                                const dateSource = commitment.commitmentDate
+                                                    || commitment.createdAt
+                                                    || commitment.weekStartDate;
+                                                const commitmentDateObj = new Date(dateSource);
+                                                const dayOfWeek = commitmentDateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                                                const dateFormatted = commitmentDateObj.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
                                                 const timeFormatted = commitment.createdAt
                                                     ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                                                     : '--:--';

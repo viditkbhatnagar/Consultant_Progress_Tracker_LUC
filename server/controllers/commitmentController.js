@@ -118,6 +118,25 @@ exports.getCommitment = async (req, res, next) => {
     }
 };
 
+// Non-admin users (team_lead, skillhub) cannot backdate a commitment into
+// a different week — the commitmentDate must fall inside [weekStartDate,
+// weekEndDate]. Admins bypass this.
+function validateCommitmentDateInWeek(body) {
+    if (!body.commitmentDate || !body.weekStartDate || !body.weekEndDate) return null;
+    const d = new Date(body.commitmentDate);
+    const s = new Date(body.weekStartDate);
+    const e = new Date(body.weekEndDate);
+    if (Number.isNaN(d.getTime()) || Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
+        return 'Invalid date provided';
+    }
+    // Compare by yyyy-mm-dd to ignore time-of-day.
+    const toDay = (x) => x.toISOString().slice(0, 10);
+    if (toDay(d) < toDay(s) || toDay(d) > toDay(e)) {
+        return 'Commitment date must fall within the selected week';
+    }
+    return null;
+}
+
 // @desc    Create new commitment
 // @route   POST /api/commitments
 // @access  Private/Consultant
@@ -130,6 +149,11 @@ exports.createCommitment = async (req, res, next) => {
             req.body.organization = req.user.organization;
             req.body.createdBy = req.user.id;
             req.body.lastUpdatedBy = req.user.id;
+
+            const err = validateCommitmentDateInWeek(req.body);
+            if (err) {
+                return res.status(400).json({ success: false, message: err });
+            }
         } else if (req.user.role === 'admin') {
             if (!req.body.teamLead || !req.body.teamName) {
                 return res.status(400).json({
@@ -210,6 +234,20 @@ exports.updateCommitment = async (req, res, next) => {
 
         // Update last modified info
         req.body.lastUpdatedBy = req.user.id;
+
+        // Non-admin edits must keep commitmentDate inside the (possibly
+        // updated) week range. Fall back to the stored week bounds when the
+        // client didn't resend them.
+        if (req.user.role !== 'admin' && req.body.commitmentDate) {
+            const err = validateCommitmentDateInWeek({
+                commitmentDate: req.body.commitmentDate,
+                weekStartDate: req.body.weekStartDate || commitment.weekStartDate,
+                weekEndDate: req.body.weekEndDate || commitment.weekEndDate,
+            });
+            if (err) {
+                return res.status(400).json({ success: false, message: err });
+            }
+        }
 
         // Skillhub-only: validate + normalize demo slots (preserves prior doneAt).
         if (isSkillhub(commitment.organization) && req.body.demos !== undefined) {

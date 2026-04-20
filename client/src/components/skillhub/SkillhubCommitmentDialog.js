@@ -22,7 +22,18 @@ import {
 } from '@mui/material';
 import { LEAD_STAGES_LIST } from '../../utils/constants';
 import { getWeekInfo } from '../../utils/weekUtils';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, getWeek } from 'date-fns';
+
+// Bound the commitment date picker to the selected week's Mon–Sun range.
+function weekBoundsFor(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const start = startOfWeek(d, { weekStartsOn: 1 });
+    const end = endOfWeek(d, { weekStartsOn: 1 });
+    return {
+        min: format(start, 'yyyy-MM-dd'),
+        max: format(end, 'yyyy-MM-dd'),
+    };
+}
 
 const DEMO_SLOTS = ['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'];
 
@@ -72,8 +83,11 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     useEffect(() => {
         if (!open) return;
         if (commitment) {
-            const dateStr = commitment.weekStartDate
-                ? format(new Date(commitment.weekStartDate), 'yyyy-MM-dd')
+            // Prefer commitmentDate (the actual date the user picked); fall
+            // back to weekStartDate only for legacy rows that predate it.
+            const source = commitment.commitmentDate || commitment.weekStartDate;
+            const dateStr = source
+                ? format(new Date(source), 'yyyy-MM-dd')
                 : format(new Date(), 'yyyy-MM-dd');
 
             // Merge stored demos into the 4-slot template so all 4 rows always render.
@@ -181,11 +195,12 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     notes: d.notes,
                 }));
 
-            const selectedDate = new Date(formData.selectedDate);
-            const weekStart = new Date(selectedDate);
-            weekStart.setHours(0, 0, 0, 0);
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekEnd.getDate() + 6);
+            // Derive week bounds from the picked commitment date so week &
+            // date can never disagree on the server.
+            const selectedDate = new Date(formData.selectedDate + 'T00:00:00');
+            const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
+            const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
+            const weekNumber = getWeek(selectedDate, { weekStartsOn: 1 });
 
             const payload = {
                 consultantName: formData.consultantName,
@@ -197,10 +212,11 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 admissionClosed: formData.admissionClosed,
                 prospectForWeek: formData.prospectForWeek,
                 commitmentVsAchieved: formData.commitmentVsAchieved,
-                weekNumber: formData.weekNumber,
-                year: formData.year,
+                weekNumber,
+                year: selectedDate.getFullYear(),
                 weekStartDate: weekStart,
                 weekEndDate: weekEnd,
+                commitmentDate: formData.selectedDate,
                 dayCommitted: formData.dayOfWeek,
                 conversionProbability: formData.conversionProbability,
                 followUpDate: formData.followUpDate || undefined,
@@ -285,6 +301,35 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 ))}
                             </Select>
                         </FormControl>
+                    </Grid>
+                    {/* Commitment Date — bounded to the week it belongs to.
+                        To log for a different week, pick a date in that week. */}
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                        {(() => {
+                            const { min, max } = weekBoundsFor(formData.selectedDate);
+                            return (
+                                <TextField
+                                    fullWidth type="date" label="Commitment Date" required
+                                    InputLabelProps={{ shrink: true }}
+                                    inputProps={{ min, max }}
+                                    value={formData.selectedDate}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        // Clamp so typing a date outside the week snaps inside it.
+                                        const clamped = v < min ? min : v > max ? max : v;
+                                        const day = format(new Date(clamped + 'T00:00:00'), 'EEEE');
+                                        const wkNum = getWeek(new Date(clamped + 'T00:00:00'), { weekStartsOn: 1 });
+                                        setFormData((f) => ({
+                                            ...f,
+                                            selectedDate: clamped,
+                                            dayOfWeek: day,
+                                            weekNumber: wkNum,
+                                        }));
+                                    }}
+                                    helperText={`Pick any day in ${min} – ${max}`}
+                                />
+                            );
+                        })()}
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
