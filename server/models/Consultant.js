@@ -37,6 +37,13 @@ const ConsultantSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    // Hide this consultant from the Hourly Tracker grid without removing them
+    // from the student form's counselor dropdown. Used for historical-only
+    // counselors who still need to be assignable on legacy student records.
+    excludeFromHourly: {
+        type: Boolean,
+        default: false,
+    },
     createdAt: {
         type: Date,
         default: Date.now,
