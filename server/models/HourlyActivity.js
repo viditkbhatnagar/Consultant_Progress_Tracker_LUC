@@ -49,6 +49,22 @@ const HourlyActivitySchema = new mongoose.Schema(
             type: Number,
             default: 60,
         },
+        // Optional multi-activity payload for a slot (Skillhub only today).
+        // When populated, readers/aggregators should iterate this instead of the
+        // flat activityType/count/duration fields. Flat fields still mirror the
+        // primary (first) item for backwards compatibility with older readers.
+        activities: {
+            type: [
+                {
+                    _id: false,
+                    activityType: { type: String, enum: ALL_ACTIVITY_TYPES, required: true },
+                    count: { type: Number, default: 1 },
+                    followupCount: { type: Number, default: 0 },
+                    duration: { type: Number, default: 0 },
+                },
+            ],
+            default: [],
+        },
         note: {
             type: String,
             default: '',
