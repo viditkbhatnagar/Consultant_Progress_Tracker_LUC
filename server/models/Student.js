@@ -36,7 +36,6 @@ const SKILLHUB_LEAD_SOURCES = [
     'Walk-In',
     'Tele-Inquiry',
 ];
-const SKILLHUB_STREAMS = ['Science', 'Commerce'];
 const STUDENT_STATUSES = ['new_admission', 'active', 'inactive'];
 const ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
 
@@ -145,7 +144,6 @@ const StudentSchema = new mongoose.Schema(
             enum: ACADEMIC_YEARS,
             required: skillhubOnly,
         },
-        stream: { type: String, enum: [...SKILLHUB_STREAMS, null], default: null },
         subjects: {
             type: [{ type: String, enum: SKILLHUB_SUBJECTS }],
             default: [],

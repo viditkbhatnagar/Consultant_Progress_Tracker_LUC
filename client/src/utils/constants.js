@@ -77,7 +77,6 @@ export const SKILLHUB_LEAD_SOURCES = [
     'Walk-In',
     'Tele-Inquiry',
 ];
-export const SKILLHUB_STREAMS = ['Science', 'Commerce'];
 export const SKILLHUB_BOARDS = ['CBSE', 'IGCSE'];
 export const SKILLHUB_IGCSE_VARIANTS = ['Cambridge', 'Edexcel', 'AQA'];
 export const SKILLHUB_ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
