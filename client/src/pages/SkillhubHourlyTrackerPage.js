@@ -60,6 +60,22 @@ const DURATIONS = [
     { v: 180, lbl: '3 hr' },
 ];
 
+// Normalize a HourlyActivity doc into an iterable list of activity items.
+// Matches the server-side helper so multi-activity slots aggregate identically
+// on both sides. Legacy/single-activity docs wrap the flat fields in one item.
+const getActivityItems = (doc) => {
+    if (Array.isArray(doc.activities) && doc.activities.length > 0) {
+        return doc.activities;
+    }
+    return [
+        {
+            activityType: doc.activityType,
+            count: doc.count,
+            duration: doc.duration,
+        },
+    ];
+};
+
 // Minimal markdown renderer for AI analysis / leaderboard output.
 // Supports: ## h2, ### h3, - / * bullets, **bold**, *italic*, blank-line spacing.
 // Keeps the output consistent with the LUC AISummaryCard visual language.
@@ -177,9 +193,10 @@ const SkillhubHourlyTrackerPage = () => {
 
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerTarget, setPickerTarget] = useState(null);
-    const [pickerType, setPickerType] = useState(null);
-    const [pickerDur, setPickerDur] = useState(60);
-    const [pickerCount, setPickerCount] = useState(1);
+    // Multi-activity picker state. `pickerItems` is the array of
+    // {activityType, count, duration} the counselor currently has selected
+    // for the slot. When length > 1 the note is mandatory.
+    const [pickerItems, setPickerItems] = useState([]);
     const [pickerNote, setPickerNote] = useState('');
 
     const [aiOpen, setAiOpen] = useState(false);
@@ -227,29 +244,80 @@ const SkillhubHourlyTrackerPage = () => {
         if (!canEdit) return;
         const existing = activities.get(`${consultantId}:${slot.id}`);
         setPickerTarget({ consultantId, consultantName, slot });
-        setPickerType(existing?.activityType || null);
-        setPickerDur(existing?.duration || slot.mins || 60);
-        setPickerCount(existing?.count || 1);
+        if (existing?.activities?.length > 0) {
+            setPickerItems(
+                existing.activities.map((i) => ({
+                    activityType: i.activityType,
+                    count: i.count || 1,
+                    duration: i.duration || slot.mins || 60,
+                }))
+            );
+        } else if (existing?.activityType) {
+            setPickerItems([
+                {
+                    activityType: existing.activityType,
+                    count: existing.count || 1,
+                    duration: existing.duration || slot.mins || 60,
+                },
+            ]);
+        } else {
+            setPickerItems([]);
+        }
         setPickerNote(existing?.note || '');
         setPickerOpen(true);
     };
 
+    const toggleActivity = (slug) => {
+        setPickerItems((prev) => {
+            if (prev.some((i) => i.activityType === slug)) {
+                return prev.filter((i) => i.activityType !== slug);
+            }
+            const meta = ACTIVITIES.find((a) => a.slug === slug);
+            return [
+                ...prev,
+                {
+                    activityType: slug,
+                    count: meta?.hasCount ? 1 : 0,
+                    duration: meta?.allowsDuration ? (pickerTarget?.slot.mins || 60) : 0,
+                },
+            ];
+        });
+    };
+
+    const updatePickerItem = (slug, field, value) => {
+        setPickerItems((prev) =>
+            prev.map((i) => (i.activityType === slug ? { ...i, [field]: value } : i))
+        );
+    };
+
+    const isMultiPick = pickerItems.length > 1;
+    const noteRequired = isMultiPick;
+    const noteMissing = noteRequired && !pickerNote.trim();
+
     const savePick = async () => {
-        if (!pickerTarget || !pickerType) {
+        if (!pickerTarget || pickerItems.length === 0) {
             setPickerOpen(false);
             return;
         }
+        if (noteMissing) {
+            alert('Please add a note when logging multiple activities in one slot.');
+            return;
+        }
         const { consultantId, consultantName, slot } = pickerTarget;
-        const act = ACTIVITIES.find((a) => a.slug === pickerType);
         try {
             await hourlyService.upsertSlot({
                 consultantId,
                 consultantName,
                 date: dateStr,
                 slotId: slot.id,
-                activityType: pickerType,
-                count: act?.hasCount ? pickerCount : 1,
-                duration: act?.allowsDuration ? pickerDur : slot.mins,
+                activities: pickerItems.map((i) => {
+                    const meta = activityMap[i.activityType];
+                    return {
+                        activityType: i.activityType,
+                        count: meta?.hasCount ? i.count || 1 : 1,
+                        duration: meta?.allowsDuration ? i.duration || slot.mins : slot.mins,
+                    };
+                }),
                 note: pickerNote,
             });
             setPickerOpen(false);
@@ -347,35 +415,37 @@ const SkillhubHourlyTrackerPage = () => {
         for (const act of activities.values()) {
             if (act.isContinuation) continue;
             t.activeConsultants.add(String(act.consultant));
-            switch (act.activityType) {
-                case 'sh_call':
-                    t.calls += act.count || 1;
-                    break;
-                case 'sh_followup_admission':
-                    t.followupAdmissions += act.count || 1;
-                    break;
-                case 'sh_schedule':
-                    t.schedules += 1;
-                    break;
-                case 'sh_break':
-                    t.breaks += 1;
-                    break;
-                case 'sh_demo_meeting':
-                    t.demoMeetings += 1;
-                    t.demoMinutes += act.duration || 60;
-                    break;
-                case 'sh_meeting':
-                    t.meetings += 1;
-                    t.meetingMinutes += act.duration || 60;
-                    break;
-                case 'sh_payment_followup':
-                    t.paymentFollowups += act.count || 1;
-                    break;
-                case 'sh_operations':
-                    t.operations += 1;
-                    break;
-                default:
-                    break;
+            for (const item of getActivityItems(act)) {
+                switch (item.activityType) {
+                    case 'sh_call':
+                        t.calls += item.count || 1;
+                        break;
+                    case 'sh_followup_admission':
+                        t.followupAdmissions += item.count || 1;
+                        break;
+                    case 'sh_schedule':
+                        t.schedules += 1;
+                        break;
+                    case 'sh_break':
+                        t.breaks += 1;
+                        break;
+                    case 'sh_demo_meeting':
+                        t.demoMeetings += 1;
+                        t.demoMinutes += item.duration || 60;
+                        break;
+                    case 'sh_meeting':
+                        t.meetings += 1;
+                        t.meetingMinutes += item.duration || 60;
+                        break;
+                    case 'sh_payment_followup':
+                        t.paymentFollowups += item.count || 1;
+                        break;
+                    case 'sh_operations':
+                        t.operations += 1;
+                        break;
+                    default:
+                        break;
+                }
             }
         }
         let totalAdmissions = 0;
@@ -437,26 +507,31 @@ const SkillhubHourlyTrackerPage = () => {
             if (act.isContinuation) continue;
             const s = map[String(act.consultant)];
             if (!s) continue;
-            switch (act.activityType) {
-                case 'sh_call': s.calls += act.count || 1; break;
-                case 'sh_followup_admission': s.followupAdmissions += act.count || 1; break;
-                case 'sh_schedule': s.schedules += 1; break;
-                case 'sh_break': s.breaks += 1; break;
-                case 'sh_demo_meeting':
-                    s.demoMeetings += 1;
-                    s.demoMinutes += act.duration || 60;
-                    break;
-                case 'sh_meeting':
-                    s.meetings += 1;
-                    s.meetingMinutes += act.duration || 60;
-                    break;
-                case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
-                case 'sh_operations': s.operations += 1; break;
-                default: break;
+            for (const item of getActivityItems(act)) {
+                switch (item.activityType) {
+                    case 'sh_call': s.calls += item.count || 1; break;
+                    case 'sh_followup_admission': s.followupAdmissions += item.count || 1; break;
+                    case 'sh_schedule': s.schedules += 1; break;
+                    case 'sh_break': s.breaks += 1; break;
+                    case 'sh_demo_meeting':
+                        s.demoMeetings += 1;
+                        s.demoMinutes += item.duration || 60;
+                        break;
+                    case 'sh_meeting':
+                        s.meetings += 1;
+                        s.meetingMinutes += item.duration || 60;
+                        break;
+                    case 'sh_payment_followup': s.paymentFollowups += item.count || 1; break;
+                    case 'sh_operations': s.operations += 1; break;
+                    default: break;
+                }
             }
-            // Collect note, keyed by column
+            // Collect the slot-level note once per active slot. When a slot
+            // holds multiple activities it has one shared note; bucket it under
+            // the first activity's summary column so the eye icon surfaces.
             if (act.note && act.note.trim()) {
-                const col = ACT_TO_COL[act.activityType];
+                const firstItem = getActivityItems(act)[0];
+                const col = ACT_TO_COL[firstItem?.activityType];
                 if (col) {
                     s.notes[col].push({
                         slot: slotLabelById[act.slotId] || act.slotId,
@@ -841,6 +916,16 @@ const SkillhubHourlyTrackerPage = () => {
                                             {SLOTS.map((s) => {
                                                 const act = activities.get(`${cid}:${s.id}`);
                                                 const meta = act && activityMap[act.activityType];
+                                                const multi = act?.activities?.length > 1
+                                                    ? act.activities
+                                                    : null;
+                                                const tooltipText = act
+                                                    ? multi
+                                                        ? `${multi.map((m) => activityMap[m.activityType]?.label || m.activityType).join(' + ')}${act.note ? ' — ' + act.note : ''}`
+                                                        : `${meta?.label || act.activityType}${act.note ? ' — ' + act.note : ''}`
+                                                    : canEdit
+                                                    ? 'Click to log activity'
+                                                    : 'Read-only';
                                                 return (
                                                     <React.Fragment key={s.id}>
                                                         <td
@@ -852,22 +937,14 @@ const SkillhubHourlyTrackerPage = () => {
                                                                 textAlign: 'center',
                                                             }}
                                                         >
-                                                            <Tooltip
-                                                                title={
-                                                                    act
-                                                                        ? `${meta?.label || act.activityType}${act.note ? ' — ' + act.note : ''}`
-                                                                        : canEdit
-                                                                        ? 'Click to log activity'
-                                                                        : 'Read-only'
-                                                                }
-                                                                arrow
-                                                            >
+                                                            <Tooltip title={tooltipText} arrow>
                                                                 <Box
                                                                     onClick={() => openPicker(cid, c.name, s)}
                                                                     sx={{
                                                                         minHeight: 38,
                                                                         mx: 0.3,
                                                                         borderRadius: 1,
+                                                                        overflow: 'hidden',
                                                                         cursor: canEdit ? 'pointer' : 'default',
                                                                         display: 'flex',
                                                                         alignItems: 'center',
@@ -875,14 +952,40 @@ const SkillhubHourlyTrackerPage = () => {
                                                                         fontSize: 11,
                                                                         fontWeight: 600,
                                                                         color: act ? '#fff' : '#94a3b8',
-                                                                        bgcolor: act ? meta?.color || '#64748b' : 'transparent',
+                                                                        bgcolor: act && !multi ? meta?.color || '#64748b' : 'transparent',
                                                                         border: act ? 'none' : '1px dashed rgba(0,0,0,0.1)',
                                                                         '&:hover': canEdit
-                                                                            ? { bgcolor: act ? meta?.color : 'rgba(0,0,0,0.04)' }
+                                                                            ? { opacity: 0.9 }
                                                                             : {},
                                                                     }}
                                                                 >
-                                                                    {act ? (
+                                                                    {act && multi ? (
+                                                                        <Box sx={{ display: 'flex', width: '100%', minHeight: 38 }}>
+                                                                            {multi.map((m) => {
+                                                                                const mm = activityMap[m.activityType];
+                                                                                return (
+                                                                                    <Box
+                                                                                        key={m.activityType}
+                                                                                        sx={{
+                                                                                            flex: 1,
+                                                                                            bgcolor: mm?.color || '#64748b',
+                                                                                            color: '#fff',
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'center',
+                                                                                            justifyContent: 'center',
+                                                                                            fontSize: 9,
+                                                                                            lineHeight: 1.05,
+                                                                                            textAlign: 'center',
+                                                                                            px: 0.2,
+                                                                                        }}
+                                                                                    >
+                                                                                        {(mm?.label || m.activityType).split(' ')[0]}
+                                                                                        {m.count > 1 ? ` ×${m.count}` : ''}
+                                                                                    </Box>
+                                                                                );
+                                                                            })}
+                                                                        </Box>
+                                                                    ) : act ? (
                                                                         <Box sx={{ textAlign: 'center', lineHeight: 1.1 }}>
                                                                             {meta?.label?.split(' ')[0] || act.activityType}
                                                                             {act.count > 1 ? ` ×${act.count}` : ''}
@@ -1018,64 +1121,103 @@ const SkillhubHourlyTrackerPage = () => {
                 </DialogTitle>
                 <DialogContent dividers>
                     <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                        Select an activity type
+                        Select one or more activities. Tap again to deselect.
                     </Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1, mb: 2 }}>
-                        {ACTIVITIES.map((a) => (
-                            <Button
-                                key={a.slug}
-                                variant={pickerType === a.slug ? 'contained' : 'outlined'}
-                                onClick={() => setPickerType(a.slug)}
-                                sx={{
-                                    justifyContent: 'flex-start',
-                                    textTransform: 'none',
-                                    bgcolor: pickerType === a.slug ? a.color : 'transparent',
-                                    color: pickerType === a.slug ? '#fff' : a.color,
-                                    borderColor: a.color,
-                                    '&:hover': {
-                                        bgcolor: pickerType === a.slug ? a.color : `${a.color}15`,
+                        {ACTIVITIES.map((a) => {
+                            const selected = pickerItems.some((i) => i.activityType === a.slug);
+                            return (
+                                <Button
+                                    key={a.slug}
+                                    variant={selected ? 'contained' : 'outlined'}
+                                    onClick={() => toggleActivity(a.slug)}
+                                    sx={{
+                                        justifyContent: 'flex-start',
+                                        textTransform: 'none',
+                                        bgcolor: selected ? a.color : 'transparent',
+                                        color: selected ? '#fff' : a.color,
                                         borderColor: a.color,
-                                    },
-                                }}
-                            >
-                                {a.label}
-                            </Button>
-                        ))}
+                                        '&:hover': {
+                                            bgcolor: selected ? a.color : `${a.color}15`,
+                                            borderColor: a.color,
+                                        },
+                                    }}
+                                >
+                                    {selected ? '✓ ' : ''}
+                                    {a.label}
+                                </Button>
+                            );
+                        })}
                     </Box>
 
-                    {pickerType && activityMap[pickerType]?.hasCount && (
-                        <TextField
-                            fullWidth
-                            type="number"
-                            label="Count"
-                            value={pickerCount}
-                            onChange={(e) => setPickerCount(Math.max(1, Number(e.target.value) || 1))}
-                            sx={{ mb: 2 }}
-                        />
-                    )}
-
-                    {pickerType && activityMap[pickerType]?.allowsDuration && (
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                            <InputLabel>Duration</InputLabel>
-                            <Select
-                                label="Duration"
-                                value={pickerDur}
-                                onChange={(e) => setPickerDur(Number(e.target.value))}
-                            >
-                                {DURATIONS.map((d) => (
-                                    <MenuItem key={d.v} value={d.v}>
-                                        {d.lbl}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                    {pickerItems.length > 0 && (
+                        <Box sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                            {pickerItems.map((it) => {
+                                const meta = activityMap[it.activityType];
+                                if (!meta?.hasCount && !meta?.allowsDuration) return null;
+                                return (
+                                    <Box key={it.activityType} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <Typography variant="body2" sx={{ minWidth: 140, color: meta?.color, fontWeight: 600 }}>
+                                            {meta?.label}
+                                        </Typography>
+                                        {meta?.hasCount && (
+                                            <TextField
+                                                size="small"
+                                                type="number"
+                                                label="Count"
+                                                value={it.count}
+                                                onChange={(e) =>
+                                                    updatePickerItem(
+                                                        it.activityType,
+                                                        'count',
+                                                        Math.max(1, Number(e.target.value) || 1)
+                                                    )
+                                                }
+                                                sx={{ width: 110 }}
+                                            />
+                                        )}
+                                        {meta?.allowsDuration && (
+                                            <FormControl size="small" sx={{ minWidth: 140 }}>
+                                                <InputLabel>Duration</InputLabel>
+                                                <Select
+                                                    label="Duration"
+                                                    value={it.duration}
+                                                    onChange={(e) =>
+                                                        updatePickerItem(
+                                                            it.activityType,
+                                                            'duration',
+                                                            Number(e.target.value)
+                                                        )
+                                                    }
+                                                >
+                                                    {DURATIONS.map((d) => (
+                                                        <MenuItem key={d.v} value={d.v}>
+                                                            {d.lbl}
+                                                        </MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </FormControl>
+                                        )}
+                                    </Box>
+                                );
+                            })}
+                        </Box>
                     )}
 
                     <TextField
                         fullWidth
                         multiline
                         minRows={2}
-                        label="Note (optional)"
+                        label={noteRequired ? 'Note (required)' : 'Note (optional)'}
+                        required={noteRequired}
+                        error={noteMissing}
+                        helperText={
+                            noteMissing
+                                ? 'Describe how the slot was split between the selected activities.'
+                                : noteRequired
+                                ? 'A note is required when logging more than one activity in a slot.'
+                                : ''
+                        }
                         value={pickerNote}
                         onChange={(e) => setPickerNote(e.target.value)}
                     />
@@ -1086,7 +1228,11 @@ const SkillhubHourlyTrackerPage = () => {
                     </Button>
                     <Box sx={{ flex: 1 }} />
                     <Button onClick={() => setPickerOpen(false)}>Cancel</Button>
-                    <Button variant="contained" onClick={savePick} disabled={!pickerType}>
+                    <Button
+                        variant="contained"
+                        onClick={savePick}
+                        disabled={pickerItems.length === 0 || noteMissing}
+                    >
                         Save
                     </Button>
                 </DialogActions>

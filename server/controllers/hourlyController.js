@@ -73,6 +73,23 @@ function isSkillhubActivity(activityType) {
     return SKILLHUB_ACTIVITY_TYPES.includes(activityType);
 }
 
+// Normalize a HourlyActivity doc into an iterable list of activity items.
+// Multi-activity docs store the full list in `activities`; legacy/single-activity
+// docs carry a single set of flat fields. All aggregators should iterate this.
+function getActivityItems(doc) {
+    if (Array.isArray(doc.activities) && doc.activities.length > 0) {
+        return doc.activities;
+    }
+    return [
+        {
+            activityType: doc.activityType,
+            count: doc.count,
+            followupCount: doc.followupCount,
+            duration: doc.duration,
+        },
+    ];
+}
+
 // Helper: check if date is exactly today (for strict validation)
 function isTodayStr(dateStr) {
     const now = new Date();
@@ -140,13 +157,49 @@ exports.upsertSlot = async (req, res, next) => {
             followupCount,
             duration,
             note,
+            activities: multiActivities,
         } = req.body;
 
-        if (!consultantId || !date || !slotId || !activityType) {
+        // Normalize to a single canonical `items` list. Callers can send either
+        // flat activityType/count/duration (legacy / LUC / Skillhub single) or
+        // an `activities: [...]` array (Skillhub multi-activity).
+        let items;
+        if (Array.isArray(multiActivities) && multiActivities.length > 0) {
+            items = multiActivities
+                .filter((it) => it && it.activityType)
+                .map((it) => ({
+                    activityType: it.activityType,
+                    count: Number(it.count) || 1,
+                    followupCount: Number(it.followupCount) || 0,
+                    duration: Number(it.duration) || 0,
+                }));
+        } else if (activityType) {
+            items = [
+                {
+                    activityType,
+                    count: Number(count) || 1,
+                    followupCount: Number(followupCount) || 0,
+                    duration: Number(duration) || 0,
+                },
+            ];
+        } else {
+            items = [];
+        }
+
+        if (!consultantId || !date || !slotId || items.length === 0) {
             return res.status(400).json({
                 success: false,
                 message:
-                    'consultantId, date, slotId, and activityType are required',
+                    'consultantId, date, slotId, and at least one activity are required',
+            });
+        }
+
+        // When multiple activities share a slot, a note is mandatory so the
+        // context of the combined work is captured.
+        if (items.length > 1 && !(note || '').trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Note is required when logging multiple activities in a single slot',
             });
         }
 
@@ -196,7 +249,14 @@ exports.upsertSlot = async (req, res, next) => {
         // correctly skips each org's lunch gap (LUC 1-2 PM, Skillhub 2-3 PM).
         const orgSlots = getSlotsForOrg(organization);
         const slotDef = orgSlots.find((s) => s.id === slotId);
-        const dur = duration || (slotDef ? slotDef.mins : 60);
+        const isMulti = items.length > 1;
+        const primary = items[0];
+        // For single-activity slots we honor the requested duration (may span
+        // into continuations). For multi, every activity shares the slot's own
+        // minutes and continuations are disabled — duration there is cosmetic.
+        const primaryDuration = isMulti
+            ? (slotDef ? slotDef.mins : 60)
+            : (primary.duration || (slotDef ? slotDef.mins : 60));
 
         const activity = await HourlyActivity.findOneAndUpdate(
             { consultant: consultantId, date: dateObj, slotId },
@@ -206,10 +266,18 @@ exports.upsertSlot = async (req, res, next) => {
                 consultantName: consultantName || '',
                 date: dateObj,
                 slotId,
-                activityType,
-                count: count || 1,
-                followupCount: followupCount || 0,
-                duration: dur,
+                activityType: primary.activityType,
+                count: primary.count || 1,
+                followupCount: primary.followupCount || 0,
+                duration: primaryDuration,
+                activities: isMulti
+                    ? items.map((it) => ({
+                          activityType: it.activityType,
+                          count: it.count || 1,
+                          followupCount: it.followupCount || 0,
+                          duration: it.duration || 0,
+                      }))
+                    : [],
                 note: note || '',
                 isContinuation: false,
                 parentSlotId: null,
@@ -218,9 +286,11 @@ exports.upsertSlot = async (req, res, next) => {
             { upsert: true, new: true, runValidators: true }
         );
 
-        // Create continuation slots if duration exceeds slot time
-        if (slotDef && dur > slotDef.mins) {
-            const contSlots = getContinuationSlots(slotId, dur, organization);
+        // Create continuation slots only for single-activity entries whose
+        // duration exceeds the slot size. Multi-activity slots never spawn
+        // continuations — all selected activities share the one slot.
+        if (!isMulti && slotDef && primaryDuration > slotDef.mins) {
+            const contSlots = getContinuationSlots(slotId, primaryDuration, organization);
             for (const csid of contSlots) {
                 await HourlyActivity.findOneAndUpdate(
                     { consultant: consultantId, date: dateObj, slotId: csid },
@@ -230,9 +300,10 @@ exports.upsertSlot = async (req, res, next) => {
                         consultantName: consultantName || '',
                         date: dateObj,
                         slotId: csid,
-                        activityType,
+                        activityType: primary.activityType,
                         count: 0,
                         duration: 0,
+                        activities: [],
                         note: '',
                         isContinuation: true,
                         parentSlotId: slotId,
@@ -611,35 +682,37 @@ async function runSkillhubAnalysis(req, res, { date, activities, dayAdmissions, 
         const s = stats[act.consultant.toString()];
         if (!s) continue;
         s.activeSlots++;
-        switch (act.activityType) {
-            case 'sh_call':
-                s.calls += act.count || 1;
-                break;
-            case 'sh_followup_admission':
-                s.followupAdmissions += act.count || 1;
-                break;
-            case 'sh_schedule':
-                s.schedules++;
-                break;
-            case 'sh_break':
-                s.breaks++;
-                break;
-            case 'sh_demo_meeting':
-                s.demoMeetings++;
-                s.demoMinutes += act.duration || 60;
-                break;
-            case 'sh_meeting':
-                s.meetings++;
-                s.meetingMinutes += act.duration || 60;
-                break;
-            case 'sh_payment_followup':
-                s.paymentFollowups += act.count || 1;
-                break;
-            case 'sh_operations':
-                s.operations.push(act.note || 'No note');
-                break;
-            default:
-                break;
+        for (const item of getActivityItems(act)) {
+            switch (item.activityType) {
+                case 'sh_call':
+                    s.calls += item.count || 1;
+                    break;
+                case 'sh_followup_admission':
+                    s.followupAdmissions += item.count || 1;
+                    break;
+                case 'sh_schedule':
+                    s.schedules++;
+                    break;
+                case 'sh_break':
+                    s.breaks++;
+                    break;
+                case 'sh_demo_meeting':
+                    s.demoMeetings++;
+                    s.demoMinutes += item.duration || 60;
+                    break;
+                case 'sh_meeting':
+                    s.meetings++;
+                    s.meetingMinutes += item.duration || 60;
+                    break;
+                case 'sh_payment_followup':
+                    s.paymentFollowups += item.count || 1;
+                    break;
+                case 'sh_operations':
+                    s.operations.push(act.note || 'No note');
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -769,21 +842,23 @@ async function runSkillhubLeaderboard(req, res, { date, activities, dayAdmission
         const s = stats[act.consultant.toString()];
         if (!s) continue;
         s.activeSlots++;
-        switch (act.activityType) {
-            case 'sh_call': s.calls += act.count || 1; break;
-            case 'sh_followup_admission': s.followupAdmissions += act.count || 1; break;
-            case 'sh_schedule': s.schedules++; break;
-            case 'sh_demo_meeting':
-                s.demoMeetings++;
-                s.demoMinutes += act.duration || 60;
-                break;
-            case 'sh_meeting':
-                s.meetings++;
-                s.meetingMinutes += act.duration || 60;
-                break;
-            case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
-            case 'sh_operations': s.operations++; break;
-            default: break;
+        for (const item of getActivityItems(act)) {
+            switch (item.activityType) {
+                case 'sh_call': s.calls += item.count || 1; break;
+                case 'sh_followup_admission': s.followupAdmissions += item.count || 1; break;
+                case 'sh_schedule': s.schedules++; break;
+                case 'sh_demo_meeting':
+                    s.demoMeetings++;
+                    s.demoMinutes += item.duration || 60;
+                    break;
+                case 'sh_meeting':
+                    s.meetings++;
+                    s.meetingMinutes += item.duration || 60;
+                    break;
+                case 'sh_payment_followup': s.paymentFollowups += item.count || 1; break;
+                case 'sh_operations': s.operations++; break;
+                default: break;
+            }
         }
     }
     for (const adm of dayAdmissions) {
@@ -1252,21 +1327,23 @@ async function runSkillhubWeeklyLeaderboard(req, res, { weekLabel, activities, w
         const s = stats[act.consultant.toString()];
         if (!s) continue;
         s.activeSlots++;
-        switch (act.activityType) {
-            case 'sh_call': s.calls += act.count || 1; break;
-            case 'sh_followup_admission': s.followupAdmissions += act.count || 1; break;
-            case 'sh_schedule': s.schedules++; break;
-            case 'sh_demo_meeting':
-                s.demoMeetings++;
-                s.demoMinutes += act.duration || 60;
-                break;
-            case 'sh_meeting':
-                s.meetings++;
-                s.meetingMinutes += act.duration || 60;
-                break;
-            case 'sh_payment_followup': s.paymentFollowups += act.count || 1; break;
-            case 'sh_operations': s.operations++; break;
-            default: break;
+        for (const item of getActivityItems(act)) {
+            switch (item.activityType) {
+                case 'sh_call': s.calls += item.count || 1; break;
+                case 'sh_followup_admission': s.followupAdmissions += item.count || 1; break;
+                case 'sh_schedule': s.schedules++; break;
+                case 'sh_demo_meeting':
+                    s.demoMeetings++;
+                    s.demoMinutes += item.duration || 60;
+                    break;
+                case 'sh_meeting':
+                    s.meetings++;
+                    s.meetingMinutes += item.duration || 60;
+                    break;
+                case 'sh_payment_followup': s.paymentFollowups += item.count || 1; break;
+                case 'sh_operations': s.operations++; break;
+                default: break;
+            }
         }
     }
     for (const adm of weekAdmissions) {
