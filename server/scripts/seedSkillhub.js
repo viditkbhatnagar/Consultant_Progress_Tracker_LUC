@@ -35,7 +35,7 @@ const BRANCHES = [
         name: 'Skillhub Institute',
         teamName: 'Skillhub Institute',
         organization: ORG_SKILLHUB_INSTITUTE,
-        counselors: ['Umme', 'Ayisha'],
+        counselors: ['Umme', 'Ayisha', 'Ameen', 'Zakeer'],
     },
 ];
 

@@ -16,6 +16,8 @@ const SKILLHUB_SUBJECTS = [
     'Business Studies',
     'Economics',
     'English',
+    'JEE',
+    'NEET',
 ];
 const SKILLHUB_CURRICULA = [
     'CBSE',

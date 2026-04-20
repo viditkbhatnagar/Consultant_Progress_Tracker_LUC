@@ -63,6 +63,8 @@ export const SKILLHUB_SUBJECTS = [
     'Business Studies',
     'Economics',
     'English',
+    'JEE',
+    'NEET',
 ];
 export const SKILLHUB_MODES = ['Online', 'Offline', 'Hybrid', 'OneToOne'];
 export const SKILLHUB_COURSE_DURATIONS = ['Monthly', 'OneYear', 'TwoYears'];
