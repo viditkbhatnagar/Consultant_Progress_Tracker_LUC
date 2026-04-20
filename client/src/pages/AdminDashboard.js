@@ -36,6 +36,7 @@ import {
     Delete as DeleteIcon,
     Visibility as VisibilityIcon,
     AutoAwesome as AutoAwesomeIcon,
+    Add as AddIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +52,7 @@ import TeamDetailDialog from '../components/TeamDetailDialog';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamHierarchyView from '../components/TeamHierarchyView';
 import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
+import AdminAddCommitmentDialog from '../components/AdminAddCommitmentDialog';
 import UserManagementDialog from '../components/UserManagementDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import AdminSidebar, { DRAWER_WIDTH } from '../components/AdminSidebar';
@@ -75,6 +77,7 @@ const AdminDashboard = () => {
     // Top-level org section: 'luc' (existing dashboard) or 'skillhub' (AdminSkillhubView)
     const [orgSection, setOrgSection] = useState('luc');
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+    const [addCommitmentOpen, setAddCommitmentOpen] = useState(false);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
     const [filters, setFilters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
 
@@ -877,9 +880,19 @@ const AdminDashboard = () => {
                         // All Commitments Tab
                         <Card elevation={2}>
                             <CardContent>
-                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                                    All Organization Commitments
-                                </Typography>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                        All Organization Commitments
+                                    </Typography>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => setAddCommitmentOpen(true)}
+                                    >
+                                        Add Commitment
+                                    </Button>
+                                </Box>
 
                                 <CommitmentFilters
                                     onFilterChange={handleFilterChange}
@@ -928,10 +941,15 @@ const AdminDashboard = () => {
                                             </TableHead>
                                             <TableBody>
                                                 {displayCommitments.map((commitment) => {
-                                                    // Calculate date, day, time formatting
-                                                    const commitmentDate = new Date(commitment.weekStartDate);
-                                                    const dayOfWeek = commitmentDate.toLocaleDateString('en-US', { weekday: 'long' });
-                                                    const dateFormatted = commitmentDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+                                                    // Date/Day come from commitmentDate (the day the user picked
+                                                    // this commitment is for). Time stays on createdAt since
+                                                    // commitmentDate has no time-of-day component.
+                                                    const dateSource = commitment.commitmentDate
+                                                        || commitment.createdAt
+                                                        || commitment.weekStartDate;
+                                                    const commitmentDateObj = new Date(dateSource);
+                                                    const dayOfWeek = commitmentDateObj.toLocaleDateString('en-US', { weekday: 'long' });
+                                                    const dateFormatted = commitmentDateObj.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
                                                     const timeFormatted = commitment.createdAt
                                                         ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                                                         : '--:--';
@@ -1361,6 +1379,20 @@ const AdminDashboard = () => {
                     }}
                     commitment={selectedCommitment}
                     onSave={handleSaveAdminComment}
+                />
+
+                {/* Add Commitment Dialog — admin can create a commitment for
+                    any org / team lead / consultant. Users come from the
+                    parent's already-loaded list. */}
+                <AdminAddCommitmentDialog
+                    open={addCommitmentOpen}
+                    onClose={() => setAddCommitmentOpen(false)}
+                    onSaved={() => {
+                        setAddCommitmentOpen(false);
+                        loadCommitments();
+                    }}
+                    users={users}
+                    consultants={consultants}
                 />
 
                 {/* User Management Dialog */}

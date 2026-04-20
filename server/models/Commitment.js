@@ -63,6 +63,14 @@ const CommitmentSchema = new mongoose.Schema(
             type: Date,
             required: [true, 'Week end date is required'],
         },
+        // The actual calendar date the team lead/counselor is logging this
+        // commitment for (not when the row was created). Must fall inside
+        // [weekStartDate, weekEndDate] for team_lead/skillhub creates;
+        // admins can set any date.
+        commitmentDate: {
+            type: Date,
+            required: [true, 'Commitment date is required'],
+        },
         dayCommitted: {
             type: String,
             enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],

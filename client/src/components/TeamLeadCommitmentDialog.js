@@ -21,7 +21,19 @@ import {
 } from '@mui/material';
 import { LEAD_STAGES_LIST } from '../utils/constants';
 import { getWeekInfo } from '../utils/weekUtils';
-import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, getWeek } from 'date-fns';
+
+// Given a selected date (yyyy-MM-dd string), return the Monday/Sunday of that
+// week as yyyy-MM-dd strings. Used to bound the <input type="date"> picker.
+function weekBoundsFor(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const start = startOfWeek(d, { weekStartsOn: 1 });
+    const end = endOfWeek(d, { weekStartsOn: 1 });
+    return {
+        min: format(start, 'yyyy-MM-dd'),
+        max: format(end, 'yyyy-MM-dd'),
+    };
+}
 
 const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsultants, user }) => {
     const currentWeekInfo = getWeekInfo();
@@ -53,9 +65,12 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
 
     useEffect(() => {
         if (commitment) {
-            // Editing existing commitment - pre-fill ALL fields
-            const commitmentDate = commitment.weekStartDate
-                ? format(new Date(commitment.weekStartDate), 'yyyy-MM-dd')
+            // Editing existing commitment - pre-fill ALL fields.
+            // Prefer commitmentDate (the date the user actually picked); fall
+            // back to weekStartDate only for legacy rows that predate it.
+            const sourceDate = commitment.commitmentDate || commitment.weekStartDate;
+            const commitmentDate = sourceDate
+                ? format(new Date(sourceDate), 'yyyy-MM-dd')
                 : format(new Date(), 'yyyy-MM-dd');
 
             const dayName = commitmentDate
@@ -181,9 +196,11 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         const weekStart = startOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Monday
         const weekEnd = endOfWeek(selectedDateObj, { weekStartsOn: 1 }); // Sunday
 
-        // Prepare data with calculated fields
+        // Prepare data with calculated fields. Week bounds are derived from
+        // the picked commitment date so the two can never disagree.
         const submitData = {
             ...formData,
+            commitmentDate: formData.selectedDate,
             weekStartDate: format(weekStart, 'yyyy-MM-dd'),
             weekEndDate: format(weekEnd, 'yyyy-MM-dd'),
             year: formData.year || new Date().getFullYear(),
@@ -246,13 +263,32 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         </Box>
                     </Grid>
 
-                    {/* Week Selector */}
+                    {/* Week Selector — changing the week snaps the Commitment
+                        Date to Monday of the new week, and the date picker
+                        below is bounded to that week's Mon–Sun range. */}
                     <Grid item xs={12}>
                         <FormControl fullWidth>
                             <InputLabel>Week</InputLabel>
                             <Select
                                 value={formData.weekNumber}
-                                onChange={(e) => handleChange('weekNumber', e.target.value)}
+                                onChange={(e) => {
+                                    const newWeekNum = e.target.value;
+                                    // Find the Monday of the chosen week relative to today.
+                                    const offset = currentWeekInfo.weekNumber - newWeekNum;
+                                    const today = new Date();
+                                    const targetWeekStart = startOfWeek(
+                                        new Date(today.getTime() - offset * 7 * 24 * 60 * 60 * 1000),
+                                        { weekStartsOn: 1 }
+                                    );
+                                    const newSelected = format(targetWeekStart, 'yyyy-MM-dd');
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        weekNumber: newWeekNum,
+                                        selectedDate: newSelected,
+                                        dayOfWeek: format(targetWeekStart, 'EEEE'),
+                                        year: targetWeekStart.getFullYear(),
+                                    }));
+                                }}
                                 label="Week"
                             >
                                 {/* Show current week and previous 4 weeks */}
@@ -279,27 +315,43 @@ const TeamLeadCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         </FormControl>
                     </Grid>
 
-                    {/* Date Picker */}
+                    {/* Date Picker — constrained to the selected week's range
+                        so team leads can't accidentally backdate into another
+                        week. To log for a different week, change the Week
+                        dropdown first. */}
                     <Grid item xs={12}>
-                        <TextField
-                            fullWidth
-                            label="Commitment Date"
-                            type="date"
-                            value={formData.selectedDate}
-                            onChange={(e) => {
-                                const selectedDate = e.target.value;
-                                const dayName = format(new Date(selectedDate), 'EEEE');
-                                setFormData(prev => ({
-                                    ...prev,
-                                    selectedDate,
-                                    dayOfWeek: dayName,
-                                }));
-                            }}
-                            InputLabelProps={{
-                                shrink: true,
-                            }}
-                            helperText="Choose the date of this commitment"
-                        />
+                        {(() => {
+                            const { min, max } = weekBoundsFor(formData.selectedDate);
+                            return (
+                                <TextField
+                                    fullWidth
+                                    label="Commitment Date"
+                                    type="date"
+                                    value={formData.selectedDate}
+                                    onChange={(e) => {
+                                        const selectedDate = e.target.value;
+                                        // Clamp to the week bounds in case the user
+                                        // typed a date outside the range manually.
+                                        const clamped =
+                                            selectedDate < min ? min :
+                                                selectedDate > max ? max : selectedDate;
+                                        const dayName = format(new Date(clamped + 'T00:00:00'), 'EEEE');
+                                        const wkNum = getWeek(new Date(clamped + 'T00:00:00'), { weekStartsOn: 1 });
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            selectedDate: clamped,
+                                            dayOfWeek: dayName,
+                                            weekNumber: wkNum,
+                                        }));
+                                    }}
+                                    inputProps={{ min, max }}
+                                    InputLabelProps={{
+                                        shrink: true,
+                                    }}
+                                    helperText={`Pick any day within ${min} – ${max}`}
+                                />
+                            );
+                        })()}
                     </Grid>
 
                     {/* ===== CONSULTANT & LEAD INFO ===== */}
