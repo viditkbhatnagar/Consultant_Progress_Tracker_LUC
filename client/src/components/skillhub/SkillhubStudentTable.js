@@ -12,7 +12,6 @@ import {
     TableContainer,
     IconButton,
     Button,
-    ButtonGroup,
     Chip,
     Menu,
     MenuItem,
@@ -224,28 +223,40 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                         ),
                     }}
                 />
-                <ButtonGroup variant="contained" size="medium">
-                    <Button
-                        startIcon={<AddIcon />}
-                        onClick={() => handleCreate('new_admission')}
-                    >
-                        New Admission
-                    </Button>
-                    <Button
-                        color="success"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleCreate('active')}
-                    >
-                        New Active
-                    </Button>
-                    <Button
-                        color="inherit"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleCreate('inactive')}
-                    >
-                        New Inactive
-                    </Button>
-                </ButtonGroup>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    {[
+                        { key: 'new_admission', label: 'New Admission', bg: '#FF9800', hover: '#F57C00' },
+                        { key: 'active', label: 'New Active', bg: '#4CAF50', hover: '#388E3C' },
+                        { key: 'inactive', label: 'New Inactive', bg: '#9E9E9E', hover: '#616161' },
+                    ].map((b) => (
+                        <Button
+                            key={b.key}
+                            variant="contained"
+                            size="medium"
+                            startIcon={<AddIcon />}
+                            onClick={() => handleCreate(b.key)}
+                            // Solid status-coded colors (matching the status tabs) with
+                            // `background` explicitly overridden to defeat the app-wide
+                            // gradient on contained buttons, which was washing out the
+                            // label and making the text hard to read.
+                            sx={{
+                                bgcolor: b.bg,
+                                background: b.bg,
+                                color: '#fff',
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                                '&:hover': {
+                                    bgcolor: b.hover,
+                                    background: b.hover,
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.18)',
+                                },
+                            }}
+                        >
+                            {b.label}
+                        </Button>
+                    ))}
+                </Box>
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
