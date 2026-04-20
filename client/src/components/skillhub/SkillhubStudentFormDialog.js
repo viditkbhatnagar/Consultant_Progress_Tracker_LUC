@@ -29,7 +29,6 @@ import {
     SKILLHUB_MODES,
     SKILLHUB_COURSE_DURATIONS,
     SKILLHUB_LEAD_SOURCES,
-    SKILLHUB_STREAMS,
     SKILLHUB_BOARDS,
     SKILLHUB_IGCSE_VARIANTS,
     SKILLHUB_ACADEMIC_YEARS,
@@ -55,7 +54,6 @@ const blankForm = {
     igcseVariant: '',
     academicYear: getCurrentAcademicYear(),
     yearOrGrade: '',
-    stream: '',
     subjects: [],
     mode: 'Online',
     courseDuration: 'OneYear',
@@ -249,18 +247,6 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                         <TextField fullWidth required label="Year / Grade" value={formData.yearOrGrade}
                             onChange={(e) => set('yearOrGrade', e.target.value)}
                             helperText="e.g. 9 for IGCSE Y9 or 11 for CBSE Grade 11" />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
-                        <FormControl fullWidth>
-                            <InputLabel>Stream</InputLabel>
-                            <Select label="Stream" value={formData.stream}
-                                onChange={(e) => set('stream', e.target.value)}>
-                                <MenuItem value=""><em>None</em></MenuItem>
-                                {SKILLHUB_STREAMS.map((s) => (
-                                    <MenuItem key={s} value={s}>{s}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
                     </Grid>
                     <Grid size={{ xs: 12, sm: 3 }}>
                         <FormControl fullWidth required>
