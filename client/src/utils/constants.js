@@ -74,6 +74,8 @@ export const SKILLHUB_LEAD_SOURCES = [
     'Instagram',
     'School',
     'Reference',
+    'Walk-In',
+    'Tele-Inquiry',
 ];
 export const SKILLHUB_STREAMS = ['Science', 'Commerce'];
 export const SKILLHUB_BOARDS = ['CBSE', 'IGCSE'];
