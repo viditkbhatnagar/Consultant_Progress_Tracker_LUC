@@ -12,7 +12,10 @@ import {
     TableContainer,
     IconButton,
     Button,
+    ButtonGroup,
     Chip,
+    Menu,
+    MenuItem,
     Typography,
     TextField,
     InputAdornment,
@@ -22,9 +25,9 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import studentService from '../../services/studentService';
 import SkillhubStudentFormDialog from './SkillhubStudentFormDialog';
 import ActivateStudentDialog from './ActivateStudentDialog';
@@ -44,8 +47,14 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
     const [search, setSearch] = useState('');
     const [formOpen, setFormOpen] = useState(false);
     const [editingStudent, setEditingStudent] = useState(null);
+    // studentStatus the current create flow will save with — set by whichever
+    // of the three "new" buttons the counselor clicked.
+    const [createStatus, setCreateStatus] = useState('new_admission');
     const [activateOpen, setActivateOpen] = useState(false);
     const [activatingStudent, setActivatingStudent] = useState(null);
+    // Row-level "Move to..." menu state.
+    const [moveAnchor, setMoveAnchor] = useState(null);
+    const [movingStudent, setMovingStudent] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -66,8 +75,9 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
 
     useEffect(() => { load(); }, [load]);
 
-    const handleCreate = () => {
+    const handleCreate = (status) => {
         setEditingStudent(null);
+        setCreateStatus(status);
         setFormOpen(true);
     };
 
@@ -112,15 +122,48 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
         }
     };
 
-    const handleActivateClick = (student) => {
-        setActivatingStudent(student);
-        setActivateOpen(true);
-    };
-
     const handleActivate = async (payload) => {
         await studentService.activateStudent(activatingStudent._id, payload);
         await load();
         onChange?.();
+    };
+
+    const openMoveMenu = (event, student) => {
+        setMovingStudent(student);
+        setMoveAnchor(event.currentTarget);
+    };
+
+    const closeMoveMenu = () => {
+        setMoveAnchor(null);
+        setMovingStudent(null);
+    };
+
+    const handleMove = async (targetStatus) => {
+        if (!movingStudent) return closeMoveMenu();
+        // new_admission → active keeps the rich activation dialog so we can
+        // capture emirate / registrationFee / dateOfEnrollment / EMIs. Every
+        // other transition is a silent one-click update.
+        if (movingStudent.studentStatus === 'new_admission' && targetStatus === 'active') {
+            setActivatingStudent(movingStudent);
+            setActivateOpen(true);
+            closeMoveMenu();
+            return;
+        }
+        try {
+            await studentService.changeStudentStatus(movingStudent._id, targetStatus);
+            await load();
+            onChange?.();
+        } catch (e) {
+            alert(e.response?.data?.message || 'Move failed');
+        } finally {
+            closeMoveMenu();
+        }
+    };
+
+    const STATUS_LABELS = {
+        new_admission: 'New Admission',
+        active: 'Active Student',
+        inactive: 'Inactive Student',
     };
 
     const filtered = students.filter((s) => {
@@ -181,13 +224,28 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                         ),
                     }}
                 />
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleCreate}
-                >
-                    New Admission
-                </Button>
+                <ButtonGroup variant="contained" size="medium">
+                    <Button
+                        startIcon={<AddIcon />}
+                        onClick={() => handleCreate('new_admission')}
+                    >
+                        New Admission
+                    </Button>
+                    <Button
+                        color="success"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleCreate('active')}
+                    >
+                        New Active
+                    </Button>
+                    <Button
+                        color="inherit"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleCreate('inactive')}
+                    >
+                        New Inactive
+                    </Button>
+                </ButtonGroup>
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -253,17 +311,15 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                                         {(s.outstandingAmount ?? 0).toLocaleString()}
                                     </TableCell>
                                     <TableCell align="center">
-                                        {statusTab === 'new_admission' && (
-                                            <Tooltip title="Mark as Active">
-                                                <IconButton
-                                                    size="small"
-                                                    color="success"
-                                                    onClick={() => handleActivateClick(s)}
-                                                >
-                                                    <CheckCircleIcon fontSize="small" />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
+                                        <Tooltip title="Move to…">
+                                            <IconButton
+                                                size="small"
+                                                color="primary"
+                                                onClick={(e) => openMoveMenu(e, s)}
+                                            >
+                                                <SwapHorizIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
                                         <Tooltip title="Edit">
                                             <IconButton size="small" onClick={() => handleEdit(s)}>
                                                 <EditIcon fontSize="small" />
@@ -288,6 +344,7 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                 onSave={handleSave}
                 student={editingStudent}
                 counselors={counselors}
+                initialStatus={createStatus}
             />
             <ActivateStudentDialog
                 open={activateOpen}
@@ -295,6 +352,19 @@ const SkillhubStudentTable = ({ counselors, onChange, organization }) => {
                 onConfirm={handleActivate}
                 student={activatingStudent}
             />
+            <Menu
+                anchorEl={moveAnchor}
+                open={Boolean(moveAnchor)}
+                onClose={closeMoveMenu}
+            >
+                {['new_admission', 'active', 'inactive']
+                    .filter((s) => s !== movingStudent?.studentStatus)
+                    .map((s) => (
+                        <MenuItem key={s} onClick={() => handleMove(s)}>
+                            Move to {STATUS_LABELS[s]}
+                        </MenuItem>
+                    ))}
+            </Menu>
         </Paper>
     );
 };

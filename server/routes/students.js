@@ -6,6 +6,7 @@ const {
     updateStudent,
     deleteStudent,
     activateStudent,
+    changeStudentStatus,
     getStudentStats,
 } = require('../controllers/studentController');
 
@@ -26,6 +27,8 @@ router
 
 // Skillhub: transition New Admission → Active (before /:id catch-all)
 router.patch('/:id/activate', authorize('admin', 'skillhub'), activateStudent);
+// Skillhub: generic status transition (any pair of studentStatus values)
+router.patch('/:id/status', authorize('admin', 'skillhub'), changeStudentStatus);
 
 router
     .route('/:id')
