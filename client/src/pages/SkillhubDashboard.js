@@ -183,13 +183,19 @@ const SkillhubDashboard = () => {
                                 <Typography color="text.secondary">No counselors seeded.</Typography>
                             ) : (
                                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                    {counselors.map((c) => (
-                                        <Chip
-                                            key={c._id}
-                                            label={c.name}
-                                            sx={{ bgcolor: '#A0D2EB', color: '#2C3E50', fontWeight: 600 }}
-                                        />
-                                    ))}
+                                    {counselors
+                                        // Hide Ameen & Zakeer from the chip strip only —
+                                        // they remain fully active everywhere else (hourly
+                                        // tracker, admission table, commitment dropdowns)
+                                        // since they still need to log historical entries.
+                                        .filter((c) => !['Ameen', 'Zakeer'].includes(c.name))
+                                        .map((c) => (
+                                            <Chip
+                                                key={c._id}
+                                                label={c.name}
+                                                sx={{ bgcolor: '#A0D2EB', color: '#2C3E50', fontWeight: 600 }}
+                                            />
+                                        ))}
                                 </Box>
                             )}
                         </CardContent>
