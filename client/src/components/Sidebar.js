@@ -23,6 +23,7 @@ import {
     School as SchoolIcon,
     AutoAwesome as AutoAwesomeIcon,
     AccessTime as AccessTimeIcon,
+    VideoCall as VideoCallIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -307,6 +308,29 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboar
                         </ListItemIcon>
                         <ListItemText
                             primary="Hourly Tracker"
+                            primaryTypographyProps={{
+                                fontSize: '0.95rem',
+                                fontWeight: 500,
+                            }}
+                        />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 1 }}>
+                    <ListItemButton
+                        onClick={() => navigate('/meetings')}
+                        sx={{
+                            borderRadius: 2,
+                            '&:hover': {
+                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
+                            <VideoCallIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Meetings"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,

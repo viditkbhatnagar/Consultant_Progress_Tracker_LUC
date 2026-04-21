@@ -37,6 +37,8 @@ import {
     Visibility as VisibilityIcon,
     AutoAwesome as AutoAwesomeIcon,
     Add as AddIcon,
+    VideoCall as VideoCallIcon,
+    AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -778,13 +780,44 @@ const AdminDashboard = () => {
 
                     {/* Tabs */}
                     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-                            <Tab label="Teams Overview" />
-                            <Tab label="All Commitments" />
-                            <Tab label="Organization Hierarchy" />
-                            <Tab label="User Management" />
-                            <Tab label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
-                            <Tab label="API Costs" />
+                        <Tabs
+                            value={tabValue}
+                            variant="scrollable"
+                            scrollButtons="auto"
+                            allowScrollButtonsMobile
+                            onChange={(e, newValue) => {
+                                // "meetings" and "hourly" are shortcuts that
+                                // route to the dedicated pages rather than
+                                // rendering inline — don't mutate tabValue.
+                                if (newValue === 'meetings') {
+                                    navigate('/meetings');
+                                    return;
+                                }
+                                if (newValue === 'hourly') {
+                                    navigate('/hourly-tracker');
+                                    return;
+                                }
+                                setTabValue(newValue);
+                            }}
+                        >
+                            <Tab value={0} label="Teams Overview" />
+                            <Tab value={1} label="All Commitments" />
+                            <Tab
+                                value="meetings"
+                                label="Meetings"
+                                icon={<VideoCallIcon sx={{ fontSize: 18 }} />}
+                                iconPosition="start"
+                            />
+                            <Tab
+                                value="hourly"
+                                label="Hourly Tracker"
+                                icon={<AccessTimeIcon sx={{ fontSize: 18 }} />}
+                                iconPosition="start"
+                            />
+                            <Tab value={2} label="Organization Hierarchy" />
+                            <Tab value={3} label="User Management" />
+                            <Tab value={4} label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
+                            <Tab value={5} label="API Costs" />
                         </Tabs>
                     </Box>
 
@@ -884,14 +917,23 @@ const AdminDashboard = () => {
                                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
                                         All Organization Commitments
                                     </Typography>
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        startIcon={<AddIcon />}
-                                        onClick={() => setAddCommitmentOpen(true)}
-                                    >
-                                        Add Commitment
-                                    </Button>
+                                    <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <Button
+                                            variant="outlined"
+                                            color="primary"
+                                            onClick={() => navigate('/meetings')}
+                                        >
+                                            View Meetings
+                                        </Button>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            startIcon={<AddIcon />}
+                                            onClick={() => setAddCommitmentOpen(true)}
+                                        >
+                                            Add Commitment
+                                        </Button>
+                                    </Box>
                                 </Box>
 
                                 <CommitmentFilters

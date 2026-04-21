@@ -1,6 +1,24 @@
 const mongoose = require('mongoose');
 const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 
+// Shared lead-stage enum used by Commitment and Meeting. Kept in one place so
+// adding new values (like "No Answer"/"Lost" from the Meeting Tracker) flows
+// through both schemas without drift.
+const LEAD_STAGES = [
+    'Dead',
+    'Cold',
+    'Warm',
+    'Hot',
+    'Offer Sent',
+    'Awaiting Confirmation',
+    'Meeting Scheduled',
+    'Admission',
+    'CIF',
+    'Unresponsive',
+    'No Answer',
+    'Lost',
+];
+
 // Skillhub-only: a commitment can carry up to 4 scheduled demo slots.
 // Each slot tracks when the demo is scheduled, whether it has been completed,
 // and when it was marked complete. LUC commitments ignore this field.
@@ -144,18 +162,7 @@ const CommitmentSchema = new mongoose.Schema(
         },
         leadStage: {
             type: String,
-            enum: [
-                'Dead',
-                'Cold',
-                'Warm',
-                'Hot',
-                'Offer Sent',
-                'Awaiting Confirmation',
-                'Meeting Scheduled',
-                'Admission',
-                'CIF',
-                'Unresponsive',
-            ],
+            enum: LEAD_STAGES,
             default: 'Cold',
         },
         conversionProbability: {
@@ -245,4 +252,7 @@ CommitmentSchema.index({ weekStartDate: 1 });
 CommitmentSchema.index({ leadStage: 1 });
 CommitmentSchema.index({ admissionClosed: 1 });
 
-module.exports = mongoose.model('Commitment', CommitmentSchema);
+const Commitment = mongoose.model('Commitment', CommitmentSchema);
+
+module.exports = Commitment;
+module.exports.LEAD_STAGES = LEAD_STAGES;

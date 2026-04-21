@@ -24,9 +24,13 @@ axios.interceptors.request.use(
     }
 );
 
-// Get all users (Admin only)
-const getUsers = async () => {
-    const response = await axios.get('/users');
+// Get all users (Admin only). Accepts optional filters (e.g. { organization: 'luc' })
+// — important for admin pages that must override the global admin org scope
+// interceptor (see utils/axiosAdminOrgInterceptor.js).
+const getUsers = async (filters = {}) => {
+    const params = {};
+    if (filters.organization) params.organization = filters.organization;
+    const response = await axios.get('/users', { params });
     return response.data;
 };
 

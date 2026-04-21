@@ -8,6 +8,7 @@ const {
     activateStudent,
     changeStudentStatus,
     getStudentStats,
+    getPrograms,
 } = require('../controllers/studentController');
 
 const router = express.Router();
@@ -19,6 +20,9 @@ router.use(protect);
 
 // Stats route (must be before /:id to prevent conflict)
 router.get('/stats', authorize('admin', 'team_lead', 'manager', 'skillhub'), getStudentStats);
+
+// Distinct program list for LUC Meeting Tracker dropdown (before /:id)
+router.get('/programs', authorize('admin', 'team_lead'), getPrograms);
 
 router
     .route('/')
