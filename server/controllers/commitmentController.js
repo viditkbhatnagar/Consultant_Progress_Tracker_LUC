@@ -118,6 +118,17 @@ exports.getCommitment = async (req, res, next) => {
     }
 };
 
+// Defensive backfill: if the caller didn't send a commitmentDate (typically a
+// stale client bundle from before the field was added, or a misbehaving CDN
+// cache), fall back to weekStartDate. Mirrors scripts/backfillCommitmentDate.js
+// so old and new payloads produce the same semantic row. Mutates req.body.
+function ensureCommitmentDate(body) {
+    if (body.commitmentDate) return;
+    if (body.weekStartDate) {
+        body.commitmentDate = body.weekStartDate;
+    }
+}
+
 // Non-admin users (team_lead, skillhub) cannot backdate a commitment into
 // a different week — the commitmentDate must fall inside [weekStartDate,
 // weekEndDate]. Admins bypass this.
@@ -142,6 +153,9 @@ function validateCommitmentDateInWeek(body) {
 // @access  Private/Consultant
 exports.createCommitment = async (req, res, next) => {
     try {
+        // Run defensively BEFORE role branching so every role gets the fallback.
+        ensureCommitmentDate(req.body);
+
         // Team leads and skillhub branch logins create commitments owned by themselves
         if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             req.body.teamLead = req.user.id;
@@ -234,6 +248,14 @@ exports.updateCommitment = async (req, res, next) => {
 
         // Update last modified info
         req.body.lastUpdatedBy = req.user.id;
+
+        // Same defensive fallback as create — an old client that doesn't send
+        // commitmentDate but does resend weekStartDate would otherwise erase
+        // the field on save with runValidators. When the client sends neither,
+        // leave the stored value alone (don't touch req.body).
+        if (!req.body.commitmentDate && req.body.weekStartDate) {
+            req.body.commitmentDate = req.body.weekStartDate;
+        }
 
         // Non-admin edits must keep commitmentDate inside the (possibly
         // updated) week range. Fall back to the stored week bounds when the
