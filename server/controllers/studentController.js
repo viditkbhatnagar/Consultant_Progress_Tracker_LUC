@@ -4,6 +4,22 @@ const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 const { isSkillhub } = require('../config/organizations');
 
+// @desc    Get distinct LUC program names (for the Meeting Tracker dropdown)
+// @route   GET /api/students/programs
+// @access  Private (Admin/Team Lead)
+exports.getPrograms = async (req, res, next) => {
+    try {
+        const programs = await Student.distinct('program', {
+            organization: 'luc',
+            program: { $nin: [null, ''] },
+        });
+        programs.sort((a, b) => a.localeCompare(b));
+        res.status(200).json({ success: true, data: programs });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get all students
 // @route   GET /api/students
 // @access  Private (Admin/Team Lead/Manager/Skillhub)

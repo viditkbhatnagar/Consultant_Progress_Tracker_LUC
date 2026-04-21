@@ -72,6 +72,12 @@ const getStudentStats = async () => {
     return response.data;
 };
 
+// Distinct LUC program names (for Meeting Tracker dropdown)
+const getPrograms = async () => {
+    const response = await axios.get(`${API_URL}/programs`);
+    return response.data;
+};
+
 const studentService = {
     getStudents,
     getStudent,
@@ -81,6 +87,7 @@ const studentService = {
     activateStudent,
     changeStudentStatus,
     getStudentStats,
+    getPrograms,
 };
 
 export default studentService;

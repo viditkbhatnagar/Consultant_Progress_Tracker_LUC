@@ -10,6 +10,15 @@ export const LEAD_STAGES = [
     { value: 'Admission', label: 'Admission', color: '#4CAF50' },
     { value: 'CIF', label: 'CIF', color: '#8BC34A' },
     { value: 'Unresponsive', label: 'Unresponsive', color: '#607D8B' },
+    { value: 'No Answer', label: 'No Answer', color: '#9E9E9E' },
+    { value: 'Lost', label: 'Lost', color: '#B71C1C' },
+];
+
+// Meeting Tracker modes (LUC)
+export const MEETING_MODES = [
+    { value: 'Zoom', label: 'Zoom' },
+    { value: 'Out Meeting', label: 'Out Meeting' },
+    { value: 'Office Meeting', label: 'Office Meeting' },
 ];
 
 // Commitment status options
