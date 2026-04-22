@@ -23,7 +23,11 @@ import CommitmentsCardsView from '../components/commitments/CommitmentsCardsView
 import CommitmentDetailDrawer from '../components/commitments/CommitmentDetailDrawer';
 import CommitmentsAIAnalysisDialog from '../components/commitments/CommitmentsAIAnalysisDialog';
 import CommitmentFormDialog from '../components/commitments/CommitmentFormDialog';
+import SkillhubCommitmentDialog from '../components/skillhub/SkillhubCommitmentDialog';
 import { TrackerThemeProvider, useThemeState } from '../utils/trackerTheme';
+import { useAdminOrgScope } from '../utils/adminOrgScope';
+import { isSkillhubOrg } from '../utils/hourlyConfig';
+import { ORGANIZATION_LABELS } from '../utils/constants';
 
 const PAGE_SIZE = 20;
 const STORAGE_KEY = 'commitments-ui-prefs';
@@ -49,6 +53,15 @@ const CommitmentsPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'admin';
+
+    // Resolve the org scope once per render. Admins pick via AdminOrgTabs,
+    // team_lead/skillhub users are pinned to their own organization.
+    const [adminOrg] = useAdminOrgScope();
+    const viewOrg = isAdmin
+        ? adminOrg || 'luc'
+        : user?.organization || 'luc';
+    const isSkillhub = isSkillhubOrg(viewOrg);
+    const orgLabel = ORGANIZATION_LABELS[viewOrg] || (isSkillhub ? 'Skillhub' : 'LUC');
 
     const prefs = useMemo(() => loadPrefs(), []);
     const [view, setView] = useState(prefs.view || 'table');
@@ -97,33 +110,36 @@ const CommitmentsPage = () => {
     useEffect(() => {
         if (!isAdmin) return;
         let cancelled = false;
+        // LUC scope lists team leads; Skillhub scope lists the branch's
+        // skillhub user (whose role === 'skillhub') so admins can filter
+        // by branch owner just like they filter by TL on LUC.
         userService
-            .getUsers({ organization: 'luc' })
+            .getUsers({ organization: viewOrg })
             .then((res) => {
                 const all = res.data || res || [];
-                const tls = all.filter(
-                    (u) =>
-                        u.role === 'team_lead' &&
-                        (u.organization || 'luc') === 'luc' &&
-                        u.isActive !== false
-                );
-                if (!cancelled) setTeamLeads(tls);
+                const filtered = all.filter((u) => {
+                    const org = u.organization || 'luc';
+                    if (org !== viewOrg) return false;
+                    if (u.isActive === false) return false;
+                    return isSkillhub ? u.role === 'skillhub' : u.role === 'team_lead';
+                });
+                if (!cancelled) setTeamLeads(filtered);
             })
             .catch(() => { if (!cancelled) setTeamLeads([]); });
         return () => { cancelled = true; };
-    }, [isAdmin]);
+    }, [isAdmin, viewOrg, isSkillhub]);
 
     useEffect(() => {
         let cancelled = false;
         consultantService
-            .getConsultants(isAdmin ? { organization: 'luc' } : {})
+            .getConsultants(isAdmin ? { organization: viewOrg } : {})
             .then((res) => {
                 const list = res.data || res || [];
                 if (!cancelled) setConsultants(list.filter((c) => c.isActive !== false));
             })
             .catch(() => { if (!cancelled) setConsultants([]); });
         return () => { cancelled = true; };
-    }, [isAdmin]);
+    }, [isAdmin, viewOrg]);
 
     const fetchParams = useMemo(
         () => ({
@@ -150,9 +166,9 @@ const CommitmentsPage = () => {
                       fetchParams.startDate,
                       fetchParams.endDate,
                       null,
-                      'luc'
+                      viewOrg
                   )
-                : await commitmentService.getCommitments({ organization: 'luc' });
+                : await commitmentService.getCommitments({ organization: viewOrg });
             setAllRows(res.data || []);
             setPage(0);
         } catch (err) {
@@ -161,7 +177,7 @@ const CommitmentsPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [fetchParams.startDate, fetchParams.endDate]);
+    }, [fetchParams.startDate, fetchParams.endDate, viewOrg]);
 
     useEffect(() => {
         loadCommitments();
@@ -296,6 +312,7 @@ const CommitmentsPage = () => {
     const handleBack = () => {
         if (isAdmin) navigate('/admin/dashboard');
         else if (user?.role === 'team_lead') navigate('/team-lead/dashboard');
+        else if (user?.role === 'skillhub') navigate('/skillhub/dashboard');
         else navigate('/');
     };
     const handleLogout = () => {
@@ -333,9 +350,22 @@ const CommitmentsPage = () => {
                         <IconButton onClick={handleBack} sx={{ color: 'white' }} aria-label="Back">
                             <ArrowBackIcon />
                         </IconButton>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            Commitment Tracker
-                        </Typography>
+                        <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                                Commitment Tracker
+                            </Typography>
+                            <Typography
+                                sx={{
+                                    fontSize: 11.5,
+                                    opacity: 0.82,
+                                    letterSpacing: '.05em',
+                                    textTransform: 'uppercase',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {orgLabel}
+                            </Typography>
+                        </Box>
                     </Box>
                     <IconButton onClick={handleLogout} sx={{ color: 'white' }} aria-label="Logout">
                         <LogoutIcon />
@@ -429,12 +459,26 @@ const CommitmentsPage = () => {
                     )}
                 </Container>
 
-                <CommitmentFormDialog
-                    open={dialogOpen}
-                    onClose={() => setDialogOpen(false)}
-                    onSubmit={handleFormSubmit}
-                    initialData={editing}
-                />
+                {/* Skillhub commitments use a different dialog (4 demo slots,
+                    counselor picker, week-bounded date picker). LUC uses the
+                    standard CommitmentFormDialog. Both hit the same service. */}
+                {isSkillhub ? (
+                    <SkillhubCommitmentDialog
+                        open={dialogOpen}
+                        onClose={() => setDialogOpen(false)}
+                        onSave={handleFormSubmit}
+                        commitment={editing}
+                        teamConsultants={consultants}
+                        user={user}
+                    />
+                ) : (
+                    <CommitmentFormDialog
+                        open={dialogOpen}
+                        onClose={() => setDialogOpen(false)}
+                        onSubmit={handleFormSubmit}
+                        initialData={editing}
+                    />
+                )}
 
                 <CommitmentDetailDrawer
                     open={drawerOpen}

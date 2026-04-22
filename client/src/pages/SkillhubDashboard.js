@@ -19,6 +19,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ORGANIZATION_LABELS, getLeadStageColor } from '../utils/constants';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
@@ -48,6 +49,7 @@ import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion
 
 const SkillhubDashboard = () => {
     const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const weekInfo = getWeekInfo();
     const branchLabel = ORGANIZATION_LABELS[user?.organization] || 'Skillhub';
     const themeState = useDashboardThemeState('skillhub-theme-mode');
@@ -204,10 +206,26 @@ const SkillhubDashboard = () => {
         },
     ];
 
+    // `students` and `commitments` used to swap in inline tables on this
+    // page. They now live on dedicated routes (shared with LUC) so counselors
+    // get the full Table/Board/Cards + KPI strip + theme toggle treatment.
+    // Dashboard / Analytics / AI stay as inline sub-views here.
+    const handleNavigate = (key) => {
+        if (key === 'students') {
+            navigate('/student-database');
+            return;
+        }
+        if (key === 'commitments') {
+            navigate('/commitments');
+            return;
+        }
+        setView(key);
+    };
+
     const sidebar = (
         <SkillhubSidebar
             activeView={view}
-            onNavigate={setView}
+            onNavigate={handleNavigate}
             onNewAdmission={() => setStudentFormOpen(true)}
             onLogout={logout}
         />
@@ -361,6 +379,19 @@ const SkillhubDashboard = () => {
                 <SectionCard
                     title="Recent Commitments"
                     eyebrow="Last 5"
+                    right={
+                        <Button
+                            size="small"
+                            onClick={() => navigate('/commitments')}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                color: 'var(--d-accent-text)',
+                            }}
+                        >
+                            View all →
+                        </Button>
+                    }
                     sx={{ mb: 0 }}
                 >
                     {commitments.slice(0, 5).length === 0 ? (
@@ -425,6 +456,61 @@ const SkillhubDashboard = () => {
                         </Box>
                     )}
                 </SectionCard>
+            </Box>
+
+            {/* Performance charts — pulled from the analytics view so the
+                landing page feels richer, matching the LUC dashboard. Full
+                analytics view still lives under the Analytics sidebar item. */}
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    gap: 2.5,
+                    mt: 2.5,
+                }}
+            >
+                <Box sx={{ minWidth: 0 }}>
+                    <LeadStageChart commitments={commitments} />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                    <AchievementChart commitments={commitments} />
+                </Box>
+            </Box>
+
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    gap: 2.5,
+                    mt: 2.5,
+                }}
+            >
+                <Box sx={{ minWidth: 0 }}>
+                    <MeetingsChart commitments={commitments} />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                    <ConsultantPerformanceChart
+                        // Chart expects { consultant: { name }, total, ... }
+                        // — feed the counselor doc through so `stat.consultant.name`
+                        // resolves. Without this it throws on an undefined `.name`.
+                        consultantStats={counselors.map((c) => {
+                            const byName = commitments.filter(
+                                (cm) => cm.consultantName === c.name
+                            );
+                            const achievedCount = byName.filter(
+                                (cm) => cm.status === 'achieved' || cm.admissionClosed
+                            ).length;
+                            return {
+                                consultant: c,
+                                total: byName.length,
+                                achieved: achievedCount,
+                                achievementRate: byName.length
+                                    ? Math.round((achievedCount / byName.length) * 100)
+                                    : 0,
+                            };
+                        })}
+                    />
+                </Box>
             </Box>
         </>
     );
@@ -643,7 +729,7 @@ const SkillhubDashboard = () => {
                             (cm) => cm.status === 'achieved' || cm.admissionClosed
                         ).length;
                         return {
-                            name: c.name,
+                            consultant: c,
                             total: byName.length,
                             achieved: achievedCount,
                             achievementRate: byName.length
@@ -656,7 +742,10 @@ const SkillhubDashboard = () => {
         </Box>
     );
 
-    const showDateRange = view === 'dashboard' || view === 'commitments' || view === 'analytics';
+    // Students / commitments sidebar clicks navigate to /student-database
+    // and /commitments respectively, so those view modes never render here
+    // anymore. Date range only matters for the inline dashboard + analytics.
+    const showDateRange = view === 'dashboard' || view === 'analytics';
 
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
@@ -691,12 +780,6 @@ const SkillhubDashboard = () => {
                 </Box>
             ) : view === 'dashboard' ? (
                 renderDashboard()
-            ) : view === 'students' ? (
-                <SectionCard padding={16}>
-                    <SkillhubStudentTable counselors={counselors} onChange={loadAll} />
-                </SectionCard>
-            ) : view === 'commitments' ? (
-                renderCommitmentsTable()
             ) : view === 'analytics' ? (
                 renderAnalytics()
             ) : view === 'ai' ? (
