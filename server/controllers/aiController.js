@@ -72,6 +72,9 @@ exports.generateDashboardAnalysis = async (req, res, next) => {
         AIUsage.create({
             user: req.user.id,
             role: req.user.role,
+            type: 'analysis',
+            teamName: req.user.teamName || '',
+            organization: req.user.organization || '',
             model: result.usage.model,
             promptTokens: result.usage.promptTokens,
             completionTokens: result.usage.completionTokens,
@@ -106,66 +109,157 @@ exports.generateDashboardAnalysis = async (req, res, next) => {
 // @desc    Get AI usage statistics
 // @route   GET /api/ai/usage
 // @access  Private (Admin only)
+//
+// Response shape (post-chatbot):
+// {
+//   summary: { analysis: {...}, chat: {...}, totalCalls, totalTokens, totalCost },
+//   byTeam:  [{ team, org, analysisCalls, analysisCost, chatCalls, chatCost, ... }],
+//   byUser:  [{ name, role, team, analysisCalls, chatCalls, ... }],
+//   daily:   [{ date, analysisCalls, chatCalls, tokens, cost }],
+//   recentCalls: [{ type, user, team, role, tokens, cost, dateRange, createdAt }],
+// }
+//
+// `type` is back-filled in this endpoint for legacy rows that were
+// written before the chatbot shipped — everything without a type defaults
+// to 'analysis' via the schema default, but the old rows in the DB have
+// no type field at all, so we coerce here too.
 exports.getUsageStats = async (req, res, next) => {
     try {
         const records = await AIUsage.find()
-            .populate('user', 'name role')
+            .populate('user', 'name role teamName organization')
             .sort('-createdAt')
             .lean();
 
-        const totalCost = records.reduce((sum, r) => sum + r.cost, 0);
-        const totalTokens = records.reduce((sum, r) => sum + r.totalTokens, 0);
-        const totalCalls = records.length;
+        // Normalize legacy rows: no `type` field → treat as 'analysis'.
+        // Prefer the cached teamName/organization on the row; fall back to
+        // the current populated user doc; final fallback '—'.
+        const norm = records.map((r) => ({
+            ...r,
+            type: r.type || 'analysis',
+            teamName: r.teamName || r.user?.teamName || '',
+            organization: r.organization || r.user?.organization || '',
+            userName: r.user?.name || 'Unknown',
+        }));
 
-        // Per-user breakdown
-        const userMap = {};
-        records.forEach((r) => {
-            const name = r.user?.name || 'Unknown';
-            if (!userMap[name]) {
-                userMap[name] = { name, role: r.role, calls: 0, tokens: 0, cost: 0 };
+        const bucket = () => ({ calls: 0, tokens: 0, cost: 0 });
+
+        // Totals + per-type totals
+        const analysis = bucket();
+        const chat = bucket();
+        for (const r of norm) {
+            const b = r.type === 'chat' ? chat : analysis;
+            b.calls += 1;
+            b.tokens += r.totalTokens || 0;
+            b.cost += r.cost || 0;
+        }
+        const summary = {
+            analysis: {
+                ...analysis,
+                cost: Math.round(analysis.cost * 1_000_000) / 1_000_000,
+            },
+            chat: {
+                ...chat,
+                cost: Math.round(chat.cost * 1_000_000) / 1_000_000,
+            },
+            totalCalls: analysis.calls + chat.calls,
+            totalTokens: analysis.tokens + chat.tokens,
+            totalCost:
+                Math.round((analysis.cost + chat.cost) * 1_000_000) / 1_000_000,
+        };
+
+        // --- By Team ---
+        const teamMap = new Map();
+        for (const r of norm) {
+            const key = r.teamName || '— (no team)';
+            const row = teamMap.get(key) || {
+                team: key,
+                organization: r.organization || '',
+                analysisCalls: 0,
+                analysisTokens: 0,
+                analysisCost: 0,
+                chatCalls: 0,
+                chatTokens: 0,
+                chatCost: 0,
+            };
+            if (r.type === 'chat') {
+                row.chatCalls += 1;
+                row.chatTokens += r.totalTokens || 0;
+                row.chatCost += r.cost || 0;
+            } else {
+                row.analysisCalls += 1;
+                row.analysisTokens += r.totalTokens || 0;
+                row.analysisCost += r.cost || 0;
             }
-            userMap[name].calls++;
-            userMap[name].tokens += r.totalTokens;
-            userMap[name].cost += r.cost;
-        });
+            teamMap.set(key, row);
+        }
+        const byTeam = [...teamMap.values()]
+            .map((r) => ({
+                ...r,
+                totalCalls: r.analysisCalls + r.chatCalls,
+                totalCost: r.analysisCost + r.chatCost,
+            }))
+            .sort((a, b) => b.totalCost - a.totalCost);
 
-        // Daily breakdown (last 30 days)
+        // --- By User ---
+        const userMap = new Map();
+        for (const r of norm) {
+            const key = r.userName;
+            const row = userMap.get(key) || {
+                name: key,
+                role: r.role,
+                team: r.teamName || '—',
+                analysisCalls: 0,
+                chatCalls: 0,
+                tokens: 0,
+                cost: 0,
+            };
+            if (r.type === 'chat') row.chatCalls += 1;
+            else row.analysisCalls += 1;
+            row.tokens += r.totalTokens || 0;
+            row.cost += r.cost || 0;
+            userMap.set(key, row);
+        }
+        const byUser = [...userMap.values()].sort((a, b) => b.cost - a.cost);
+
+        // --- Daily (last 30 days) — now split by type ---
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const dailyMap = {};
-        records
-            .filter((r) => new Date(r.createdAt) >= thirtyDaysAgo)
-            .forEach((r) => {
-                const day = new Date(r.createdAt).toISOString().split('T')[0];
-                if (!dailyMap[day]) {
-                    dailyMap[day] = { date: day, calls: 0, tokens: 0, cost: 0 };
-                }
-                dailyMap[day].calls++;
-                dailyMap[day].tokens += r.totalTokens;
-                dailyMap[day].cost += r.cost;
-            });
+        const dailyMap = new Map();
+        for (const r of norm) {
+            if (new Date(r.createdAt) < thirtyDaysAgo) continue;
+            const day = new Date(r.createdAt).toISOString().split('T')[0];
+            const row = dailyMap.get(day) || {
+                date: day,
+                analysisCalls: 0,
+                chatCalls: 0,
+                tokens: 0,
+                cost: 0,
+            };
+            if (r.type === 'chat') row.chatCalls += 1;
+            else row.analysisCalls += 1;
+            row.tokens += r.totalTokens || 0;
+            row.cost += r.cost || 0;
+            dailyMap.set(day, row);
+        }
+        const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+        // --- Recent ---
+        const recentCalls = norm.slice(0, 50).map((r) => ({
+            type: r.type,
+            user: r.userName,
+            team: r.teamName || '—',
+            role: r.role,
+            promptTokens: r.promptTokens,
+            completionTokens: r.completionTokens,
+            totalTokens: r.totalTokens,
+            cost: r.cost,
+            dateRange: r.dateRangeQueried,
+            createdAt: r.createdAt,
+        }));
 
         res.status(200).json({
             success: true,
-            data: {
-                summary: {
-                    totalCalls,
-                    totalTokens,
-                    totalCost: Math.round(totalCost * 1_000_000) / 1_000_000,
-                },
-                byUser: Object.values(userMap).sort((a, b) => b.cost - a.cost),
-                daily: Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date)),
-                recentCalls: records.slice(0, 50).map((r) => ({
-                    user: r.user?.name || 'Unknown',
-                    role: r.role,
-                    promptTokens: r.promptTokens,
-                    completionTokens: r.completionTokens,
-                    totalTokens: r.totalTokens,
-                    cost: r.cost,
-                    dateRange: r.dateRangeQueried,
-                    createdAt: r.createdAt,
-                })),
-            },
+            data: { summary, byTeam, byUser, daily, recentCalls },
         });
     } catch (error) {
         next(error);
@@ -226,6 +320,9 @@ exports.generateStudentAnalysis = async (req, res, next) => {
         AIUsage.create({
             user: req.user.id,
             role: req.user.role,
+            type: 'analysis',
+            teamName: req.user.teamName || '',
+            organization: req.user.organization || '',
             model: result.usage.model,
             promptTokens: result.usage.promptTokens,
             completionTokens: result.usage.completionTokens,

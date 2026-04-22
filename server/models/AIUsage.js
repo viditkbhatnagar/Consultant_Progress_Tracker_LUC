@@ -9,8 +9,33 @@ const AIUsageSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ['admin', 'team_lead'],
+            // Enum expanded to match the real user role set. The original
+            // version only listed admin+team_lead, which silently rejected
+            // chat usage rows coming from skillhub/manager accounts.
+            enum: ['admin', 'team_lead', 'manager', 'skillhub'],
             required: true,
+        },
+        // Which feature produced this call. Default 'analysis' keeps legacy
+        // rows (written before the chatbot shipped) labeled correctly — the
+        // AI-analysis dashboard tool was the only consumer back then.
+        type: {
+            type: String,
+            enum: ['analysis', 'chat'],
+            default: 'analysis',
+            index: true,
+        },
+        // Cached at write time so admin's "by team" breakdown doesn't need
+        // an extra populate-join on every read. Populated from req.user at
+        // the controller/service layer.
+        teamName: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        organization: {
+            type: String,
+            trim: true,
+            default: '',
         },
         model: {
             type: String,
