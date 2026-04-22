@@ -483,13 +483,16 @@ const StudentFormDialog = ({
                 sx: {
                     minHeight: '85vh',
                     maxHeight: '95vh',
+                    backgroundColor: 'var(--t-surface)',
+                    color: 'var(--t-text)',
+                    border: '1px solid var(--t-border)',
                 }
             }}
         >
-            <DialogTitle sx={{ 
-                backgroundColor: '#1976d2', 
-                color: 'white',
-                pb: 2 
+            <DialogTitle sx={{
+                backgroundColor: '#1976d2',
+                color: '#fff',
+                pb: 2
             }}>
                 <Typography variant="h5" sx={{ fontWeight: 600 }}>
                     {student ? 'Edit Student' : 'Add New Student'}
@@ -499,7 +502,27 @@ const StudentFormDialog = ({
                 </Typography>
             </DialogTitle>
             
-            <DialogContent sx={{ p: 4, backgroundColor: '#fafafa', overflowY: 'auto' }}>
+            <DialogContent
+                sx={{
+                    p: 4,
+                    backgroundColor: 'var(--t-surface-muted)',
+                    color: 'var(--t-text)',
+                    overflowY: 'auto',
+                    // Scope input styling so dark mode is legible. MUI's own
+                    // Typography palette applies, but we retune the field
+                    // chrome: input text, labels, borders, and the background
+                    // of the text field itself.
+                    '& .MuiInputBase-input': { color: 'var(--t-text)' },
+                    '& .MuiInputLabel-root': { color: 'var(--t-text-muted)' },
+                    '& .MuiOutlinedInput-root': { backgroundColor: 'var(--t-surface)' },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--t-border)' },
+                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'var(--t-text-muted)',
+                    },
+                    '& .MuiTypography-root': { color: 'var(--t-text)' },
+                    '& .MuiDivider-root': { borderColor: 'var(--t-border)' },
+                }}
+            >
                 <LocalizationProvider dateAdapter={AdapterDateFns}>
                     {error && (
                         <Alert severity="error" sx={{ mb: 3, mt: 1 }}>
@@ -509,7 +532,7 @@ const StudentFormDialog = ({
 
                     {/* Section 1: Basic Information */}
                     <Box sx={{ mb: 4, mt: 2 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Basic Information
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -652,7 +675,7 @@ const StudentFormDialog = ({
 
                     {/* Section 2: Academic Information */}
                     <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Academic Information
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -719,7 +742,7 @@ const StudentFormDialog = ({
 
                     {/* Section 3: Lead Source & Campaign */}
                     <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Lead Source & Campaign
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -776,7 +799,7 @@ const StudentFormDialog = ({
 
                     {/* Section 4: Dates & Conversion */}
                     <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Dates & Conversion
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -821,7 +844,7 @@ const StudentFormDialog = ({
 
                     {/* Section 5: Team Assignment */}
                     <Box sx={{ mb: 4 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Team Assignment
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -899,7 +922,7 @@ const StudentFormDialog = ({
 
                     {/* Section 6: Professional Information */}
                     <Box sx={{ mb: 2 }}>
-                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Professional Information
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
@@ -955,10 +978,10 @@ const StudentFormDialog = ({
                 </LocalizationProvider>
             </DialogContent>
             
-            <DialogActions sx={{ 
-                p: 3, 
-                backgroundColor: '#E5EAF5',
-                borderTop: '1px solid #ccc'
+            <DialogActions sx={{
+                p: 3,
+                backgroundColor: 'var(--t-surface-elev)',
+                borderTop: '1px solid var(--t-border)'
             }}>
                 <Button 
                     onClick={onClose} 

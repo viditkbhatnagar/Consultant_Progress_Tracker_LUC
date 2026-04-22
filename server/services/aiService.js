@@ -400,10 +400,230 @@ const generateAnalysis = async (messages) => {
     };
 };
 
+// ─── STUDENT-DATABASE ANALYSIS ─────────────────────────────
+// Aggregates the current Student Database filter window and builds a prompt
+// keyed to the org (LUC vs Skillhub) since the field shapes diverge.
+const aggregateStudentData = async ({
+    startDate,
+    endDate,
+    organization,
+    teamLeadId,
+    curriculumSlug,
+}) => {
+    const isSkillhubOrg =
+        organization === 'skillhub_training' ||
+        organization === 'skillhub_institute';
+    const dateField = isSkillhubOrg ? 'createdAt' : 'closingDate';
+
+    const filter = {};
+    if (organization) filter.organization = organization;
+    if (teamLeadId) filter.teamLead = teamLeadId;
+
+    if (startDate && endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter[dateField] = { $gte: new Date(startDate), $lte: end };
+    }
+
+    if (curriculumSlug === 'CBSE') {
+        filter.$or = [{ curriculumSlug: 'CBSE' }, { curriculum: 'CBSE' }];
+    } else if (curriculumSlug === 'IGCSE') {
+        filter.$or = [
+            { curriculumSlug: 'IGCSE' },
+            { curriculum: { $regex: '^IGCSE', $options: 'i' } },
+        ];
+    }
+
+    const students = await Student.find(filter).lean();
+    if (students.length === 0) return null;
+
+    const bump = (map, key) => {
+        if (!key) return;
+        map[key] = (map[key] || 0) + 1;
+    };
+
+    if (isSkillhubOrg) {
+        // Skillhub: curriculum, yearOrGrade, mode, leadSource, status,
+        // outstanding, EMI tracking.
+        const byStatus = {};
+        const byCurriculum = {};
+        const byYearOrGrade = {};
+        const byMode = {};
+        const byLeadSource = {};
+        const byConsultant = {};
+        let totalCourseFee = 0;
+        let totalPaid = 0;
+        let totalOutstanding = 0;
+
+        students.forEach((s) => {
+            bump(byStatus, s.studentStatus);
+            bump(byCurriculum, s.curriculum);
+            bump(byYearOrGrade, s.yearOrGrade);
+            bump(byMode, s.mode);
+            bump(byLeadSource, s.leadSource);
+            bump(byConsultant, s.consultantName);
+            totalCourseFee += s.courseFee || 0;
+            const paid = (s.admissionFeePaid || 0) + (s.registrationFee || 0);
+            const emiPaid = Array.isArray(s.emis)
+                ? s.emis.reduce((sum, e) => sum + (e.paidAmount || 0), 0)
+                : 0;
+            totalPaid += paid + emiPaid;
+            totalOutstanding += Math.max(
+                0,
+                (s.courseFee || 0) - paid - emiPaid
+            );
+        });
+
+        return {
+            kind: 'skillhub',
+            dateRange: { startDate, endDate },
+            organization,
+            curriculumSlug,
+            totalStudents: students.length,
+            totalCourseFee,
+            totalPaid,
+            totalOutstanding,
+            byStatus,
+            byCurriculum,
+            byYearOrGrade,
+            byMode,
+            byLeadSource,
+            byConsultant,
+        };
+    }
+
+    // LUC: university / program / source / consultant / team
+    const byUniversity = {};
+    const byProgram = {};
+    const bySource = {};
+    const byConsultant = {};
+    const byTeam = {};
+    let totalRevenue = 0;
+    let totalConversionDays = 0;
+    let withConversion = 0;
+
+    students.forEach((s) => {
+        bump(byUniversity, s.university);
+        bump(byProgram, s.program);
+        bump(bySource, s.source);
+        bump(byConsultant, s.consultantName);
+        bump(byTeam, s.teamName);
+        totalRevenue += s.courseFee || 0;
+        if (s.conversionTime) {
+            totalConversionDays += s.conversionTime;
+            withConversion++;
+        }
+    });
+
+    return {
+        kind: 'luc',
+        dateRange: { startDate, endDate },
+        organization: organization || 'luc',
+        totalStudents: students.length,
+        totalRevenue,
+        avgConversionDays:
+            withConversion > 0 ? Math.round(totalConversionDays / withConversion) : 0,
+        byUniversity,
+        byProgram,
+        bySource,
+        byConsultant,
+        byTeam,
+    };
+};
+
+const buildStudentPrompt = (data) => {
+    const systemPrompt = `You are a senior admissions analyst for an education consultancy. You analyze student enrollment data and provide actionable insights. Be specific — use exact names, numbers, and percentages. Keep the analysis concise but impactful. Use markdown formatting with ## headers, **bold** for key metrics, and bullet points.`;
+
+    if (data.kind === 'skillhub') {
+        const userPrompt = `Analyze this Skillhub student admissions data for ${data.dateRange.startDate} to ${data.dateRange.endDate} (${data.organization}${data.curriculumSlug ? ` / ${data.curriculumSlug}` : ''}):
+
+OVERVIEW
+- Total Students: ${data.totalStudents}
+- Course Fees Billed: AED ${data.totalCourseFee.toLocaleString()}
+- Collected: AED ${data.totalPaid.toLocaleString()}
+- Outstanding: AED ${data.totalOutstanding.toLocaleString()} (${data.totalCourseFee ? Math.round((data.totalOutstanding / data.totalCourseFee) * 100) : 0}%)
+
+DISTRIBUTIONS
+- By Status: ${JSON.stringify(data.byStatus)}
+- By Curriculum: ${JSON.stringify(data.byCurriculum)}
+- By Year/Grade: ${JSON.stringify(data.byYearOrGrade)}
+- By Mode: ${JSON.stringify(data.byMode)}
+- By Lead Source: ${JSON.stringify(data.byLeadSource)}
+- By Counselor: ${JSON.stringify(data.byConsultant)}
+
+Generate an analysis with EXACTLY these sections in this order:
+
+## Recommendations
+5-7 detailed, specific, actionable recommendations (prioritized by urgency). Cite counselor names, statuses, or programs directly. 2-3 sentences each.
+
+## Admissions Snapshot
+Overall picture — how many new admissions vs active vs inactive, total billed, collection rate.
+
+## Top Counselors
+Best-performing counselors by volume; call out standouts from the distribution.
+
+## Curriculum & Mode Trends
+Which curriculum and mode are the most popular? Any outliers?
+
+## Lead Source Effectiveness
+Which lead sources are bringing the most admissions — and which are underperforming?
+
+## Outstanding Fees Alert
+Are there unusually high outstanding fees? What's the collection risk?`;
+
+        return [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+        ];
+    }
+
+    // LUC
+    const userPrompt = `Analyze this LUC student admissions data for ${data.dateRange.startDate} to ${data.dateRange.endDate}:
+
+OVERVIEW
+- Total Students: ${data.totalStudents}
+- Revenue: AED ${data.totalRevenue.toLocaleString()}
+- Avg Conversion Time: ${data.avgConversionDays} days
+
+DISTRIBUTIONS
+- By University: ${JSON.stringify(data.byUniversity)}
+- By Program: ${JSON.stringify(data.byProgram)}
+- By Source: ${JSON.stringify(data.bySource)}
+- By Consultant: ${JSON.stringify(data.byConsultant)}
+- By Team: ${JSON.stringify(data.byTeam)}
+
+Generate an analysis with EXACTLY these sections in this order:
+
+## Recommendations
+5-7 detailed, specific, actionable recommendations (prioritized by urgency). Cite consultant names, sources, universities, or programs directly. 2-3 sentences each.
+
+## Admissions Snapshot
+Total conversions, revenue, avg conversion time — what does the window tell us?
+
+## Top Consultants
+Best-performing consultants by volume and revenue. Call out standouts.
+
+## University & Program Mix
+Which universities and programs dominate? Which are underperforming? Any missed opportunities?
+
+## Source Effectiveness
+Which marketing / lead sources are bringing the most admissions — and which are weak?
+
+## Conversion Speed
+Is the average conversion time healthy? Where could it be sped up?`;
+
+    return [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+    ];
+};
+
 module.exports = {
     aggregateAdminData,
     aggregateTeamLeadData,
+    aggregateStudentData,
     buildAdminPrompt,
     buildTeamLeadPrompt,
+    buildStudentPrompt,
     generateAnalysis,
 };

@@ -3,6 +3,12 @@
 // component can read them via `var(--t-...)` in sx without prop-drilling.
 
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { createTheme, ThemeProvider, useTheme } from '@mui/material/styles';
+
+// Geist stack — loaded in public/index.html. Falls back to Inter for any
+// environment that doesn't have Geist yet, then system fonts.
+const GEIST_STACK = '"Geist", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const GEIST_MONO_STACK = '"Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 
 export const LIGHT_TOKENS = {
     '--t-page-bg': '#F5F7FB',
@@ -85,6 +91,13 @@ export const useTrackerTheme = () => useContext(TrackerThemeContext);
 // Reads persisted mode once and exposes { mode, toggle, tokensSx } which
 // callers merge into the root Box's sx so CSS vars apply to everything
 // inside.
+//
+// ALSO publishes the same tokens onto `document.documentElement` so that
+// MUI components rendered via Portal (Menu, Popover, Dialog, Tooltip,
+// Snackbar, etc.) — which mount at document.body and sit outside the
+// page's sx-scoped subtree — can still resolve `var(--t-...)`. Without
+// this, popovers render without a background because the CSS variables
+// don't cascade out of the page root.
 export const useThemeState = (storageKey) => {
     const [mode, setMode] = useState(() => {
         try {
@@ -103,6 +116,19 @@ export const useThemeState = (storageKey) => {
         }
     }, [mode, storageKey]);
 
+    // Keep :root in sync so portal-rendered menus / dialogs see the
+    // tokens. Cleaning up on unmount is deliberate: the next page's
+    // useThemeState will immediately re-apply its own set.
+    useEffect(() => {
+        const el = document.documentElement;
+        const tokens = getTokens(mode);
+        const keys = Object.keys(tokens);
+        keys.forEach((k) => el.style.setProperty(k, tokens[k]));
+        return () => {
+            keys.forEach((k) => el.style.removeProperty(k));
+        };
+    }, [mode]);
+
     const toggle = useCallback(() => setMode((m) => (m === 'dark' ? 'light' : 'dark')), []);
 
     const value = useMemo(() => ({ mode, setMode, toggle }), [mode, toggle]);
@@ -112,6 +138,87 @@ export const useThemeState = (storageKey) => {
     return { mode, toggle, tokensSx, contextValue: value };
 };
 
+// Builds a nested MUI theme that inherits from the parent but overrides
+// typography (Geist) and maps palette colors onto the tracker tokens so
+// every MUI surface inside a tracker page (Typography, Button, Chip,
+// ToggleButton, TextField, etc.) uses the same font and dark/light colors
+// as the CSS-var system — without editing every page.
+const useTrackerMuiTheme = (mode) => {
+    const parent = useTheme();
+    return useMemo(() => {
+        const t = mode === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
+        return createTheme({
+            ...parent,
+            palette: {
+                ...(parent.palette || {}),
+                mode,
+                primary: {
+                    main: t['--t-accent'],
+                    light: t['--t-accent-text'],
+                    dark: t['--t-accent-text'],
+                    contrastText: '#FFFFFF',
+                },
+                error: { main: t['--t-danger'] },
+                success: { main: t['--t-success'] },
+                warning: { main: t['--t-warning'] },
+                text: {
+                    primary: t['--t-text'],
+                    secondary: t['--t-text-3'],
+                    disabled: t['--t-text-faint'],
+                },
+                background: {
+                    default: t['--t-page-bg'],
+                    paper: t['--t-surface'],
+                },
+                divider: t['--t-border'],
+                action: {
+                    hover: t['--t-surface-hover'],
+                    selected: t['--t-accent-bg'],
+                    disabled: t['--t-disabled'],
+                },
+            },
+            typography: {
+                ...parent.typography,
+                fontFamily: GEIST_STACK,
+                button: {
+                    ...(parent.typography?.button || {}),
+                    fontFamily: GEIST_STACK,
+                    textTransform: 'none',
+                },
+            },
+            components: {
+                ...(parent.components || {}),
+                MuiTypography: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiButton: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiListItemText: {
+                    styleOverrides: {
+                        primary: { fontFamily: GEIST_STACK },
+                        secondary: { fontFamily: GEIST_STACK },
+                    },
+                },
+                MuiMenuItem: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiChip: { styleOverrides: { label: { fontFamily: GEIST_STACK } } },
+                MuiTab: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiTableCell: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiInputBase: { styleOverrides: { input: { fontFamily: GEIST_STACK } } },
+                MuiOutlinedInput: { styleOverrides: { input: { fontFamily: GEIST_STACK } } },
+                MuiToggleButton: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+                MuiAlert: { styleOverrides: { root: { fontFamily: GEIST_STACK } } },
+            },
+        });
+    }, [parent, mode]);
+};
+
+const TrackerMuiThemeWrapper = ({ mode, children }) => {
+    const theme = useTrackerMuiTheme(mode || 'light');
+    return <ThemeProvider theme={theme}>{children}</ThemeProvider>;
+};
+
 export const TrackerThemeProvider = ({ value, children }) => (
-    <TrackerThemeContext.Provider value={value}>{children}</TrackerThemeContext.Provider>
+    <TrackerThemeContext.Provider value={value}>
+        <TrackerMuiThemeWrapper mode={value?.mode}>{children}</TrackerMuiThemeWrapper>
+    </TrackerThemeContext.Provider>
 );
+
+export const TRACKER_FONT = GEIST_STACK;
+export const TRACKER_FONT_MONO = GEIST_MONO_STACK;

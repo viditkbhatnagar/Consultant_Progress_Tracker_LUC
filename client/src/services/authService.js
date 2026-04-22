@@ -30,6 +30,9 @@ const login = async (email, password) => {
 const logout = () => {
     setAuthToken(null);
     localStorage.removeItem('user');
+    // Reset admin org-scope filter; otherwise the next login inherits the
+    // previous session's scope and silently filters every admin GET.
+    localStorage.removeItem('adminOrgScope');
 };
 
 // Get current user

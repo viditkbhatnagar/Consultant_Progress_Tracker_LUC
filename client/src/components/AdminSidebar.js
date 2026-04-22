@@ -96,6 +96,44 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
         return () => clearInterval(interval);
     }, []);
 
+    // Shared style blocks so nav + bottom items stay in visual lockstep.
+    // All colors resolve against the dashboard token root when mounted
+    // inside DashboardShell; fall back to sensible hex otherwise.
+    const navItemSx = {
+        borderRadius: '10px',
+        color: 'var(--d-text-2, #2A2927)',
+        transition:
+            'background-color var(--d-dur-sm, 180ms) var(--d-ease-enter, ease), color var(--d-dur-sm, 180ms) var(--d-ease-enter, ease)',
+        '& .MuiListItemIcon-root': {
+            color: 'var(--d-text-3, #57564E)',
+            minWidth: 40,
+            transition: 'color var(--d-dur-sm, 180ms) var(--d-ease-enter, ease)',
+        },
+        '& .MuiListItemText-primary': {
+            fontSize: '0.925rem',
+            fontWeight: 500,
+        },
+        '@media (hover: hover) and (pointer: fine)': {
+            '&:hover': {
+                backgroundColor: 'var(--d-surface-hover, #EFEDE8)',
+            },
+        },
+        '&:focus-visible': {
+            outline: '2px solid var(--d-accent, #2383E2)',
+            outlineOffset: -2,
+        },
+        '&.Mui-selected': {
+            backgroundColor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+            color: 'var(--d-accent-text, #1F6FBF)',
+            '& .MuiListItemIcon-root': {
+                color: 'var(--d-accent, #2383E2)',
+            },
+            '&:hover': {
+                backgroundColor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+            },
+        },
+    };
+
     return (
         <Drawer
             variant="permanent"
@@ -105,9 +143,9 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                 '& .MuiDrawer-paper': {
                     width: DRAWER_WIDTH,
                     boxSizing: 'border-box',
-                    background: '#E5EAF5',
-                    color: '#2C3E50',
-                    borderRight: 'none',
+                    backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                    color: 'var(--d-text-2, #2A2927)',
+                    borderRight: '1px solid var(--d-border-soft, #ECE9E2)',
                 },
             }}
         >
@@ -118,7 +156,7 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    borderBottom: '1px solid rgba(44, 62, 80, 0.1)',
+                    borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
                 }}
             >
                 <img
@@ -132,12 +170,12 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                     }}
                 />
                 <Typography
-                    variant="h6"
                     sx={{
                         fontWeight: 600,
                         textAlign: 'center',
-                        fontSize: '0.95rem',
-                        opacity: 0.95,
+                        fontSize: '0.925rem',
+                        color: 'var(--d-text-3, #57564E)',
+                        letterSpacing: '-0.01em',
                     }}
                 >
                     Team Progress Tracker
@@ -151,26 +189,28 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
-                    background: 'rgba(44, 62, 80, 0.05)',
+                    backgroundColor: 'var(--d-surface, #FFFFFF)',
+                    borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
                 }}
             >
                 <Avatar
                     sx={{
-                        bgcolor: '#A0D2EB',
-                        color: '#2C3E50',
+                        bgcolor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+                        color: 'var(--d-accent-text, #1F6FBF)',
                         width: 40,
                         height: 40,
                         fontSize: '1rem',
+                        fontWeight: 600,
                     }}
                 >
                     {user?.name?.charAt(0)}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography
-                        variant="body1"
                         sx={{
                             fontWeight: 600,
                             fontSize: '0.9rem',
+                            color: 'var(--d-text, #191918)',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -179,256 +219,126 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                         {user?.name}
                     </Typography>
                     <Typography
-                        variant="caption"
                         sx={{
-                            opacity: 0.8,
-                            fontSize: '0.75rem',
+                            fontSize: '0.72rem',
+                            color: 'var(--d-text-muted, #8A887E)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            fontWeight: 600,
                         }}
                     >
-                        Admin
+                        Administrator
                     </Typography>
                 </Box>
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(44, 62, 80, 0.1)' }} />
+            <Divider sx={{ borderColor: 'transparent' }} />
 
             {/* Navigation */}
-            <List sx={{ flex: 1, px: 1.5, py: 2 }}>
-                <ListItem disablePadding sx={{ mb: 1 }}>
+            <List sx={{ flex: 1, px: 1.25, py: 1.5 }}>
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
                         onClick={onDashboard}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                            '&.Mui-selected': {
-                                backgroundColor: '#A0D2EB',
-                            },
-                        }}
                         selected={!aiAnalysisActive && !apiCostsActive}
+                        sx={navItemSx}
                     >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <DashboardIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Dashboard"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                        <ListItemIcon><DashboardIcon /></ListItemIcon>
+                        <ListItemText primary="Dashboard" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={onAIAnalysis}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                            '&.Mui-selected': {
-                                backgroundColor: '#A0D2EB',
-                            },
-                        }}
-                        selected={aiAnalysisActive}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <AutoAwesomeIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="AI Analysis"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
+                        <ListItemIcon><AutoAwesomeIcon /></ListItemIcon>
+                        <ListItemText primary="AI Analysis" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={onAPICosts}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                            '&.Mui-selected': {
-                                backgroundColor: '#A0D2EB',
-                            },
-                        }}
-                        selected={apiCostsActive}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <MoneyIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="API Costs"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={onAPICosts} selected={apiCostsActive} sx={navItemSx}>
+                        <ListItemIcon><MoneyIcon /></ListItemIcon>
+                        <ListItemText primary="API Costs" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={() => navigate('/student-database')}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <SchoolIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Student Database"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/student-database')} sx={navItemSx}>
+                        <ListItemIcon><SchoolIcon /></ListItemIcon>
+                        <ListItemText primary="Student Database" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
                         onClick={() => {
-                            // Admin entry point: reset org scope so the
-                            // tracker opens on LUC by default. Admin can
-                            // still toggle to Skillhub from the in-page tab.
                             setAdminOrgScope('luc');
                             navigate('/hourly-tracker');
                         }}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                        }}
+                        sx={navItemSx}
                     >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <AccessTimeIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Hourly Tracker"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                        <ListItemIcon><AccessTimeIcon /></ListItemIcon>
+                        <ListItemText primary="Hourly Tracker" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={() => navigate('/commitments')}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <CommitmentsIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Commitments"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/commitments')} sx={navItemSx}>
+                        <ListItemIcon><CommitmentsIcon /></ListItemIcon>
+                        <ListItemText primary="Commitments" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={() => navigate('/meetings')}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <VideoCallIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Meetings"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/meetings')} sx={navItemSx}>
+                        <ListItemIcon><VideoCallIcon /></ListItemIcon>
+                        <ListItemText primary="Meetings" />
                     </ListItemButton>
                 </ListItem>
 
-                <ListItem disablePadding sx={{ mb: 1 }}>
-                    <ListItemButton
-                        onClick={(e) => onExport(e.currentTarget)}
-                        sx={{
-                            borderRadius: 2,
-                            '&:hover': {
-                                backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                            },
-                        }}
-                    >
-                        <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <DownloadIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                            primary="Export Data"
-                            primaryTypographyProps={{
-                                fontSize: '0.95rem',
-                                fontWeight: 500,
-                            }}
-                        />
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={(e) => onExport(e.currentTarget)} sx={navItemSx}>
+                        <ListItemIcon><DownloadIcon /></ListItemIcon>
+                        <ListItemText primary="Export Data" />
                     </ListItemButton>
                 </ListItem>
             </List>
 
-            <Divider sx={{ borderColor: 'rgba(44, 62, 80, 0.1)' }} />
-
             {/* Bottom Actions */}
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: 2, borderTop: '1px solid var(--d-border-soft, #ECE9E2)' }}>
                 {/* Motivational Quote */}
                 <Box
                     sx={{
-                        mb: 2,
-                        p: 3,
-                        minHeight: '120px',
-                        backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                        borderRadius: 2,
-                        borderLeft: '4px solid #A0D2EB',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                        mb: 1.75,
+                        p: 2,
+                        minHeight: 110,
+                        backgroundColor: 'var(--d-surface, #FFFFFF)',
+                        border: '1px solid var(--d-border-soft, #ECE9E2)',
+                        borderLeft: '3px solid var(--d-warm, #D97706)',
+                        borderRadius: '10px',
                         display: 'flex',
-                        alignItems: 'center',
+                        alignItems: 'flex-start',
+                        gap: 1.25,
                     }}
                 >
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, width: '100%' }}>
-                        <QuoteIcon sx={{ fontSize: 20, color: '#2C3E50', opacity: 0.7, mt: 0.5, flexShrink: 0 }} />
-                        <Typography
-                            sx={{
-                                color: '#2C3E50',
-                                fontSize: '0.9rem',
-                                lineHeight: 1.5,
-                                fontStyle: 'italic',
-                                fontWeight: 700,
-                            }}
-                        >
-                            {getPersonalizedQuote(MOTIVATIONAL_QUOTES[currentQuoteIndex])}
-                        </Typography>
-                    </Box>
+                    <QuoteIcon
+                        sx={{
+                            fontSize: 18,
+                            color: 'var(--d-warm, #D97706)',
+                            mt: 0.25,
+                            flexShrink: 0,
+                        }}
+                    />
+                    <Typography
+                        sx={{
+                            color: 'var(--d-text-2, #2A2927)',
+                            fontSize: '0.82rem',
+                            lineHeight: 1.5,
+                            fontStyle: 'italic',
+                            fontWeight: 500,
+                        }}
+                    >
+                        {getPersonalizedQuote(MOTIVATIONAL_QUOTES[currentQuoteIndex])}
+                    </Typography>
                 </Box>
 
                 <Box
@@ -436,36 +346,27 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        mb: 2,
+                        mb: 1,
+                        px: 1,
                     }}
                 >
-                    <Typography variant="caption" sx={{ opacity: 0.8, color: '#2C3E50' }}>
+                    <Typography
+                        sx={{
+                            fontSize: 11,
+                            color: 'var(--d-text-muted, #8A887E)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            fontWeight: 600,
+                        }}
+                    >
                         Notifications
                     </Typography>
-                    <NotificationBell iconColor="#2C3E50" />
+                    <NotificationBell iconColor="var(--d-text-3, #57564E)" />
                 </Box>
 
-                <ListItemButton
-                    onClick={onLogout}
-                    sx={{
-                        borderRadius: 2,
-                        '&:hover': {
-                            backgroundColor: 'rgba(160, 210, 235, 0.3)',
-                        },
-                        px: 2,
-                        py: 1.5,
-                    }}
-                >
-                    <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                        <LogoutIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                        primary="Logout"
-                        primaryTypographyProps={{
-                            fontSize: '0.95rem',
-                            fontWeight: 500,
-                        }}
-                    />
+                <ListItemButton onClick={onLogout} sx={{ ...navItemSx, px: 1.5, py: 1 }}>
+                    <ListItemIcon><LogoutIcon /></ListItemIcon>
+                    <ListItemText primary="Logout" />
                 </ListItemButton>
             </Box>
         </Drawer>

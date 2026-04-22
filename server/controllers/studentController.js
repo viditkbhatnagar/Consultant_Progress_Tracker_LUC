@@ -109,18 +109,41 @@ exports.getStudents = async (req, res, next) => {
             }
         }
 
-        query = Student.find(filter)
-            .populate('teamLead', 'name email teamName')
-            .populate('consultant', 'name')
-            .populate('createdBy', 'name')
-            .sort({ closingDate: -1, sno: -1 });
+        // Server-side pagination. Clients can either pass `page`/`limit` (for
+        // the paginated Table view) or omit them (for Cards view which fetches
+        // everything). Hard cap at 500 so a missing page param can't eat the
+        // server; legacy callers that passed nothing still get the full
+        // dataset (bounded to 500).
+        const rawPage = parseInt(req.query.page, 10);
+        const rawLimit = parseInt(req.query.limit, 10);
+        const hasPagination = !Number.isNaN(rawPage) || !Number.isNaN(rawLimit);
+        const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage);
+        const limit = Math.max(1, Math.min(500, Number.isNaN(rawLimit) ? 500 : rawLimit));
+        const skip = (page - 1) * limit;
 
-        const students = await query;
+        const [students, total] = await Promise.all([
+            Student.find(filter)
+                .populate('teamLead', 'name email teamName')
+                .populate('consultant', 'name')
+                .populate('createdBy', 'name')
+                .sort({ closingDate: -1, sno: -1 })
+                .skip(skip)
+                .limit(limit),
+            hasPagination ? Student.countDocuments(filter) : null,
+        ]);
 
         res.status(200).json({
             success: true,
             count: students.length,
             data: students,
+            pagination: hasPagination
+                ? {
+                      page,
+                      limit,
+                      total,
+                      pages: Math.max(1, Math.ceil(total / limit)),
+                  }
+                : undefined,
         });
     } catch (error) {
         console.error('Error fetching students:', error);
@@ -526,70 +549,168 @@ exports.changeStudentStatus = async (req, res, next) => {
 
 // @desc    Get student statistics
 // @route   GET /api/students/stats
-// @access  Private (Admin/Team Lead)
+// @access  Private (Admin/Team Lead/Manager/Skillhub)
+//
+// Accepts the same filter query-params as GET /api/students so the KPI strip
+// on the Student Database page can show "all-time" totals when no filter is
+// set and "filtered-window" totals when any filter is applied. Returns an
+// `overview` block used by both LUC + Skillhub pages — LUC ignores the
+// Skillhub-specific fields (outstanding / paid) and vice versa.
 exports.getStudentStats = async (req, res, next) => {
     try {
-        const matchStage = buildScopeFilter(req);
+        const {
+            startDate,
+            endDate,
+            consultant,
+            university,
+            team,
+            month,
+            program,
+            source,
+            conversionOperator,
+            conversionDays,
+            studentStatus,
+            curriculumSlug,
+        } = req.query;
 
-        const stats = await Student.aggregate([
-            { $match: matchStage },
+        const filter = buildScopeFilter(req);
+
+        if (studentStatus) filter.studentStatus = studentStatus;
+
+        if (curriculumSlug === 'CBSE') {
+            filter.$or = [{ curriculumSlug: 'CBSE' }, { curriculum: 'CBSE' }];
+        } else if (curriculumSlug === 'IGCSE') {
+            filter.$or = [
+                { curriculumSlug: 'IGCSE' },
+                { curriculum: { $regex: '^IGCSE', $options: 'i' } },
+            ];
+        }
+
+        if (startDate && endDate) {
+            const orgScope = filter.organization || req.query.organization;
+            const isSkillhubScope =
+                curriculumSlug ||
+                orgScope === 'skillhub_training' ||
+                orgScope === 'skillhub_institute';
+            const field = isSkillhubScope ? 'createdAt' : 'closingDate';
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filter[field] = { $gte: new Date(startDate), $lte: end };
+        }
+
+        if (consultant) filter.consultantName = consultant;
+        if (university) filter.university = university;
+        if (team && req.user.role === 'admin') filter.teamName = team;
+        if (month) {
+            const months = month.split(',');
+            filter.month = { $in: months };
+        }
+        if (program) filter.program = program;
+        if (source) filter.source = source;
+        if (conversionOperator && conversionDays) {
+            const days = Number(conversionDays);
+            if (!Number.isNaN(days)) {
+                filter.conversionTime =
+                    conversionOperator === 'gt' ? { $gt: days } : { $lt: days };
+            }
+        }
+
+        // Single aggregation that computes everything the KPI strip needs.
+        // EMI paid amounts live in an array sub-doc so we $map → $sum them
+        // before deriving the per-student outstanding.
+        const pipeline = [
+            { $match: filter },
+            {
+                $addFields: {
+                    emiPaid: {
+                        $sum: {
+                            $map: {
+                                input: { $ifNull: ['$emis', []] },
+                                as: 'e',
+                                in: { $ifNull: ['$$e.paidAmount', 0] },
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    totalPaidPerStudent: {
+                        $add: [
+                            { $ifNull: ['$admissionFeePaid', 0] },
+                            { $ifNull: ['$registrationFee', 0] },
+                            '$emiPaid',
+                        ],
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    outstandingPerStudent: {
+                        $max: [
+                            0,
+                            {
+                                $subtract: [
+                                    { $ifNull: ['$courseFee', 0] },
+                                    '$totalPaidPerStudent',
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
             {
                 $group: {
                     _id: null,
                     totalStudents: { $sum: 1 },
-                    totalRevenue: { $sum: '$courseFee' },
+                    totalRevenue: { $sum: { $ifNull: ['$courseFee', 0] } },
+                    totalPaid: { $sum: '$totalPaidPerStudent' },
+                    totalOutstanding: { $sum: '$outstandingPerStudent' },
                     avgConversionTime: { $avg: '$conversionTime' },
-                }
-            }
-        ]);
-
-        // Stats by university
-        const universityStats = await Student.aggregate([
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: '$university',
-                    count: { $sum: 1 },
-                    revenue: { $sum: '$courseFee' },
-                }
+                    // Min/max of the most meaningful date per org so the KPI
+                    // strip can show a live "coverage" sub-label like
+                    // "Jan 1, 2020 – today". We surface both closingDate
+                    // (LUC) and createdAt (Skillhub) and let the client pick.
+                    minClosingDate: { $min: '$closingDate' },
+                    maxClosingDate: { $max: '$closingDate' },
+                    minCreatedAt: { $min: '$createdAt' },
+                    maxCreatedAt: { $max: '$createdAt' },
+                    uniqueConsultants: { $addToSet: '$consultantName' },
+                    uniqueUniversities: { $addToSet: '$university' },
+                },
             },
-            { $sort: { count: -1 } }
-        ]);
+        ];
 
-        // Stats by source
-        const sourceStats = await Student.aggregate([
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: '$source',
-                    count: { $sum: 1 },
-                }
-            },
-            { $sort: { count: -1 } }
-        ]);
+        const [agg] = await Student.aggregate(pipeline);
+        const overview = agg
+            ? {
+                  totalStudents: agg.totalStudents || 0,
+                  totalRevenue: agg.totalRevenue || 0,
+                  totalPaid: agg.totalPaid || 0,
+                  totalOutstanding: agg.totalOutstanding || 0,
+                  avgConversionTime: agg.avgConversionTime || 0,
+                  minClosingDate: agg.minClosingDate || null,
+                  maxClosingDate: agg.maxClosingDate || null,
+                  minCreatedAt: agg.minCreatedAt || null,
+                  maxCreatedAt: agg.maxCreatedAt || null,
+                  consultantCount: (agg.uniqueConsultants || []).filter(Boolean).length,
+                  universityCount: (agg.uniqueUniversities || []).filter(Boolean).length,
+              }
+            : {
+                  totalStudents: 0,
+                  totalRevenue: 0,
+                  totalPaid: 0,
+                  totalOutstanding: 0,
+                  avgConversionTime: 0,
+                  minClosingDate: null,
+                  maxClosingDate: null,
+                  minCreatedAt: null,
+                  maxCreatedAt: null,
+                  consultantCount: 0,
+                  universityCount: 0,
+              };
 
-        // Stats by consultant
-        const consultantStats = await Student.aggregate([
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: '$consultantName',
-                    count: { $sum: 1 },
-                    revenue: { $sum: '$courseFee' },
-                }
-            },
-            { $sort: { count: -1 } }
-        ]);
-
-        res.status(200).json({
-            success: true,
-            data: {
-                overview: stats[0] || { totalStudents: 0, totalRevenue: 0, avgConversionTime: 0 },
-                byUniversity: universityStats,
-                bySource: sourceStats,
-                byConsultant: consultantStats,
-            },
-        });
+        res.status(200).json({ success: true, data: { overview } });
     } catch (error) {
         next(error);
     }

@@ -179,8 +179,27 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="md"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    backgroundColor: 'var(--d-surface)',
+                    color: 'var(--d-text)',
+                    border: '1px solid var(--d-border)',
+                },
+            }}
+        >
+            <DialogTitle
+                sx={{
+                    backgroundColor: 'var(--d-accent-bg)',
+                    color: 'var(--d-accent-text)',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--d-border-soft)',
+                }}
+            >
                 {student
                     ? 'Edit Student'
                     : initialStatus === 'active'
@@ -189,7 +208,23 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     ? 'New Inactive Student'
                     : 'New Admission'}
             </DialogTitle>
-            <DialogContent dividers>
+            <DialogContent
+                dividers
+                sx={{
+                    backgroundColor: 'var(--d-surface-muted)',
+                    color: 'var(--d-text)',
+                    borderColor: 'var(--d-border)',
+                    '& .MuiInputBase-input': { color: 'var(--d-text)' },
+                    '& .MuiInputLabel-root': { color: 'var(--d-text-muted)' },
+                    '& .MuiOutlinedInput-root': { backgroundColor: 'var(--d-surface)' },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--d-border)' },
+                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'var(--d-text-muted)',
+                    },
+                    '& .MuiTypography-root': { color: 'var(--d-text)' },
+                    '& .MuiDivider-root': { borderColor: 'var(--d-border)' },
+                }}
+            >
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>General Info</Typography>
@@ -568,8 +603,13 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     </Grid>
                 </Grid>
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
+            <DialogActions
+                sx={{
+                    backgroundColor: 'var(--d-surface-elev)',
+                    borderTop: '1px solid var(--d-border)',
+                }}
+            >
+                <Button onClick={onClose} sx={{ color: 'var(--d-text-3)' }}>Cancel</Button>
                 <Button onClick={handleSave} variant="contained" disabled={saving}>
                     {saving ? 'Saving…' : student ? 'Save Changes' : 'Create Admission'}
                 </Button>

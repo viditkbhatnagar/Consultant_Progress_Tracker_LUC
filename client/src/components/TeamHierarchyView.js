@@ -1,193 +1,259 @@
 import React from 'react';
-import {
-    Box,
-    Card,
-    CardContent,
-    Typography,
-    Avatar,
-    Chip,
-    Grid,
-    Paper,
-} from '@mui/material';
+import { Box, Typography, Avatar, Chip, Grid } from '@mui/material';
 import {
     AccountTree as HierarchyIcon,
     Person as PersonIcon,
     Groups as GroupsIcon,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
+import {
+    gridStagger,
+    riseItemVariants,
+    cardHover,
+    useReducedMotionVariants,
+} from '../utils/dashboardMotion';
 
-const TeamHierarchyView = ({ teams, onTeamClick, onConsultantClick, adminUser }) => {
+// Flat hierarchy visual using the dashboard tokens. Replaces the old
+// gradient-heavy layout so it reads consistently with the redesigned
+// Admin dashboard (Notion-esque palette, light/dark). Falls back to
+// sensible hex when rendered outside DashboardShell.
+const TeamHierarchyView = ({ teams = [], onTeamClick, onConsultantClick, adminUser }) => {
+    const stagger = useReducedMotionVariants(gridStagger);
+    const item = useReducedMotionVariants(riseItemVariants);
+    const totalConsultants = teams.reduce((sum, t) => sum + (t.consultants?.length || 0), 0);
+
     return (
-        <Card elevation={3}>
-            <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                    <HierarchyIcon sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        Organization Hierarchy
-                    </Typography>
-                </Box>
+        <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+                <HierarchyIcon sx={{ color: 'var(--d-accent, #2383E2)' }} />
+                <Typography
+                    sx={{
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: 'var(--d-text, #191918)',
+                        letterSpacing: '-0.01em',
+                    }}
+                >
+                    Organization
+                </Typography>
+            </Box>
 
-                {/* Admin Level */}
-                <Box sx={{ mb: 4, textAlign: 'center' }}>
-                    <Paper
-                        elevation={2}
+            {/* Admin card — the org root */}
+            <motion.div variants={item} initial="hidden" animate="show">
+                <Box
+                    sx={{
+                        display: 'inline-flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        padding: '20px 28px',
+                        backgroundColor: 'var(--d-surface, #FFFFFF)',
+                        border: '1px solid var(--d-border, #E6E3DC)',
+                        borderRadius: '14px',
+                        boxShadow: 'var(--d-shadow-card)',
+                        minWidth: 260,
+                        mb: 3,
+                    }}
+                >
+                    <Avatar
                         sx={{
-                            display: 'inline-block',
-                            p: 3,
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            color: 'white',
-                            minWidth: 280,
+                            bgcolor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+                            color: 'var(--d-accent-text, #1F6FBF)',
+                            width: 52,
+                            height: 52,
+                            mb: 1,
                         }}
                     >
-                        <GroupsIcon sx={{ fontSize: 50, mb: 1 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-                            {adminUser?.name || 'Administration'}
-                        </Typography>
-                        <Typography variant="caption" display="block" sx={{ mb: 1 }}>
-                            {adminUser?.email || 'admin@learnerseducation.com'}
-                        </Typography>
-                        <Chip
-                            label="Administrator"
-                            sx={{
-                                bgcolor: 'rgba(255,255,255,0.3)',
-                                color: 'white',
-                                fontWeight: 600
-                            }}
-                        />
-                        <Box sx={{ mt: 2 }}>
-                            <Typography variant="body2">
-                                {teams.length} Teams • {teams.reduce((sum, t) => sum + t.consultants.length, 0)} Consultants
-                            </Typography>
-                        </Box>
-                    </Paper>
+                        <GroupsIcon />
+                    </Avatar>
+                    <Typography
+                        sx={{
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: 'var(--d-text, #191918)',
+                            letterSpacing: '-0.01em',
+                        }}
+                    >
+                        {adminUser?.name || 'Administration'}
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted, #8A887E)', mt: 0.25 }}>
+                        {adminUser?.email || 'admin@learnerseducation.com'}
+                    </Typography>
+                    <Chip
+                        label="Administrator"
+                        size="small"
+                        sx={{
+                            mt: 1,
+                            backgroundColor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+                            color: 'var(--d-accent-text, #1F6FBF)',
+                            fontWeight: 600,
+                            fontSize: 11,
+                        }}
+                    />
+                    <Typography
+                        sx={{
+                            fontSize: 12,
+                            color: 'var(--d-text-muted, #8A887E)',
+                            mt: 1.25,
+                            fontVariantNumeric: 'tabular-nums',
+                        }}
+                    >
+                        {teams.length} teams · {totalConsultants} consultants
+                    </Typography>
                 </Box>
+            </motion.div>
 
-                {/* Teams Level */}
-                <Grid container spacing={3} justifyContent="center">
+            {/* Teams */}
+            <motion.div variants={stagger} initial="hidden" animate="show">
+                <Grid container spacing={2.5}>
                     {teams.map((team) => (
                         <Grid item xs={12} md={6} key={team.teamName}>
-                            <Box>
-                                {/* Connecting Line */}
-                                <Box
-                                    sx={{
-                                        width: 2,
-                                        height: 40,
-                                        bgcolor: 'divider',
-                                        mx: 'auto',
-                                        mb: 2,
+                            <motion.div variants={item} initial="rest" whileHover="hover" whileTap="press">
+                                <motion.div
+                                    variants={onTeamClick ? cardHover : undefined}
+                                    onClick={onTeamClick ? () => onTeamClick(team) : undefined}
+                                    role={onTeamClick ? 'button' : undefined}
+                                    tabIndex={onTeamClick ? 0 : undefined}
+                                    onKeyDown={
+                                        onTeamClick
+                                            ? (e) => {
+                                                  if (e.key === 'Enter' || e.key === ' ') {
+                                                      e.preventDefault();
+                                                      onTeamClick(team);
+                                                  }
+                                              }
+                                            : undefined
+                                    }
+                                    style={{
+                                        cursor: onTeamClick ? 'pointer' : 'default',
+                                        backgroundColor: 'var(--d-surface, #FFFFFF)',
+                                        border: '1px solid var(--d-border, #E6E3DC)',
+                                        borderRadius: '14px',
+                                        boxShadow: 'var(--d-shadow-card)',
+                                        padding: '16px 18px',
                                     }}
-                                />
-
-                                {/* Team Lead Card */}
-                                <Paper
-                                    elevation={3}
-                                    sx={{
-                                        p: 2,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease',
-                                        '&:hover': {
-                                            transform: 'translateY(-4px)',
-                                            boxShadow: 6,
-                                        },
-                                        background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
-                                        color: 'white',
-                                    }}
-                                    onClick={() => onTeamClick && onTeamClick(team)}
                                 >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)', mr: 2 }}>
-                                            <GroupsIcon />
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                                        <Avatar
+                                            sx={{
+                                                bgcolor: 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+                                                color: 'var(--d-accent-text, #1F6FBF)',
+                                                width: 40,
+                                                height: 40,
+                                            }}
+                                        >
+                                            <GroupsIcon fontSize="small" />
                                         </Avatar>
-                                        <Box>
-                                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                                            <Typography
+                                                sx={{
+                                                    fontSize: 15,
+                                                    fontWeight: 700,
+                                                    color: 'var(--d-text, #191918)',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
                                                 {team.teamLead.name}
                                             </Typography>
-                                            <Typography variant="caption">Team Lead</Typography>
+                                            <Typography sx={{ fontSize: 11.5, color: 'var(--d-text-muted, #8A887E)' }}>
+                                                Team Lead
+                                            </Typography>
                                         </Box>
+                                        <Chip
+                                            label={team.teamName}
+                                            size="small"
+                                            sx={{
+                                                fontWeight: 600,
+                                                fontSize: 11,
+                                                height: 22,
+                                                backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                                                color: 'var(--d-text-2, #2A2927)',
+                                                border: '1px solid var(--d-border-soft, #ECE9E2)',
+                                            }}
+                                        />
                                     </Box>
-                                    <Chip
-                                        label={team.teamName}
-                                        size="small"
-                                        sx={{
-                                            bgcolor: 'rgba(255,255,255,0.2)',
-                                            color: 'white',
-                                            fontWeight: 600,
-                                        }}
-                                    />
-                                    <Box sx={{ mt: 2 }}>
-                                        <Typography variant="body2">
-                                            {team.consultants.length} Consultants
-                                        </Typography>
-                                    </Box>
-                                </Paper>
 
-                                {/* Consultants */}
-                                {team.consultants && team.consultants.length > 0 && (
-                                    <Box sx={{ mt: 2, ml: 4 }}>
-                                        <Grid container spacing={2}>
+                                    {team.consultants?.length > 0 ? (
+                                        <Box
+                                            sx={{
+                                                display: 'grid',
+                                                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                                                gap: 0.75,
+                                            }}
+                                        >
                                             {team.consultants.map((consultant) => (
-                                                <Grid item xs={12} key={consultant._id}>
-                                                    {/* Connecting Line */}
-                                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                        <Box
-                                                            sx={{
-                                                                width: 30,
-                                                                height: 2,
-                                                                bgcolor: 'divider',
-                                                            }}
-                                                        />
-                                                        <Paper
-                                                            elevation={1}
-                                                            sx={{
-                                                                p: 1.5,
-                                                                flex: 1,
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s ease',
-                                                                '&:hover': {
-                                                                    bgcolor: 'action.hover',
-                                                                    transform: 'translateX(8px)',
-                                                                },
-                                                            }}
-                                                            onClick={() => onConsultantClick && onConsultantClick(consultant)}
-                                                        >
-                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <Avatar
-                                                                    sx={{
-                                                                        bgcolor: 'primary.light',
-                                                                        width: 32,
-                                                                        height: 32,
-                                                                        mr: 1.5,
-                                                                    }}
-                                                                >
-                                                                    <PersonIcon fontSize="small" />
-                                                                </Avatar>
-                                                                <Box sx={{ flex: 1 }}>
-                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                        {consultant.name}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        Consultant
-                                                                    </Typography>
-                                                                </Box>
-                                                            </Box>
-                                                        </Paper>
-                                                    </Box>
-                                                </Grid>
+                                                <Box
+                                                    key={consultant._id}
+                                                    onClick={
+                                                        onConsultantClick
+                                                            ? (e) => {
+                                                                  e.stopPropagation();
+                                                                  onConsultantClick(consultant);
+                                                              }
+                                                            : undefined
+                                                    }
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 1,
+                                                        padding: '6px 8px',
+                                                        borderRadius: '8px',
+                                                        cursor: onConsultantClick ? 'pointer' : 'default',
+                                                        transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                                        '@media (hover: hover) and (pointer: fine)': {
+                                                            '&:hover': {
+                                                                backgroundColor: 'var(--d-surface-hover, #EFEDE8)',
+                                                            },
+                                                        },
+                                                    }}
+                                                >
+                                                    <Avatar
+                                                        sx={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            bgcolor: 'var(--d-surface-muted, #F1EFEA)',
+                                                            color: 'var(--d-text-3, #57564E)',
+                                                            fontSize: 11,
+                                                        }}
+                                                    >
+                                                        <PersonIcon sx={{ fontSize: 14 }} />
+                                                    </Avatar>
+                                                    <Typography
+                                                        sx={{
+                                                            fontSize: 12.5,
+                                                            color: 'var(--d-text-2, #2A2927)',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            flex: 1,
+                                                            minWidth: 0,
+                                                        }}
+                                                    >
+                                                        {consultant.name}
+                                                    </Typography>
+                                                </Box>
                                             ))}
-                                        </Grid>
-                                    </Box>
-                                )}
-                            </Box>
+                                        </Box>
+                                    ) : (
+                                        <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted, #8A887E)', fontStyle: 'italic' }}>
+                                            No consultants yet
+                                        </Typography>
+                                    )}
+                                </motion.div>
+                            </motion.div>
                         </Grid>
                     ))}
                 </Grid>
+            </motion.div>
 
-                {teams.length === 0 && (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                        <Typography color="text.secondary">No teams found</Typography>
-                    </Box>
-                )}
-            </CardContent>
-        </Card>
+            {teams.length === 0 && (
+                <Typography sx={{ textAlign: 'center', py: 4, color: 'var(--d-text-muted, #8A887E)' }}>
+                    No teams found.
+                </Typography>
+            )}
+        </Box>
     );
 };
 
