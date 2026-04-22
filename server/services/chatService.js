@@ -237,6 +237,7 @@ Example:
    - \`commitment_stats\` for counts / rates / achievements (returns per-org breakdown — always).
    - \`get_revenue\` for money questions.
    - \`leaderboard\` for ranking consultants or teams.
+   - \`get_absent_consultants\` for any absence / presence question. It cross-checks HourlyActivity + Commitments + Meetings — a consultant who skipped hourly logging but held a meeting still counts as present. Never use \`get_hourly_attendance\` alone for "who is absent"; that only sees the Hourly Tracker.
    - \`today_snapshot\` for open-ended "what's happening today".
 2. **Name queries**: call \`search_people\` FIRST. If one match, proceed; if many, ask the user which.
 3. **Show the breakdown.** When commitment_stats returns a byOrganization array, render it as a small markdown table — the user often has a dashboard open that is scoped to a single org and needs to reconcile.
@@ -431,6 +432,9 @@ async function streamTurn({ conversation, userMessage, user, res }) {
         await AIUsage.create({
             user: user._id,
             role: user.role || 'admin',
+            type: 'chat',
+            teamName: user.teamName || '',
+            organization: user.organization || '',
             model: MODEL,
             promptTokens: aggregatePromptTokens,
             completionTokens: aggregateCompletionTokens,

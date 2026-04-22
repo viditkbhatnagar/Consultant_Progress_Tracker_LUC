@@ -761,6 +761,91 @@ async function getHourlyAttendance({ consultantName, date, organization } = {}) 
     };
 }
 
+// Cross-tracker absence detection. "Who was absent today" is the canonical
+// question — the Hourly Tracker alone isn't enough because a consultant
+// might have skipped logging slots while still being active (logging a
+// commitment, holding a meeting). We treat "absent" as "no activity
+// anywhere in the tracker for that date":
+//   - zero HourlyActivity rows
+//   - zero Commitments with commitmentDate on that day
+//   - zero Meetings with meetingDate on that day
+//
+// Anyone with a non-zero count on any of those is PRESENT. Absentees are
+// listed with their team + org so the LLM can say "Dipin (Team Shasin, LUC)
+// is absent".
+async function getAbsentConsultants({ date, organization } = {}) {
+    const d = toDate(date) || new Date();
+    const dayStart = new Date(d);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(d);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const consultantFilter = { isActive: true };
+    if (organization) consultantFilter.organization = organization;
+    const consultants = await Consultant.find(consultantFilter)
+        .select('name teamName organization excludeFromHourly')
+        .lean();
+
+    // Run every per-consultant check concurrently. Each is an indexed
+    // count — cheap — and MongoDB handles 100+ parallel counts fine.
+    const enriched = await Promise.all(
+        consultants.map(async (c) => {
+            const [hourly, commits, meetings] = await Promise.all([
+                HourlyActivity.countDocuments({
+                    consultantName: c.name,
+                    date: { $gte: dayStart, $lte: dayEnd },
+                }),
+                Commitment.countDocuments({
+                    consultantName: c.name,
+                    commitmentDate: { $gte: dayStart, $lte: dayEnd },
+                }),
+                Meeting.countDocuments({
+                    consultantName: c.name,
+                    meetingDate: { $gte: dayStart, $lte: dayEnd },
+                }),
+            ]);
+            const total = hourly + commits + meetings;
+            return {
+                name: c.name,
+                team: c.teamName,
+                organization: c.organization,
+                hourlyEntries: hourly,
+                commitmentsLogged: commits,
+                meetingsHeld: meetings,
+                totalActivity: total,
+                present: total > 0,
+                excludedFromHourly: !!c.excludeFromHourly,
+            };
+        })
+    );
+
+    const absent = enriched.filter((r) => !r.present);
+    const present = enriched.filter((r) => r.present);
+
+    return {
+        date: dayStart.toISOString().slice(0, 10),
+        totalConsultants: consultants.length,
+        presentCount: present.length,
+        absentCount: absent.length,
+        absent: absent.map((r) => ({
+            name: r.name,
+            team: r.team,
+            organization: r.organization,
+            excludedFromHourly: r.excludedFromHourly,
+        })),
+        present: present.map((r) => ({
+            name: r.name,
+            team: r.team,
+            organization: r.organization,
+            hourlyEntries: r.hourlyEntries,
+            commitmentsLogged: r.commitmentsLogged,
+            meetingsHeld: r.meetingsHeld,
+        })),
+        notes:
+            'Activity = hourly slots OR commitments logged OR meetings held on the given date. Consultants marked excludedFromHourly (Ameen, Zakeer) don\'t use the Hourly Tracker — they may still show present via commitments or meetings. Data windows: hourly Mar 25–Apr 22 2026, commitments Dec 2025–Apr 27 2026, meetings Apr 1–Apr 22 2026. Dates outside those will return everyone as absent.',
+    };
+}
+
 async function getDailyAdmissions({ startDate, endDate, organization } = {}) {
     const filter = {};
     if (organization) filter.organization = organization;
@@ -982,13 +1067,32 @@ const TOOL_SCHEMAS = [
         function: {
             name: 'get_hourly_attendance',
             description:
-                'Check who is present / logged hourly activity on a given day. Defaults to today. Returns per-consultant slot breakdown.',
+                'Return per-consultant Hourly Tracker slot breakdown for a given day. Use when the user asks what someone specifically DID during the day (which slots, what activity type, counts). For "who is absent / who is present" questions use get_absent_consultants instead — it cross-checks commitments and meetings too.',
             parameters: {
                 type: 'object',
                 properties: {
                     consultantName: { type: 'string' },
                     date: { type: 'string', description: 'YYYY-MM-DD, defaults to today' },
                     organization: { type: 'string' },
+                },
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'get_absent_consultants',
+            description:
+                'Cross-tracker absence detection for a given day. Returns the list of active consultants with ZERO activity across: HourlyActivity slots, Commitments logged (by commitmentDate), and Meetings held (by meetingDate). Use this for any "who is absent / who is present / who was missing / who did not show up" question. Defaults to today.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    date: { type: 'string', description: 'YYYY-MM-DD, defaults to today' },
+                    organization: {
+                        type: 'string',
+                        enum: ['luc', 'skillhub_training', 'skillhub_institute'],
+                        description: 'Optional — leave off to cover all orgs.',
+                    },
                 },
             },
         },
@@ -1030,6 +1134,7 @@ const DISPATCH = {
     get_students: getStudents,
     get_revenue: getRevenue,
     get_hourly_attendance: getHourlyAttendance,
+    get_absent_consultants: getAbsentConsultants,
     get_daily_admissions: getDailyAdmissions,
     today_snapshot: todaySnapshot,
 };
