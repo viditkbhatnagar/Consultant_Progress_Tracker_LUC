@@ -1,14 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box,
-    Container,
     Typography,
-    Grid,
-    Card,
-    CardContent,
-    Paper,
     Button,
     Chip,
+    Collapse,
     Table,
     TableHead,
     TableRow,
@@ -22,13 +18,14 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { ORGANIZATION_LABELS, getLeadStageColor } from '../utils/constants';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import consultantService from '../services/consultantService';
 import commitmentService from '../services/commitmentService';
 import studentService from '../services/studentService';
-import SkillhubSidebar, { DRAWER_WIDTH } from '../components/skillhub/SkillhubSidebar';
+import SkillhubSidebar from '../components/skillhub/SkillhubSidebar';
 import SkillhubStudentTable from '../components/skillhub/SkillhubStudentTable';
 import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFormDialog';
 import SkillhubCommitmentDialog from '../components/skillhub/SkillhubCommitmentDialog';
@@ -42,30 +39,21 @@ import {
 } from '../components/Charts';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 
-const KpiCard = ({ label, value, color, sub }) => (
-    <Card elevation={2} sx={{ height: '100%', borderRadius: 3 }}>
-        <CardContent>
-            <Typography variant="body2" sx={{ color: '#34495E', opacity: 0.85, mb: 1 }}>
-                {label}
-            </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 700, color: color || '#2C3E50' }}>
-                {value}
-            </Typography>
-            {sub && (
-                <Typography variant="caption" sx={{ color: '#34495E', opacity: 0.7 }}>
-                    {sub}
-                </Typography>
-            )}
-        </CardContent>
-    </Card>
-);
+import DashboardShell from '../components/dashboard/DashboardShell';
+import DashboardHero from '../components/dashboard/DashboardHero';
+import SectionCard from '../components/dashboard/SectionCard';
+import KPIStrip from '../components/dashboard/KPIStrip';
+import { useDashboardThemeState } from '../utils/dashboardTheme';
+import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion';
 
 const SkillhubDashboard = () => {
     const { user, logout } = useAuth();
     const weekInfo = getWeekInfo();
     const branchLabel = ORGANIZATION_LABELS[user?.organization] || 'Skillhub';
+    const themeState = useDashboardThemeState('skillhub-theme-mode');
+    const riseV = useReducedMotionVariants(riseVariants);
 
-    const [view, setView] = useState('dashboard'); // dashboard | students | commitments
+    const [view, setView] = useState('dashboard'); // dashboard | students | commitments | analytics | ai
     const [counselors, setCounselors] = useState([]);
     const [commitments, setCommitments] = useState([]);
     const [stats, setStats] = useState({
@@ -76,8 +64,6 @@ const SkillhubDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // Date range filter — same semantics as LUC admin dashboard. Drives
-    // commitments list + "this period" KPIs. Active Students stays cumulative.
     const [dateRange, setDateRange] = useState({
         startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
@@ -88,26 +74,50 @@ const SkillhubDashboard = () => {
     const [commitmentDialogOpen, setCommitmentDialogOpen] = useState(false);
     const [editingCommitment, setEditingCommitment] = useState(null);
 
+    // "This Week" block is independent of the date-range selector above — it
+    // always shows the current Mon–Sun so counselors can see what they've
+    // logged this week even while viewing Month / Last-3-months in the main
+    // strip below. Per counselor feedback: they want week context to persist,
+    // not get replaced when they toggle to month.
+    const thisWeek = useMemo(() => {
+        const now = new Date();
+        return {
+            start: format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+            end: format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+        };
+    }, []);
+    const [weekCommitments, setWeekCommitments] = useState([]);
+    const [weekNewAdmissions, setWeekNewAdmissions] = useState(0);
+    const [weekListOpen, setWeekListOpen] = useState(false);
+
     const loadAll = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
-            const [consultantsRes, commitmentsRes, newRes, activeRes] = await Promise.all([
+            const [
+                consultantsRes,
+                commitmentsRes,
+                newRes,
+                activeRes,
+                weekCommitsRes,
+                weekNewRes,
+            ] = await Promise.all([
                 consultantService.getConsultants(),
-                // Date-range scoped commitments (uses /commitments/date-range)
-                commitmentService.getCommitmentsByDateRange(
-                    dateRange.startDate,
-                    dateRange.endDate
-                ),
-                // New Admissions in the selected period (backend uses createdAt
-                // when curriculumSlug or skillhub org is in scope).
+                commitmentService.getCommitmentsByDateRange(dateRange.startDate, dateRange.endDate),
                 studentService.getStudents({
                     studentStatus: 'new_admission',
                     startDate: dateRange.startDate,
                     endDate: dateRange.endDate,
                 }),
-                // Active Students — cumulative, no date filter.
                 studentService.getStudents({ studentStatus: 'active' }),
+                // Always-on current-week fetch so the "This Week" block stays
+                // populated regardless of what the date-range selector shows.
+                commitmentService.getCommitmentsByDateRange(thisWeek.start, thisWeek.end),
+                studentService.getStudents({
+                    studentStatus: 'new_admission',
+                    startDate: thisWeek.start,
+                    endDate: thisWeek.end,
+                }),
             ]);
             const commitList = commitmentsRes.data || [];
             setCounselors(consultantsRes.data || []);
@@ -117,12 +127,14 @@ const SkillhubDashboard = () => {
                 activeStudents: (activeRes.data || []).length,
                 commitmentsPeriod: commitList.length,
             });
+            setWeekCommitments(weekCommitsRes.data || []);
+            setWeekNewAdmissions((weekNewRes.data || []).length);
         } catch (e) {
             setError(e.response?.data?.message || 'Failed to load dashboard');
         } finally {
             setLoading(false);
         }
-    }, [dateRange.startDate, dateRange.endDate]);
+    }, [dateRange.startDate, dateRange.endDate, thisWeek.start, thisWeek.end]);
 
     useEffect(() => {
         loadAll();
@@ -153,139 +165,354 @@ const SkillhubDashboard = () => {
     const achieved = commitments.filter((c) => c.status === 'achieved' || c.admissionClosed).length;
     const pending = commitments.filter((c) => c.status === 'pending' || c.status === 'in_progress').length;
 
+    const weekAchieved = weekCommitments.filter((c) => c.status === 'achieved' || c.admissionClosed).length;
+    const weekPending = weekCommitments.filter((c) => c.status === 'pending' || c.status === 'in_progress').length;
+
+    const weekKpiItems = [
+        { label: 'Commitments', value: weekCommitments.length, sub: 'Logged this week', accent: 'accent' },
+        { label: 'Achieved', value: weekAchieved, sub: 'This week', accent: 'success' },
+        { label: 'Pending', value: weekPending, sub: 'This week', accent: 'warm' },
+        { label: 'New Admissions', value: weekNewAdmissions, sub: 'This week', accent: 'accent' },
+    ];
+
+    const weekRangeLabel = `${format(new Date(thisWeek.start + 'T00:00:00'), 'MMM d')} – ${format(new Date(thisWeek.end + 'T00:00:00'), 'MMM d')}`;
+
+    const kpiItems = [
+        {
+            label: 'New Admissions',
+            value: stats.newAdmissionsPeriod,
+            sub: 'In selected period',
+            accent: 'warm',
+        },
+        {
+            label: 'Active Students',
+            value: stats.activeStudents,
+            sub: 'Total enrolled',
+            accent: 'success',
+        },
+        {
+            label: 'Achieved',
+            value: achieved,
+            sub: 'Commitments in period',
+            accent: 'accent',
+        },
+        {
+            label: 'Pending',
+            value: pending,
+            sub: 'In progress / pending',
+            accent: 'accent',
+        },
+    ];
+
+    const sidebar = (
+        <SkillhubSidebar
+            activeView={view}
+            onNavigate={setView}
+            onNewAdmission={() => setStudentFormOpen(true)}
+            onLogout={logout}
+        />
+    );
+
     const renderDashboard = () => (
         <>
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="New Admissions" value={stats.newAdmissionsPeriod} color="#FF9800" sub="In selected period" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="Active Students" value={stats.activeStudents} color="#4CAF50" sub="Total enrolled" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="Achieved" value={achieved} color="#2196F3" sub="Commitments in period" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                    <KpiCard label="Pending" value={pending} color="#9C27B0" sub="In progress / pending" />
-                </Grid>
-            </Grid>
-
-            <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Card elevation={2} sx={{ borderRadius: 3 }}>
-                        <CardContent>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                                <Typography variant="h6" sx={{ fontWeight: 600, color: '#2C3E50' }}>
-                                    Counselors ({counselors.length})
-                                </Typography>
-                            </Box>
-                            {counselors.length === 0 ? (
-                                <Typography color="text.secondary">No counselors seeded.</Typography>
-                            ) : (
-                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                    {counselors
-                                        // Hide Ameen & Zakeer from the chip strip only —
-                                        // they remain fully active everywhere else (hourly
-                                        // tracker, admission table, commitment dropdowns)
-                                        // since they still need to log historical entries.
-                                        .filter((c) => !['Ameen', 'Zakeer'].includes(c.name))
-                                        .map((c) => (
+            {/* "This Week" block — always current Mon–Sun, independent of the
+                date-range selector. Sits above the period-filtered strip so
+                counselors can see what they logged this week even while the
+                lower view is set to Month / Last-3-months / Custom. */}
+            <Box sx={{ mb: 2.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: 'var(--d-text-muted)',
+                            letterSpacing: '.1em',
+                            textTransform: 'uppercase',
+                        }}
+                    >
+                        📅 This Week
+                    </Typography>
+                    <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted)' }}>
+                        · {weekRangeLabel}
+                    </Typography>
+                </Box>
+                <KPIStrip items={weekKpiItems} />
+                {weekCommitments.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                        <Button
+                            size="small"
+                            onClick={() => setWeekListOpen((v) => !v)}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                color: 'var(--d-accent-text)',
+                                px: 0,
+                            }}
+                        >
+                            {weekListOpen
+                                ? 'Hide this-week list'
+                                : `View ${weekCommitments.length} commitment${weekCommitments.length === 1 ? '' : 's'} this week`}
+                        </Button>
+                        <Collapse in={weekListOpen} unmountOnExit>
+                            <SectionCard sx={{ mt: 1, mb: 0 }} padding={0}>
+                                <Box sx={{ px: 2 }}>
+                                    {weekCommitments.map((c, idx, arr) => (
+                                        <Box
+                                            key={c._id}
+                                            sx={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                gap: 2,
+                                                py: 1.25,
+                                                borderBottom:
+                                                    idx < arr.length - 1
+                                                        ? '1px solid var(--d-border-soft)'
+                                                        : 'none',
+                                            }}
+                                        >
+                                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                                                <Typography
+                                                    sx={{
+                                                        fontWeight: 600,
+                                                        fontSize: 13,
+                                                        color: 'var(--d-text)',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                    }}
+                                                >
+                                                    {c.consultantName} — {c.studentName || 'Lead'}
+                                                </Typography>
+                                                <Typography
+                                                    sx={{
+                                                        fontSize: 12,
+                                                        color: 'var(--d-text-muted)',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap',
+                                                    }}
+                                                >
+                                                    {c.commitmentMade?.substring(0, 90)}
+                                                    {c.commitmentMade?.length > 90 ? '…' : ''}
+                                                </Typography>
+                                            </Box>
                                             <Chip
-                                                key={c._id}
-                                                label={c.name}
-                                                sx={{ bgcolor: '#A0D2EB', color: '#2C3E50', fontWeight: 600 }}
+                                                label={c.leadStage}
+                                                size="small"
+                                                sx={{
+                                                    bgcolor: getLeadStageColor(c.leadStage),
+                                                    color: 'white',
+                                                    fontWeight: 600,
+                                                    fontSize: 11,
+                                                    height: 22,
+                                                    flexShrink: 0,
+                                                    alignSelf: 'center',
+                                                }}
                                             />
-                                        ))}
-                                </Box>
-                            )}
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Card elevation={2} sx={{ borderRadius: 3 }}>
-                        <CardContent>
-                            <Typography variant="h6" sx={{ fontWeight: 600, color: '#2C3E50', mb: 2 }}>
-                                Recent Commitments
-                            </Typography>
-                            {commitments.slice(0, 5).length === 0 ? (
-                                <Typography color="text.secondary">No commitments yet.</Typography>
-                            ) : (
-                                commitments.slice(0, 5).map((c) => (
-                                    <Box
-                                        key={c._id}
-                                        sx={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            py: 1,
-                                            borderBottom: '1px solid rgba(0,0,0,0.06)',
-                                        }}
-                                    >
-                                        <Box>
-                                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                {c.consultantName} — {c.studentName || 'Lead'}
-                                            </Typography>
-                                            <Typography variant="caption" color="text.secondary" noWrap>
-                                                {c.commitmentMade?.substring(0, 60)}…
-                                            </Typography>
                                         </Box>
-                                        <Chip
-                                            label={c.leadStage}
-                                            size="small"
-                                            sx={{ bgcolor: getLeadStageColor(c.leadStage), color: 'white' }}
-                                        />
+                                    ))}
+                                </Box>
+                            </SectionCard>
+                        </Collapse>
+                    </Box>
+                )}
+            </Box>
+
+            <KPIStrip items={kpiItems} />
+
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    gap: 2.5,
+                }}
+            >
+                <SectionCard
+                    title={`Counselors (${counselors.length})`}
+                    eyebrow="Team"
+                    sx={{ mb: 0 }}
+                >
+                    {counselors.length === 0 ? (
+                        <Typography sx={{ color: 'var(--d-text-muted)', fontSize: 13 }}>
+                            No counselors seeded.
+                        </Typography>
+                    ) : (
+                        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                            {counselors
+                                .filter((c) => !['Ameen', 'Zakeer'].includes(c.name))
+                                .map((c) => (
+                                    <Chip
+                                        key={c._id}
+                                        label={c.name}
+                                        sx={{
+                                            backgroundColor: 'var(--d-accent-bg)',
+                                            color: 'var(--d-accent-text)',
+                                            fontWeight: 600,
+                                            fontSize: 12,
+                                            height: 26,
+                                            border: '1px solid var(--d-border-soft)',
+                                        }}
+                                    />
+                                ))}
+                        </Box>
+                    )}
+                </SectionCard>
+
+                <SectionCard
+                    title="Recent Commitments"
+                    eyebrow="Last 5"
+                    sx={{ mb: 0 }}
+                >
+                    {commitments.slice(0, 5).length === 0 ? (
+                        <Typography sx={{ color: 'var(--d-text-muted)', fontSize: 13 }}>
+                            No commitments yet.
+                        </Typography>
+                    ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                            {commitments.slice(0, 5).map((c, idx, arr) => (
+                                <Box
+                                    key={c._id}
+                                    sx={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        gap: 2,
+                                        py: 1.25,
+                                        borderBottom:
+                                            idx < arr.length - 1
+                                                ? '1px solid var(--d-border-soft)'
+                                                : 'none',
+                                    }}
+                                >
+                                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                                        <Typography
+                                            sx={{
+                                                fontWeight: 600,
+                                                fontSize: 13,
+                                                color: 'var(--d-text)',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {c.consultantName} — {c.studentName || 'Lead'}
+                                        </Typography>
+                                        <Typography
+                                            sx={{
+                                                fontSize: 12,
+                                                color: 'var(--d-text-muted)',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {c.commitmentMade?.substring(0, 70)}…
+                                        </Typography>
                                     </Box>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
+                                    <Chip
+                                        label={c.leadStage}
+                                        size="small"
+                                        sx={{
+                                            bgcolor: getLeadStageColor(c.leadStage),
+                                            color: 'white',
+                                            fontWeight: 600,
+                                            fontSize: 11,
+                                            height: 22,
+                                            flexShrink: 0,
+                                        }}
+                                    />
+                                </Box>
+                            ))}
+                        </Box>
+                    )}
+                </SectionCard>
+            </Box>
         </>
     );
 
-    const renderCommitments = () => (
-        <Card elevation={2} sx={{ borderRadius: 3 }}>
-            <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#2C3E50' }}>
-                        Commitments
-                    </Typography>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={handleNewCommitment}>
-                        New Commitment
-                    </Button>
-                </Box>
-                {commitments.length === 0 ? (
-                    <Typography sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                        No commitments yet.
-                    </Typography>
-                ) : (
-                    <TableContainer>
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Week</TableCell>
-                                    <TableCell>Counselor</TableCell>
-                                    <TableCell>Student</TableCell>
-                                    <TableCell>Commitment</TableCell>
-                                    <TableCell>Stage</TableCell>
-                                    <TableCell>Status</TableCell>
-                                    <TableCell align="center">Demos</TableCell>
-                                    <TableCell align="right">%</TableCell>
-                                    <TableCell align="center">Actions</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {commitments.map((c) => {
-                                    const demos = c.demos || [];
-                                    const scheduled = demos.filter((d) => d.scheduledAt).length;
-                                    const done = demos.filter((d) => d.done).length;
-                                    return (
-                                    <TableRow hover key={c._id}>
-                                        <TableCell>W{c.weekNumber}/{c.year}</TableCell>
+    const renderCommitmentsTable = () => (
+        <SectionCard
+            title="Commitments"
+            right={
+                <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={handleNewCommitment}
+                    sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        background: 'var(--d-accent)',
+                        '&:hover': { background: 'var(--d-accent-text)' },
+                        boxShadow: 'none',
+                    }}
+                >
+                    New Commitment
+                </Button>
+            }
+            padding={commitments.length === 0 ? 22 : 0}
+        >
+            {commitments.length === 0 ? (
+                <Typography
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        color: 'var(--d-text-muted)',
+                        fontSize: 14,
+                    }}
+                >
+                    No commitments yet.
+                </Typography>
+            ) : (
+                <TableContainer>
+                    <Table
+                        size="small"
+                        sx={{
+                            '& .MuiTableCell-root': {
+                                borderColor: 'var(--d-border-soft)',
+                                color: 'var(--d-text-2)',
+                            },
+                            '& .MuiTableCell-head': {
+                                color: 'var(--d-text-muted)',
+                                fontWeight: 600,
+                                fontSize: 11,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                            },
+                        }}
+                    >
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Week</TableCell>
+                                <TableCell>Counselor</TableCell>
+                                <TableCell>Student</TableCell>
+                                <TableCell>Commitment</TableCell>
+                                <TableCell>Stage</TableCell>
+                                <TableCell>Status</TableCell>
+                                <TableCell align="center">Demos</TableCell>
+                                <TableCell align="right">%</TableCell>
+                                <TableCell align="center">Actions</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {commitments.map((c) => {
+                                const demos = c.demos || [];
+                                const scheduled = demos.filter((d) => d.scheduledAt).length;
+                                const done = demos.filter((d) => d.done).length;
+                                return (
+                                    <TableRow
+                                        key={c._id}
+                                        sx={{
+                                            transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                            '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
+                                        }}
+                                    >
+                                        <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            W{c.weekNumber}/{c.year}
+                                        </TableCell>
                                         <TableCell>{c.consultantName}</TableCell>
                                         <TableCell>{c.studentName || '-'}</TableCell>
                                         <TableCell sx={{ maxWidth: 280 }}>
-                                            <Typography variant="body2" noWrap>
+                                            <Typography variant="body2" noWrap sx={{ color: 'var(--d-text-2)' }}>
                                                 {c.commitmentMade}
                                             </Typography>
                                         </TableCell>
@@ -293,7 +520,13 @@ const SkillhubDashboard = () => {
                                             <Chip
                                                 label={c.leadStage}
                                                 size="small"
-                                                sx={{ bgcolor: getLeadStageColor(c.leadStage), color: 'white' }}
+                                                sx={{
+                                                    bgcolor: getLeadStageColor(c.leadStage),
+                                                    color: 'white',
+                                                    fontWeight: 600,
+                                                    fontSize: 11,
+                                                    height: 22,
+                                                }}
                                             />
                                         </TableCell>
                                         <TableCell>{c.status}</TableCell>
@@ -308,7 +541,16 @@ const SkillhubDashboard = () => {
                                                             {['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].map((slot) => {
                                                                 const d = demos.find((x) => x.slot === slot);
                                                                 return (
-                                                                    <Box key={slot} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, fontSize: 12, py: 0.2 }}>
+                                                                    <Box
+                                                                        key={slot}
+                                                                        sx={{
+                                                                            display: 'flex',
+                                                                            justifyContent: 'space-between',
+                                                                            gap: 2,
+                                                                            fontSize: 12,
+                                                                            py: 0.2,
+                                                                        }}
+                                                                    >
                                                                         <span style={{ fontWeight: 700 }}>{slot}</span>
                                                                         <span>
                                                                             {d?.scheduledAt
@@ -332,134 +574,134 @@ const SkillhubDashboard = () => {
                                                     label={`${scheduled}/4 · ${done} done`}
                                                     size="small"
                                                     sx={{
-                                                        bgcolor: done > 0 ? '#dcfce7' : scheduled > 0 ? '#dbeafe' : 'rgba(0,0,0,0.05)',
-                                                        color: done > 0 ? '#14532d' : scheduled > 0 ? '#1e3a8a' : '#64748b',
+                                                        bgcolor:
+                                                            done > 0
+                                                                ? 'var(--d-success-bg)'
+                                                                : scheduled > 0
+                                                                    ? 'var(--d-accent-bg)'
+                                                                    : 'var(--d-surface-muted)',
+                                                        color:
+                                                            done > 0
+                                                                ? 'var(--d-success-text)'
+                                                                : scheduled > 0
+                                                                    ? 'var(--d-accent-text)'
+                                                                    : 'var(--d-text-muted)',
                                                         fontWeight: 600,
+                                                        fontSize: 11,
+                                                        height: 22,
                                                         cursor: 'help',
                                                     }}
                                                 />
                                             </Tooltip>
                                         </TableCell>
-                                        <TableCell align="right">{c.achievementPercentage || 0}%</TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {c.achievementPercentage || 0}%
+                                        </TableCell>
                                         <TableCell align="center">
                                             <Tooltip title="Edit">
-                                                <IconButton size="small" onClick={() => handleEditCommitment(c)}>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleEditCommitment(c)}
+                                                    sx={{ color: 'var(--d-accent)' }}
+                                                >
                                                     <EditIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                         </TableCell>
                                     </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                )}
-            </CardContent>
-        </Card>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
+        </SectionCard>
     );
 
+    const renderAnalytics = () => (
+        <Box
+            sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: 2.5,
+            }}
+        >
+            <Box sx={{ minWidth: 0 }}>
+                <LeadStageChart commitments={commitments} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+                <AchievementChart commitments={commitments} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+                <MeetingsChart commitments={commitments} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+                <ConsultantPerformanceChart
+                    consultantStats={counselors.map((c) => {
+                        const byName = commitments.filter((cm) => cm.consultantName === c.name);
+                        const achievedCount = byName.filter(
+                            (cm) => cm.status === 'achieved' || cm.admissionClosed
+                        ).length;
+                        return {
+                            name: c.name,
+                            total: byName.length,
+                            achieved: achievedCount,
+                            achievementRate: byName.length
+                                ? Math.round((achievedCount / byName.length) * 100)
+                                : 0,
+                        };
+                    })}
+                />
+            </Box>
+        </Box>
+    );
+
+    const showDateRange = view === 'dashboard' || view === 'commitments' || view === 'analytics';
+
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#A0D2EB' }}>
-            <SkillhubSidebar
-                activeView={view}
-                onNavigate={setView}
-                onNewAdmission={() => setStudentFormOpen(true)}
-                onLogout={logout}
+        <DashboardShell sidebar={sidebar} themeState={themeState}>
+            <DashboardHero
+                eyebrow={user?.organization === 'skillhub_training' ? 'Skillhub Training' : 'Skillhub Institute'}
+                title={`${branchLabel} Dashboard`}
+                subtitle={formatWeekDisplay(
+                    weekInfo.weekNumber,
+                    weekInfo.year,
+                    weekInfo.weekStartDate,
+                    weekInfo.weekEndDate
+                )}
             />
 
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    width: `calc(100% - ${DRAWER_WIDTH}px)`,
-                    backgroundColor: '#A0D2EB',
-                    minHeight: '100vh',
-                }}
-            >
-                <Container maxWidth="xl" sx={{ py: 2 }}>
-                    <Box sx={{ mb: 3 }}>
-                        <Typography variant="h4" gutterBottom sx={{ color: '#2C3E50', fontWeight: 700 }}>
-                            {branchLabel} Dashboard
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#34495E', opacity: 0.9 }}>
-                            {formatWeekDisplay(
-                                weekInfo.weekNumber,
-                                weekInfo.year,
-                                weekInfo.weekStartDate,
-                                weekInfo.weekEndDate
-                            )}
-                        </Typography>
-                    </Box>
+            {showDateRange && (
+                <SectionCard eyebrow="Date range" padding={18}>
+                    <DateRangeSelector value={dateRange} onChange={setDateRange} />
+                </SectionCard>
+            )}
 
-                    {/* Date range filter — drives commitments + "this period"
-                        KPIs. Hidden on the Student Database view (which has
-                        its own CBSE/IGCSE + status filters) and the AI views. */}
-                    {(view === 'dashboard' || view === 'commitments' || view === 'analytics') && (
-                        <Card elevation={2} sx={{ mb: 3, borderRadius: 3 }}>
-                            <CardContent>
-                                <DateRangeSelector
-                                    value={dateRange}
-                                    onChange={setDateRange}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
+            {error && (
+                <motion.div variants={riseV} style={{ marginBottom: 24 }}>
+                    <Alert severity="error" onClose={() => setError('')}>
+                        {error}
+                    </Alert>
+                </motion.div>
+            )}
 
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-
-                    {loading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : view === 'dashboard' ? (
-                        renderDashboard()
-                    ) : view === 'students' ? (
-                        <SkillhubStudentTable counselors={counselors} onChange={loadAll} />
-                    ) : view === 'commitments' ? (
-                        renderCommitments()
-                    ) : view === 'analytics' ? (
-                        <Grid container spacing={3}>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <LeadStageChart commitments={commitments} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <AchievementChart commitments={commitments} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <MeetingsChart commitments={commitments} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                                <ConsultantPerformanceChart
-                                    consultantStats={counselors.map((c) => {
-                                        const byName = commitments.filter(
-                                            (cm) => cm.consultantName === c.name
-                                        );
-                                        const achieved = byName.filter(
-                                            (cm) => cm.status === 'achieved' || cm.admissionClosed
-                                        ).length;
-                                        return {
-                                            name: c.name,
-                                            total: byName.length,
-                                            achieved,
-                                            achievementRate: byName.length
-                                                ? Math.round((achieved / byName.length) * 100)
-                                                : 0,
-                                        };
-                                    })}
-                                />
-                            </Grid>
-                        </Grid>
-                    ) : view === 'ai' ? (
-                        <AISummaryCard />
-                    ) : null}
-                </Container>
-            </Box>
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
+                    <CircularProgress sx={{ color: 'var(--d-accent)' }} />
+                </Box>
+            ) : view === 'dashboard' ? (
+                renderDashboard()
+            ) : view === 'students' ? (
+                <SectionCard padding={16}>
+                    <SkillhubStudentTable counselors={counselors} onChange={loadAll} />
+                </SectionCard>
+            ) : view === 'commitments' ? (
+                renderCommitmentsTable()
+            ) : view === 'analytics' ? (
+                renderAnalytics()
+            ) : view === 'ai' ? (
+                <AISummaryCard />
+            ) : null}
 
             <SkillhubStudentFormDialog
                 open={studentFormOpen}
@@ -476,7 +718,7 @@ const SkillhubDashboard = () => {
                 teamConsultants={counselors}
                 user={user}
             />
-        </Box>
+        </DashboardShell>
     );
 };
 
