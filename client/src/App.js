@@ -12,6 +12,7 @@ import HourlyTrackerPage from './pages/HourlyTrackerPage';
 import MeetingTrackerPage from './pages/MeetingTrackerPage';
 import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
+import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
 
 // Home redirect component
@@ -66,11 +67,13 @@ function App() {
               }
             />
 
-            {/* Student Database - accessible by both admin and team_lead */}
+            {/* Student Database - admin, team_lead, manager, and skillhub.
+                The dispatcher inside StudentDatabasePage picks the LUC or
+                Skillhub variant based on the caller's org. */}
             <Route
               path="/student-database"
               element={
-                <PrivateRoute allowedRoles={['admin', 'team_lead', 'manager']}>
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'manager', 'skillhub']}>
                   <StudentDatabasePage />
                 </PrivateRoute>
               }
@@ -96,11 +99,14 @@ function App() {
               }
             />
 
-            {/* Commitment Tracker - LUC admin + team_lead */}
+            {/* Commitment Tracker - admin, team_lead, and skillhub.
+                The page reads the caller's org (user.organization or admin's
+                current adminOrgScope) and swaps in the Skillhub form dialog
+                when appropriate. */}
             <Route
               path="/commitments"
               element={
-                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'skillhub']}>
                   <CommitmentsPage />
                 </PrivateRoute>
               }
@@ -119,6 +125,9 @@ function App() {
             {/* Catch all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          {/* Chat copilot — visible on every authenticated page,
+              hidden on /login via the component itself. */}
+          <FloatingChatLauncher />
         </Router>
       </AuthProvider>
     </ThemeProvider>

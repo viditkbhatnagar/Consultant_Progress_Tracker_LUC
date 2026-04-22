@@ -4,28 +4,25 @@ import {
     Typography,
     CircularProgress,
     Alert,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    TableContainer,
-    Chip,
-    Tooltip,
+    Button,
 } from '@mui/material';
+import {
+    School as SchoolIcon,
+    Assignment as AssignmentIcon,
+    ArrowForward as ArrowForwardIcon,
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import {
     ORGANIZATIONS,
     ORGANIZATION_LABELS,
-    getLeadStageColor,
 } from '../../utils/constants';
 import studentService from '../../services/studentService';
 import consultantService from '../../services/consultantService';
 import commitmentService from '../../services/commitmentService';
-import SkillhubStudentTable from './SkillhubStudentTable';
 import DateRangeSelector from '../DateRangeSelector';
 import SectionCard from '../dashboard/SectionCard';
 import KPIStrip from '../dashboard/KPIStrip';
-import DashboardTabs, { AnimatedTabPanel } from '../dashboard/DashboardTabs';
+import { setAdminOrgScope } from '../../utils/adminOrgScope';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const BRANCHES = [
@@ -102,7 +99,11 @@ const BranchSwitcher = ({ value, onChange, branchTotals }) => (
 );
 
 const AdminSkillhubView = () => {
+    const navigate = useNavigate();
     const [branchTab, setBranchTab] = useState(0);
+    // subTab kept for backward compatibility but tab UI is replaced with
+    // shortcut buttons — admins now open the full dedicated pages via
+    // /student-database and /commitments (with the branch pinned below).
     const [subTab, setSubTab] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -282,191 +283,107 @@ const AdminSkillhubView = () => {
                 <>
                     <KPIStrip items={kpiItems} />
 
-                    <DashboardTabs
-                        value={subTab}
-                        onChange={setSubTab}
-                        tabs={[
-                            { value: 0, label: 'Student Database' },
-                            { value: 1, label: 'Commitments' },
-                        ]}
-                    />
-
-                    <AnimatedTabPanel panelKey={`${activeBranch}-${subTab}`}>
-                        {subTab === 0 ? (
-                            <SectionCard padding={16}>
-                                <SkillhubStudentTable
-                                    key={activeBranch}
-                                    counselors={counselors}
-                                    organization={activeBranch}
-                                    onChange={load}
-                                />
-                            </SectionCard>
-                        ) : (
-                            <SectionCard padding={0}>
-                                {commitments.length === 0 ? (
-                                    <Typography
-                                        sx={{
-                                            p: 5,
-                                            textAlign: 'center',
-                                            color: 'var(--d-text-muted)',
-                                            fontSize: 14,
-                                        }}
-                                    >
-                                        No commitments for this branch.
-                                    </Typography>
-                                ) : (
-                                    <TableContainer>
-                                        <Table
-                                            size="small"
-                                            sx={{
-                                                '& .MuiTableCell-root': {
-                                                    borderColor: 'var(--d-border-soft)',
-                                                    color: 'var(--d-text-2)',
-                                                },
-                                            }}
-                                        >
-                                            <TableHead>
-                                                <TableRow>
-                                                    {['Week', 'Counselor', 'Student', 'Commitment', 'Stage', 'Status', 'Demos', '%'].map((h, i) => (
-                                                        <TableCell
-                                                            key={h}
-                                                            align={h === 'Demos' ? 'center' : h === '%' ? 'right' : 'left'}
-                                                            sx={{
-                                                                color: 'var(--d-text-muted)',
-                                                                fontWeight: 600,
-                                                                fontSize: 12,
-                                                                textTransform: 'uppercase',
-                                                                letterSpacing: '0.05em',
-                                                            }}
-                                                        >
-                                                            {h}
-                                                        </TableCell>
-                                                    ))}
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {commitments.map((c) => {
-                                                    const demos = c.demos || [];
-                                                    const scheduled = demos.filter((d) => d.scheduledAt).length;
-                                                    const done = demos.filter((d) => d.done).length;
-                                                    return (
-                                                        <TableRow
-                                                            key={c._id}
-                                                            sx={{
-                                                                transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
-                                                                '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
-                                                            }}
-                                                        >
-                                                            <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                                                                W{c.weekNumber}/{c.year}
-                                                            </TableCell>
-                                                            <TableCell>{c.consultantName}</TableCell>
-                                                            <TableCell>{c.studentName || '-'}</TableCell>
-                                                            <TableCell sx={{ maxWidth: 280 }}>
-                                                                <Typography
-                                                                    variant="body2"
-                                                                    noWrap
-                                                                    sx={{ color: 'var(--d-text-2)' }}
-                                                                >
-                                                                    {c.commitmentMade}
-                                                                </Typography>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Chip
-                                                                    label={c.leadStage}
-                                                                    size="small"
-                                                                    sx={{
-                                                                        bgcolor: getLeadStageColor(c.leadStage),
-                                                                        color: 'white',
-                                                                        fontWeight: 600,
-                                                                        fontSize: 11,
-                                                                        height: 22,
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell>{c.status}</TableCell>
-                                                            <TableCell align="center">
-                                                                <Tooltip
-                                                                    arrow
-                                                                    title={
-                                                                        demos.length === 0 ? (
-                                                                            'No demos'
-                                                                        ) : (
-                                                                            <Box sx={{ p: 0.5, minWidth: 220 }}>
-                                                                                {['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].map((slot) => {
-                                                                                    const d = demos.find((x) => x.slot === slot);
-                                                                                    return (
-                                                                                        <Box
-                                                                                            key={slot}
-                                                                                            sx={{
-                                                                                                display: 'flex',
-                                                                                                justifyContent: 'space-between',
-                                                                                                gap: 2,
-                                                                                                fontSize: 12,
-                                                                                                py: 0.2,
-                                                                                            }}
-                                                                                        >
-                                                                                            <span style={{ fontWeight: 700 }}>{slot}</span>
-                                                                                            <span>
-                                                                                                {d?.scheduledAt
-                                                                                                    ? new Date(d.scheduledAt).toLocaleString([], {
-                                                                                                          month: 'short',
-                                                                                                          day: 'numeric',
-                                                                                                          hour: '2-digit',
-                                                                                                          minute: '2-digit',
-                                                                                                      })
-                                                                                                    : '—'}
-                                                                                                {d?.done && ' ✓'}
-                                                                                            </span>
-                                                                                        </Box>
-                                                                                    );
-                                                                                })}
-                                                                            </Box>
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <Chip
-                                                                        label={`${scheduled}/4 · ${done} done`}
-                                                                        size="small"
-                                                                        sx={{
-                                                                            bgcolor: done > 0
-                                                                                ? 'var(--d-success-bg)'
-                                                                                : scheduled > 0
-                                                                                    ? 'var(--d-accent-bg)'
-                                                                                    : 'var(--d-surface-muted)',
-                                                                            color: done > 0
-                                                                                ? 'var(--d-success-text)'
-                                                                                : scheduled > 0
-                                                                                    ? 'var(--d-accent-text)'
-                                                                                    : 'var(--d-text-muted)',
-                                                                            fontWeight: 600,
-                                                                            fontSize: 11,
-                                                                            height: 22,
-                                                                            cursor: 'help',
-                                                                        }}
-                                                                    />
-                                                                </Tooltip>
-                                                            </TableCell>
-                                                            <TableCell
-                                                                align="right"
-                                                                sx={{ fontVariantNumeric: 'tabular-nums' }}
-                                                            >
-                                                                {c.achievementPercentage || 0}%
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    );
-                                                })}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                )}
-                            </SectionCard>
-                        )}
-                    </AnimatedTabPanel>
+                    {/* Shortcuts to the dedicated pages. Clicking pins the
+                        admin's current org scope to this branch so the
+                        downstream page renders Skillhub data, not LUC. */}
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                            gap: 2.5,
+                            mt: 2,
+                        }}
+                    >
+                        <ShortcutCard
+                            icon={<SchoolIcon sx={{ fontSize: 22 }} />}
+                            eyebrow="Students"
+                            title={`${stats.activeStudents + stats.newAdmissionsPeriod} in view`}
+                            description="Open the full Student Database for this branch — CBSE / IGCSE tabs, status moves, activation, EMIs, export."
+                            cta="Open Student Database"
+                            onClick={() => {
+                                setAdminOrgScope(activeBranch);
+                                navigate('/student-database');
+                            }}
+                        />
+                        <ShortcutCard
+                            icon={<AssignmentIcon sx={{ fontSize: 22 }} />}
+                            eyebrow="Commitments"
+                            title={`${stats.commitmentsPeriod} in period`}
+                            description="Open the Commitment Tracker — Table / Board / Cards views, demo-slot management, AI analysis."
+                            cta="Open Commitment Tracker"
+                            onClick={() => {
+                                setAdminOrgScope(activeBranch);
+                                navigate('/commitments');
+                            }}
+                        />
+                    </Box>
                 </>
             )}
         </Box>
     );
 };
+
+const ShortcutCard = ({ icon, eyebrow, title, description, cta, onClick }) => (
+    <SectionCard sx={{ mb: 0 }} padding={22}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box
+                sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--d-accent-bg)',
+                    color: 'var(--d-accent-text)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                }}
+            >
+                {icon}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                    sx={{
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: 'var(--d-text-muted)',
+                        letterSpacing: '.08em',
+                        textTransform: 'uppercase',
+                        mb: 0.5,
+                    }}
+                >
+                    {eyebrow}
+                </Typography>
+                <Typography
+                    sx={{
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: 'var(--d-text)',
+                        mb: 0.5,
+                    }}
+                >
+                    {title}
+                </Typography>
+                <Typography sx={{ fontSize: 13, color: 'var(--d-text-3)', mb: 1.5 }}>
+                    {description}
+                </Typography>
+                <Button
+                    variant="contained"
+                    onClick={onClick}
+                    endIcon={<ArrowForwardIcon sx={{ fontSize: 16 }} />}
+                    sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        borderRadius: '10px',
+                        boxShadow: 'none',
+                    }}
+                >
+                    {cta}
+                </Button>
+            </Box>
+        </Box>
+    </SectionCard>
+);
 
 export default AdminSkillhubView;
