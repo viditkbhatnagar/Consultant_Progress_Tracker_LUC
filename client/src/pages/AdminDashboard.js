@@ -965,6 +965,7 @@ const AdminDashboard = () => {
                                         <Table>
                                             <TableHead>
                                                 <TableRow>
+                                                    <TableCell align="center">Actions</TableCell>
                                                     <TableCell>Week</TableCell>
                                                     <TableCell>Date</TableCell>
                                                     <TableCell>Day</TableCell>
@@ -982,7 +983,6 @@ const AdminDashboard = () => {
                                                     <TableCell align="center">Closed Date</TableCell>
                                                     <TableCell align="center">TL Comments</TableCell>
                                                     <TableCell align="center">Admin Comments</TableCell>
-                                                    <TableCell align="center">Actions</TableCell>
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
@@ -1004,6 +1004,27 @@ const AdminDashboard = () => {
 
                                                     return (
                                                         <TableRow key={commitment._id} hover>
+                                                            {/* Actions (moved to first column) */}
+                                                            <TableCell align="center">
+                                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="primary"
+                                                                        onClick={() => handleOpenAdminComment(commitment)}
+                                                                        title="Edit/Add Admin Comment"
+                                                                    >
+                                                                        <EditIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        color="error"
+                                                                        onClick={() => handleDeleteCommitment(commitment._id)}
+                                                                        title="Delete Commitment"
+                                                                    >
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </Box>
+                                                            </TableCell>
                                                             <TableCell>W{commitment.weekNumber}</TableCell>
                                                             <TableCell>{dateFormatted}</TableCell>
                                                             <TableCell>{dayOfWeek}</TableCell>
@@ -1150,28 +1171,6 @@ const AdminDashboard = () => {
                                                                         <CommentIcon fontSize="small" />
                                                                     </IconButton>
                                                                 )}
-                                                            </TableCell>
-
-                                                            {/* Actions */}
-                                                            <TableCell align="center">
-                                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="primary"
-                                                                        onClick={() => handleOpenAdminComment(commitment)}
-                                                                        title="Edit/Add Admin Comment"
-                                                                    >
-                                                                        <EditIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="error"
-                                                                        onClick={() => handleDeleteCommitment(commitment._id)}
-                                                                        title="Delete Commitment"
-                                                                    >
-                                                                        <DeleteIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Box>
                                                             </TableCell>
                                                         </TableRow>
                                                     );
