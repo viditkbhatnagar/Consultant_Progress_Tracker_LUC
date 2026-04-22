@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Dialog,
-    DialogTitle,
     DialogContent,
     DialogActions,
     TextField,
@@ -10,28 +9,25 @@ import {
     Box,
     Autocomplete,
     Alert,
+    Typography,
+    ToggleButton,
+    ToggleButtonGroup,
+    IconButton,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import {
-    Videocam as VideocamIcon,
-    DirectionsCar as DirectionsCarIcon,
-    Business as BusinessIcon,
-    School as SchoolIcon,
+    Close as CloseIcon,
+    Add as AddIcon,
 } from '@mui/icons-material';
-import { LEAD_STAGES, MEETING_MODES } from '../utils/constants';
+import { MEETING_MODES } from '../utils/constants';
+import { ALL_STATUSES, MODE_META } from '../utils/meetingDesign';
 import { useAuth } from '../context/AuthContext';
 import studentService from '../services/studentService';
 import consultantService from '../services/consultantService';
 import userService from '../services/userService';
-
-const MODE_ICONS = {
-    Zoom: { Icon: VideocamIcon, color: '#4f46e5' },
-    'Out Meeting': { Icon: DirectionsCarIcon, color: '#7c3aed' },
-    'Office Meeting': { Icon: BusinessIcon, color: '#16a34a' },
-    'Student Meeting': { Icon: SchoolIcon, color: '#ea580c' },
-};
+import StatusPill from './meetings/StatusPill';
 
 const blankForm = {
     meetingDate: new Date(),
@@ -43,6 +39,23 @@ const blankForm = {
     status: '',
     remarks: '',
 };
+
+const Label = ({ children }) => (
+    <Typography
+        component="span"
+        sx={{
+            fontSize: 11.5,
+            color: 'var(--t-text-muted)',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            mb: 0.5,
+            display: 'block',
+        }}
+    >
+        {children}
+    </Typography>
+);
 
 const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     const { user } = useAuth();
@@ -57,15 +70,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     const [teamLeads, setTeamLeads] = useState([]);
     const [consultants, setConsultants] = useState([]);
 
-    // Seed the form from initialData when editing, or reset to blank (plus the
-    // current TL's own id for team_lead role) when creating.
+    // Seed from initialData or reset to blank (+ auto-teamLead for TL role).
     useEffect(() => {
         if (!open) return;
         if (initialData) {
             const tlId = initialData.teamLead?._id || initialData.teamLead || '';
-            // If the stored consultant ref is null, the TL themselves was the
-            // person who conducted the meeting — represent that in the
-            // dropdown with the `tl:<id>` sentinel value.
             const consultantId = initialData.consultant?._id || initialData.consultant;
             const consultantValue = consultantId
                 ? consultantId
@@ -92,25 +101,16 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         setSubmitError('');
     }, [open, initialData, isAdmin, user]);
 
-    // Load the program list once the dialog opens.
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
         studentService
             .getPrograms()
-            .then((res) => {
-                if (!cancelled) setPrograms(res.data || []);
-            })
-            .catch(() => {
-                if (!cancelled) setPrograms([]);
-            });
-        return () => {
-            cancelled = true;
-        };
+            .then((res) => { if (!cancelled) setPrograms(res.data || []); })
+            .catch(() => { if (!cancelled) setPrograms([]); });
+        return () => { cancelled = true; };
     }, [open]);
 
-    // Admin needs the list of LUC team leads. TL doesn't — their teamLead is
-    // always themselves.
     useEffect(() => {
         if (!open || !isAdmin) return;
         let cancelled = false;
@@ -123,18 +123,10 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 );
                 if (!cancelled) setTeamLeads(tls);
             })
-            .catch(() => {
-                if (!cancelled) setTeamLeads([]);
-            });
-        return () => {
-            cancelled = true;
-        };
+            .catch(() => { if (!cancelled) setTeamLeads([]); });
+        return () => { cancelled = true; };
     }, [open, isAdmin]);
 
-    // Load the consultant list: TL gets their own team's consultants; admin
-    // cascades from the selected team lead. Consultants live in the
-    // Consultant collection (not the User collection) so we always fetch via
-    // consultantService and, for admin, filter by teamLead client-side.
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
@@ -152,9 +144,9 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 const active = list.filter((c) => c.isActive !== false);
                 const scoped = isAdmin
                     ? active.filter((c) => {
-                          const tl = c.teamLead?._id || c.teamLead;
-                          return tl && tl.toString() === formData.teamLead.toString();
-                      })
+                        const tl = c.teamLead?._id || c.teamLead;
+                        return tl && tl.toString() === formData.teamLead.toString();
+                    })
                     : active;
                 if (!cancelled) setConsultants(scoped);
             } catch (_e) {
@@ -163,9 +155,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         };
 
         load();
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [open, isAdmin, formData.teamLead]);
 
     const currentTeamLeadName = useMemo(() => {
@@ -173,9 +163,6 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         return user?.name || '';
     }, [isAdmin, user]);
 
-    // Resolve the Team Lead object for the currently-selected teamLead id —
-    // used to prepend the TL into the consultant dropdown (they may have
-    // conducted the meeting themselves).
     const activeTeamLead = useMemo(() => {
         if (!formData.teamLead) return null;
         if (isAdmin) {
@@ -187,43 +174,28 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         };
     }, [isAdmin, teamLeads, formData.teamLead, user]);
 
-    // Options shown in the Consultant dropdown: the TL (as `tl:<id>`) first,
-    // then the team's consultants.
     const consultantOptions = useMemo(() => {
         const list = [];
         if (activeTeamLead) {
             list.push({
                 value: `tl:${activeTeamLead._id}`,
                 label: `${activeTeamLead.name} (Team Lead)`,
-                isTL: true,
             });
         }
         for (const c of consultants) {
-            list.push({ value: c._id, label: c.name, isTL: false });
+            list.push({ value: c._id, label: c.name });
         }
         return list;
     }, [activeTeamLead, consultants]);
 
-    const handleChange = (field) => (event) => {
+    const handleField = (field) => (event) => {
         const value = event.target.value;
         setFormData((prev) => {
             const next = { ...prev, [field]: value };
-            // When admin swaps the team lead, clear the consultant — it belongs
-            // to the previous TL's team.
             if (field === 'teamLead') next.consultant = '';
             return next;
         });
         if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
-    };
-
-    const handleDateChange = (date) => {
-        setFormData((prev) => ({ ...prev, meetingDate: date }));
-        if (errors.meetingDate) setErrors((prev) => ({ ...prev, meetingDate: '' }));
-    };
-
-    const handleProgramChange = (_event, value) => {
-        setFormData((prev) => ({ ...prev, program: value || '' }));
-        if (errors.program) setErrors((prev) => ({ ...prev, program: '' }));
     };
 
     const validate = () => {
@@ -244,10 +216,6 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         setSubmitError('');
         setSubmitting(true);
         try {
-            // Translate the consultant dropdown value. If the TL themselves
-            // was selected (value = `tl:<id>`), send consultant: null and set
-            // consultantName to the TL's name — the server stores that on
-            // the Meeting doc.
             const selected = formData.consultant;
             let consultantId = null;
             let consultantName;
@@ -276,113 +244,193 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         }
     };
 
+    const modeFilter = MEETING_MODES.filter((m) => m.value !== 'Meeting Scheduled');
+    const statusOptions = ALL_STATUSES;
+
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
             <Dialog
                 open={open}
                 onClose={submitting ? undefined : onClose}
-                maxWidth="lg"
+                maxWidth="md"
                 fullWidth
                 scroll="paper"
-                PaperProps={{ sx: { maxHeight: '92vh' } }}
+                PaperProps={{
+                    sx: {
+                        maxWidth: 620,
+                        borderRadius: '14px',
+                        boxShadow: '0 12px 40px rgba(15,23,42,0.18)',
+                        overflow: 'hidden',
+                    },
+                }}
             >
-                <DialogTitle sx={{ fontSize: '1.25rem', fontWeight: 600 }}>
-                    {initialData ? 'Edit Meeting' : 'Add Meeting'}
-                </DialogTitle>
-                <DialogContent dividers>
-                    <Box sx={{ pt: 1 }}>
-                        {submitError && (
-                            <Alert severity="error" sx={{ mb: 2 }}>
-                                {submitError}
-                            </Alert>
-                        )}
-                        <Box
-                            sx={{
-                                display: 'grid',
-                                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                                columnGap: 3,
-                                rowGap: 3,
-                            }}
-                        >
+                {/* Head */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        borderBottom: '1px solid var(--t-border)',
+                    }}
+                >
+                    <Box>
+                        <Typography sx={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.01em', color: 'var(--t-text)' }}>
+                            {initialData ? 'Edit meeting' : 'New meeting'}
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: 'var(--t-text-muted)', mt: 0.25 }}>
+                            {initialData ? 'Update meeting details' : 'Log an admissions meeting'}
+                        </Typography>
+                    </Box>
+                    <IconButton
+                        size="small"
+                        onClick={onClose}
+                        disabled={submitting}
+                        sx={{ color: 'var(--t-text-3)' }}
+                    >
+                        <CloseIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                </Box>
+
+                {/* Body */}
+                <DialogContent sx={{ padding: '18px 20px', backgroundColor: 'var(--t-surface)' }}>
+                    {submitError && (
+                        <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }}>
+                            {submitError}
+                        </Alert>
+                    )}
+
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                            columnGap: 2,
+                            rowGap: 2,
+                        }}
+                    >
+                        {/* Date */}
+                        <Box>
+                            <Label>Date</Label>
                             <DatePicker
-                                label="Date"
                                 value={formData.meetingDate}
-                                onChange={handleDateChange}
+                                onChange={(d) => {
+                                    setFormData((prev) => ({ ...prev, meetingDate: d }));
+                                    if (errors.meetingDate) setErrors((prev) => ({ ...prev, meetingDate: '' }));
+                                }}
                                 format="dd/MM/yyyy"
                                 slotProps={{
                                     textField: {
                                         fullWidth: true,
-                                        required: true,
+                                        size: 'small',
                                         error: !!errors.meetingDate,
-                                        helperText: errors.meetingDate || 'Backdate or future date allowed',
+                                        helperText: errors.meetingDate || ' ',
                                     },
                                 }}
                             />
+                        </Box>
 
+                        {/* Student Name */}
+                        <Box>
+                            <Label>Student name</Label>
                             <TextField
                                 fullWidth
-                                required
-                                label="Student Name"
+                                size="small"
                                 value={formData.studentName}
-                                onChange={handleChange('studentName')}
+                                onChange={handleField('studentName')}
+                                placeholder="e.g. Maria Anastasia"
                                 error={!!errors.studentName}
-                                helperText={errors.studentName}
+                                helperText={errors.studentName || ' '}
                             />
+                        </Box>
 
+                        {/* Program */}
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                            <Label>Program</Label>
                             <Autocomplete
                                 options={programs}
                                 value={formData.program || null}
-                                onChange={handleProgramChange}
+                                onChange={(_e, v) => {
+                                    setFormData((prev) => ({ ...prev, program: v || '' }));
+                                    if (errors.program) setErrors((prev) => ({ ...prev, program: '' }));
+                                }}
                                 renderInput={(params) => (
                                     <TextField
                                         {...params}
-                                        required
-                                        label="Program"
+                                        size="small"
                                         error={!!errors.program}
                                         helperText={errors.program || 'Pick from existing student programs'}
                                     />
                                 )}
                             />
+                        </Box>
 
-                            <TextField
-                                fullWidth
-                                required
-                                select
-                                label="Mode of the Meeting"
+                        {/* Mode — segmented */}
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                            <Label>Mode</Label>
+                            <ToggleButtonGroup
+                                exclusive
+                                size="small"
                                 value={formData.mode}
-                                onChange={handleChange('mode')}
-                                error={!!errors.mode}
-                                helperText={errors.mode}
+                                onChange={(_e, v) => {
+                                    if (!v) return;
+                                    setFormData((prev) => ({ ...prev, mode: v }));
+                                    if (errors.mode) setErrors((prev) => ({ ...prev, mode: '' }));
+                                }}
+                                sx={{
+                                    backgroundColor: 'var(--t-surface-muted)',
+                                    border: '1px solid var(--t-border)',
+                                    borderRadius: '8px',
+                                    padding: '2px',
+                                    gap: '2px',
+                                    flexWrap: 'wrap',
+                                    '& .MuiToggleButton-root': {
+                                        border: 0,
+                                        borderRadius: '6px !important',
+                                        textTransform: 'none',
+                                        fontSize: 12.5,
+                                        fontWeight: 500,
+                                        color: 'var(--t-text-3)',
+                                        gap: 0.75,
+                                        px: 1.5,
+                                        py: 0.625,
+                                    },
+                                    '& .MuiToggleButton-root.Mui-selected': {
+                                        backgroundColor: 'var(--t-surface)',
+                                        color: 'var(--t-text)',
+                                        boxShadow: '0 1px 2px rgba(15,23,42,0.06)',
+                                    },
+                                }}
                             >
-                                {MEETING_MODES.map((m) => {
-                                    const iconMeta = MODE_ICONS[m.value];
-                                    const Icon = iconMeta?.Icon;
+                                {modeFilter.map((m) => {
+                                    const meta = MODE_META[m.value];
+                                    const Icon = meta?.Icon;
                                     return (
-                                        <MenuItem key={m.value} value={m.value}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                {Icon && (
-                                                    <Icon
-                                                        fontSize="small"
-                                                        sx={{ color: iconMeta.color }}
-                                                    />
-                                                )}
-                                                {m.label}
-                                            </Box>
-                                        </MenuItem>
+                                        <ToggleButton key={m.value} value={m.value}>
+                                            {Icon && <Icon sx={{ fontSize: 14, color: meta.color }} />}
+                                            {m.label}
+                                        </ToggleButton>
                                     );
                                 })}
-                            </TextField>
+                            </ToggleButtonGroup>
+                            {errors.mode && (
+                                <Typography sx={{ fontSize: 11, color: 'var(--t-danger-text)', mt: 0.5 }}>
+                                    {errors.mode}
+                                </Typography>
+                            )}
+                        </Box>
 
+                        {/* Team Lead */}
+                        <Box>
+                            <Label>Team lead</Label>
                             {isAdmin ? (
                                 <TextField
                                     fullWidth
-                                    required
+                                    size="small"
                                     select
-                                    label="Team Lead"
                                     value={formData.teamLead}
-                                    onChange={handleChange('teamLead')}
+                                    onChange={handleField('teamLead')}
                                     error={!!errors.teamLead}
-                                    helperText={errors.teamLead}
+                                    helperText={errors.teamLead || ' '}
                                 >
                                     {teamLeads.map((tl) => (
                                         <MenuItem key={tl._id} value={tl._id}>
@@ -394,26 +442,27 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                             ) : (
                                 <TextField
                                     fullWidth
-                                    label="Team Lead"
+                                    size="small"
                                     value={currentTeamLeadName}
                                     InputProps={{ readOnly: true }}
                                     helperText="Scoped to your team"
                                 />
                             )}
+                        </Box>
 
+                        {/* Consultant */}
+                        <Box>
+                            <Label>Consultant</Label>
                             <TextField
                                 fullWidth
-                                required
+                                size="small"
                                 select
-                                label="Consultant"
                                 value={formData.consultant}
-                                onChange={handleChange('consultant')}
+                                onChange={handleField('consultant')}
                                 error={!!errors.consultant}
                                 helperText={
                                     errors.consultant ||
-                                    (isAdmin && !formData.teamLead
-                                        ? 'Pick a team lead first'
-                                        : 'Team Lead can log their own meetings too')
+                                    (isAdmin && !formData.teamLead ? 'Pick a team lead first' : ' ')
                                 }
                                 disabled={isAdmin && !formData.teamLead}
                             >
@@ -423,60 +472,88 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                     </MenuItem>
                                 ))}
                             </TextField>
+                        </Box>
 
+                        {/* Status — pill picker */}
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                            <Label>Status</Label>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                                {statusOptions.map((s) => {
+                                    const selected = formData.status === s;
+                                    return (
+                                        <Box
+                                            key={s}
+                                            sx={{
+                                                padding: '3px',
+                                                borderRadius: 999,
+                                                border: selected ? '1.5px solid #1976d2' : '1.5px solid transparent',
+                                                backgroundColor: selected ? 'rgba(25,118,210,0.08)' : 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 120ms ease',
+                                                '&:hover': {
+                                                    backgroundColor: selected ? 'rgba(25,118,210,0.08)' : 'rgba(0,0,0,0.03)',
+                                                },
+                                            }}
+                                            onClick={() => {
+                                                setFormData((prev) => ({ ...prev, status: s }));
+                                                if (errors.status) setErrors((prev) => ({ ...prev, status: '' }));
+                                            }}
+                                        >
+                                            <StatusPill status={s} size="sm" />
+                                        </Box>
+                                    );
+                                })}
+                            </Box>
+                            {errors.status && (
+                                <Typography sx={{ fontSize: 11, color: 'var(--t-danger-text)', mt: 0.5 }}>
+                                    {errors.status}
+                                </Typography>
+                            )}
+                        </Box>
+
+                        {/* Remarks */}
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                            <Label>Remarks</Label>
                             <TextField
                                 fullWidth
-                                required
-                                select
-                                label="Status"
-                                value={formData.status}
-                                onChange={handleChange('status')}
-                                error={!!errors.status}
-                                helperText={errors.status}
-                            >
-                                {LEAD_STAGES.filter((s) => s.value !== 'Meeting Scheduled').map((stage) => (
-                                    <MenuItem key={stage.value} value={stage.value}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                            <Box
-                                                sx={{
-                                                    width: 12,
-                                                    height: 12,
-                                                    borderRadius: '50%',
-                                                    backgroundColor: stage.color,
-                                                    mr: 1,
-                                                }}
-                                            />
-                                            {stage.label}
-                                        </Box>
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-
-                            <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                                <TextField
-                                    fullWidth
-                                    multiline
-                                    minRows={4}
-                                    label="Remarks"
-                                    value={formData.remarks}
-                                    onChange={handleChange('remarks')}
-                                    helperText="Optional"
-                                />
-                            </Box>
+                                multiline
+                                minRows={3}
+                                size="small"
+                                value={formData.remarks}
+                                onChange={handleField('remarks')}
+                                placeholder="Follow-up plan, objections, documents…"
+                            />
                         </Box>
                     </Box>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={onClose} disabled={submitting}>
+
+                {/* Foot */}
+                <DialogActions
+                    sx={{
+                        padding: '12px 20px',
+                        borderTop: '1px solid var(--t-border)',
+                        backgroundColor: 'var(--t-surface-muted)',
+                    }}
+                >
+                    <Button
+                        onClick={onClose}
+                        disabled={submitting}
+                        sx={{ textTransform: 'none', color: 'var(--t-text-3)' }}
+                    >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleSubmit}
                         variant="contained"
-                        color="primary"
                         disabled={submitting}
+                        startIcon={!initialData && <AddIcon sx={{ fontSize: 16 }} />}
+                        sx={{ textTransform: 'none', borderRadius: '8px', boxShadow: 'none', px: 2 }}
                     >
-                        {initialData ? 'Update' : 'Save'} Meeting
+                        {submitting
+                            ? 'Saving…'
+                            : initialData
+                                ? 'Update meeting'
+                                : 'Log meeting'}
                     </Button>
                 </DialogActions>
             </Dialog>

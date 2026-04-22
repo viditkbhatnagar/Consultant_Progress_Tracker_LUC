@@ -120,6 +120,19 @@ const getConsultantPerformance = async (consultantId, { months = 3, startDate, e
     return response.data;
 };
 
+// Focused AI analysis of commitments in the current filter window.
+const getAIAnalysis = async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.teamLead) params.append('teamLead', filters.teamLead);
+    if (filters.consultantName) params.append('consultantName', filters.consultantName);
+    if (filters.leadStage) params.append('leadStage', filters.leadStage);
+    if (filters.status) params.append('status', filters.status);
+    const response = await axios.get(`${API_URL}/ai-analysis?${params.toString()}`);
+    return response.data;
+};
+
 const commitmentService = {
     getCommitments,
     getCommitment,
@@ -132,6 +145,7 @@ const commitmentService = {
     getCurrentWeekCommitments,
     getCommitmentsByDateRange,
     getConsultantPerformance,
+    getAIAnalysis,
 };
 
 export default commitmentService;

@@ -10,6 +10,7 @@ const {
     getWeekCommitments,
     getCommitmentsByDateRange,
     getConsultantPerformance,
+    getAIAnalysis,
 } = require('../controllers/commitmentController');
 
 const router = express.Router();
@@ -30,6 +31,9 @@ router
 
 // Date range queries (BEFORE /:id)
 router.get('/date-range', authorize('team_lead', 'admin', 'skillhub'), getCommitmentsByDateRange);
+
+// AI analysis for the Commitment Tracker page (BEFORE /:id)
+router.get('/ai-analysis', authorize('admin', 'team_lead'), getAIAnalysis);
 
 // Week-specific route (BEFORE /:id)
 router.route('/week/:weekNumber/:year').get(getWeekCommitments);

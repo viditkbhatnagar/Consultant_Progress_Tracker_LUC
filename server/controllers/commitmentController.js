@@ -1,7 +1,20 @@
 const Commitment = require('../models/Commitment');
 const User = require('../models/User');
+const AIUsage = require('../models/AIUsage');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 const { isSkillhub } = require('../config/organizations');
+const OpenAI = require('openai');
+
+let _openai;
+const getOpenAIClient = () => {
+    if (!_openai) {
+        if (!process.env.OPENAI_API_KEY) {
+            throw new Error('OPENAI_API_KEY is not configured on the server');
+        }
+        _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return _openai;
+};
 
 // Sanitize + validate Skillhub demo slots before save.
 // Rules:
@@ -537,6 +550,185 @@ exports.getConsultantPerformance = async (req, res, next) => {
             allCommitments: commitments,
         });
     } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Focused AI analysis of commitments in the current filter window.
+// @route   GET /api/commitments/ai-analysis
+// @access  Private (admin, team_lead)
+//
+// Mirrors meetingController.getAIAnalysis. LUC team leads get org-wide scope
+// on this view (benchmark their team against the rest of the org).
+exports.getAIAnalysis = async (req, res, next) => {
+    try {
+        const { startDate, endDate, teamLead, consultantName, leadStage, status } = req.query;
+
+        const filter = buildScopeFilter(req);
+        if (req.user.role === 'team_lead' && req.user.organization === 'luc') {
+            delete filter.teamLead;
+        }
+
+        if (startDate || endDate) {
+            filter.commitmentDate = {};
+            if (startDate) filter.commitmentDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.commitmentDate.$lte = end;
+            }
+        }
+        if (teamLead && req.user.role === 'admin') filter.teamLead = teamLead;
+        if (consultantName) filter.consultantName = consultantName;
+        if (leadStage) filter.leadStage = leadStage;
+        if (status) filter.status = status;
+
+        const commitments = await Commitment.find(filter)
+            .populate('teamLead', 'name teamName')
+            .limit(1000)
+            .lean();
+
+        if (commitments.length === 0) {
+            return res.status(200).json({
+                success: true,
+                analysis: 'No commitments match the current filters. Widen the date range or clear filters to run an analysis.',
+            });
+        }
+
+        const byStage = {};
+        const byStatus = {};
+        const byTeam = {};
+        const byConsultant = {};
+        let totalMeetings = 0;
+        let totalClosed = 0;
+        let totalRevenue = 0;
+        let probSum = 0;
+        for (const c of commitments) {
+            byStage[c.leadStage] = (byStage[c.leadStage] || 0) + 1;
+            byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+            const team = c.teamLead?.teamName || c.teamName || 'Unknown';
+            byTeam[team] = (byTeam[team] || 0) + 1;
+            const cons = c.consultantName || 'Unknown';
+            byConsultant[cons] = (byConsultant[cons] || 0) + 1;
+            totalMeetings += c.meetingsDone || 0;
+            if (c.admissionClosed) {
+                totalClosed++;
+                totalRevenue += c.closedAmount || 0;
+            }
+            probSum += c.conversionProbability || 0;
+        }
+
+        const avgProb = commitments.length
+            ? Math.round(probSum / commitments.length)
+            : 0;
+        const achievementRate = commitments.length
+            ? Math.round(
+                  (commitments.filter((c) => c.status === 'achieved' || c.admissionClosed)
+                      .length /
+                      commitments.length) *
+                      100
+              )
+            : 0;
+
+        const dateRange =
+            startDate && endDate
+                ? `${new Date(startDate).toISOString().slice(0, 10)} → ${new Date(endDate).toISOString().slice(0, 10)}`
+                : 'the current view';
+
+        const fmtMap = (m, n = 8) =>
+            Object.entries(m)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, n)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+
+        const prompt = `You are analyzing sales commitments for an education consultancy for ${dateRange}.
+
+Totals
+- Total commitments: ${commitments.length}
+- Achievement rate (achieved + admissions closed): ${achievementRate}%
+- Admissions closed: ${totalClosed} (₹${Math.round(totalRevenue).toLocaleString()})
+- Avg conversion probability: ${avgProb}%
+- Total meetings done across commitments: ${totalMeetings}
+
+Lead-stage distribution: ${fmtMap(byStage)}
+Workflow status: ${fmtMap(byStatus)}
+Commitments by team: ${fmtMap(byTeam)}
+Top consultants (by commitment count): ${fmtMap(byConsultant, 10)}
+
+Write a concise, actionable markdown analysis for the team. Follow this exact shape:
+
+## 📈 Commitment Tracker Analysis
+
+### Snapshot
+One paragraph (3–4 lines) summarising volume, achievement rate, and the shape of the pipeline (Admission vs Warm/Awaiting vs Lost/Dead).
+
+### What's working
+- 2–4 bullets highlighting strongest stage/team/consultant signals with concrete numbers.
+
+### Watch-outs
+- 2–4 bullets flagging stalled states (Awaiting Confirmation, Offer Sent, Unresponsive, No Answer), high Missed/Lost rate, or teams with low conversion.
+
+### Next actions
+- 3 crisp recommendations. Each must name what to do, who it targets, and why.
+
+Rules: keep total output under 280 words, use tabular-looking numbers when helpful, do not invent consultants or teams not listed above, and do not repeat the raw numbers block.`;
+
+        const client = getOpenAIClient();
+        const completion = await client.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content:
+                        'You are a pragmatic sales-ops analyst for an education consultancy. You read aggregated commitment stats and produce short, useful markdown. Never fabricate names or numbers.',
+                },
+                { role: 'user', content: prompt },
+            ],
+            temperature: 0.5,
+            max_tokens: 900,
+        });
+
+        const analysis =
+            completion.choices[0]?.message?.content ||
+            'No analysis was generated. Please try again.';
+
+        const usage = completion.usage || {};
+        const promptTokens = usage.prompt_tokens || 0;
+        const completionTokens = usage.completion_tokens || 0;
+        const cost =
+            promptTokens * 0.00000015 + completionTokens * 0.0000006;
+
+        AIUsage.create({
+            user: req.user.id,
+            role: req.user.role,
+            model: 'gpt-4o-mini',
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cost,
+            dateRangeQueried: {
+                startDate: startDate || 'all',
+                endDate: endDate || 'all',
+            },
+        }).catch((err) => console.error('Failed to log AI usage:', err.message));
+
+        res.status(200).json({ success: true, analysis });
+    } catch (error) {
+        if (error.message === 'OPENAI_API_KEY is not configured on the server') {
+            return res.status(503).json({
+                success: false,
+                message:
+                    'AI analysis is not available. The OpenAI API key has not been configured.',
+            });
+        }
+        if (error.status === 429) {
+            return res.status(502).json({
+                success: false,
+                message:
+                    'AI service is temporarily rate-limited. Please try again in a moment.',
+            });
+        }
         next(error);
     }
 };
