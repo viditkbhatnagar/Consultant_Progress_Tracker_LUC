@@ -47,6 +47,7 @@ import { getUsers } from '../services/authService';
 import exportService from '../services/exportService';
 import consultantService from '../services/consultantService';
 import { API_BASE_URL } from '../utils/constants';
+import { setAdminOrgScope } from '../utils/adminOrgScope';
 import NotificationBell from '../components/NotificationBell';
 import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
@@ -794,6 +795,9 @@ const AdminDashboard = () => {
                                     return;
                                 }
                                 if (newValue === 'hourly') {
+                                    // Force LUC on entry — admin can switch
+                                    // to Skillhub from the in-page tab.
+                                    setAdminOrgScope('luc');
                                     navigate('/hourly-tracker');
                                     return;
                                 }

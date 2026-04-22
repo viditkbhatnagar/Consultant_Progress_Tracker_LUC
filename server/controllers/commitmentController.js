@@ -452,14 +452,22 @@ exports.getCommitmentsByDateRange = async (req, res, next) => {
             });
         }
 
+        // Filter by the actual commitmentDate (the calendar day the row is
+        // logged for), not weekStartDate. weekStartDate is always a Monday,
+        // so a Mar-ending range would otherwise sweep in the first few April
+        // days of a Mon-30 / Sun-Apr-5 week.
+        const rangeStart = new Date(startDate);
+        const rangeEnd = new Date(endDate);
+        rangeEnd.setHours(23, 59, 59, 999);
+
         const query = {
             ...buildScopeFilter(req),
-            weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+            commitmentDate: { $gte: rangeStart, $lte: rangeEnd },
         };
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email')
-            .sort('-weekStartDate');
+            .sort('-commitmentDate');
 
         res.status(200).json({
             success: true,

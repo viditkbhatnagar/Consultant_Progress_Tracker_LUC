@@ -19,6 +19,7 @@ export const MEETING_MODES = [
     { value: 'Zoom', label: 'Zoom' },
     { value: 'Out Meeting', label: 'Out Meeting' },
     { value: 'Office Meeting', label: 'Office Meeting' },
+    { value: 'Student Meeting', label: 'Student Meeting' },
 ];
 
 // Commitment status options
