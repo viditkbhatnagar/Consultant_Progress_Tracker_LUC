@@ -32,6 +32,7 @@ import {
 import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { getLeadStageColor, getAchievementColor } from '../utils/constants';
+import { formatWeekOfMonth } from '../utils/weekUtils';
 
 const ConsultantDetailDialog = ({ 
     open, 
@@ -132,7 +133,7 @@ const ConsultantDetailDialog = ({
 
                                                 return (
                                                     <TableRow key={commitment._id}>
-                                                        <TableCell>W{commitment.weekNumber}</TableCell>
+                                                        <TableCell>{formatWeekOfMonth(commitment.commitmentDate, commitment.weekStartDate)}</TableCell>
                                                         <TableCell>{dateFormatted}</TableCell>
                                                         <TableCell>{dayOfWeek}</TableCell>
                                                         <TableCell>{timeFormatted}</TableCell>

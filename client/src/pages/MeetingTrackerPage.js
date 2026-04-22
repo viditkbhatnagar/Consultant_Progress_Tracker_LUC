@@ -292,7 +292,7 @@ const MeetingTrackerPage = () => {
                                 onChange={handleFilterChange('status')}
                             >
                                 <MenuItem value="">All</MenuItem>
-                                {LEAD_STAGES.map((s) => (
+                                {LEAD_STAGES.filter((s) => s.value !== 'Meeting Scheduled').map((s) => (
                                     <MenuItem key={s.value} value={s.value}>
                                         {s.label}
                                     </MenuItem>

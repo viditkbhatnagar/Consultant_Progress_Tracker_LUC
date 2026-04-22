@@ -33,9 +33,21 @@ exports.generateDashboardAnalysis = async (req, res, next) => {
                 });
             }
             messages = buildAdminPrompt(data);
+        } else if (req.user.role === 'team_lead' && req.user.organization === 'luc') {
+            // LUC team leads see org-wide analysis (LUC-only) — same aggregation
+            // as admin, scoped to the LUC tenant. They can compare how their
+            // team is performing against the rest of the organization.
+            data = await aggregateAdminData(startDate, endDate, 'luc');
+            if (!data) {
+                return res.status(200).json({
+                    success: true,
+                    analysis: 'No commitment or student data found for the selected date range. Please select a different period.',
+                });
+            }
+            messages = buildAdminPrompt(data);
         } else if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
-            // Skillhub branch logins use the same aggregation as a team lead —
-            // they own their branch's commitments/students via teamLead FK.
+            // Skillhub branch logins stay scoped to their own branch via
+            // teamLead FK. (LUC team_leads are handled in the branch above.)
             data = await aggregateTeamLeadData(req.user.id, startDate, endDate);
             if (!data) {
                 return res.status(200).json({

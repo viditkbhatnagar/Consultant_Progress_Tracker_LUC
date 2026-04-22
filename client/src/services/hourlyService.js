@@ -109,16 +109,16 @@ const getTeamLeads = async () => {
     return response.data;
 };
 
-const getLeaderboard = async (date) => {
+const getLeaderboard = async (date, { groupBy } = {}) => {
     const response = await axios.get(`${API_URL}/leaderboard`, {
-        params: { date, ...adminOrgParam() },
+        params: { date, ...(groupBy ? { groupBy } : {}), ...adminOrgParam() },
     });
     return response.data;
 };
 
-const getWeeklyLeaderboard = async (date) => {
+const getWeeklyLeaderboard = async (date, { groupBy } = {}) => {
     const response = await axios.get(`${API_URL}/leaderboard/weekly`, {
-        params: { date, ...adminOrgParam() },
+        params: { date, ...(groupBy ? { groupBy } : {}), ...adminOrgParam() },
     });
     return response.data;
 };

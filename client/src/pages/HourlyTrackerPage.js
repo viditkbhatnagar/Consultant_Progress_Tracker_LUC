@@ -14,6 +14,8 @@ import {
     FormControl,
     CircularProgress,
     Drawer,
+    ToggleButton,
+    ToggleButtonGroup,
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -190,6 +192,7 @@ const LucHourlyTrackerPage = () => {
     const [lbLoading, setLbLoading] = useState(false);
     const [lbData, setLbData] = useState('');
     const [lbKind, setLbKind] = useState('daily'); // 'daily' | 'weekly'
+    const [lbGroupBy, setLbGroupBy] = useState('consultant'); // 'consultant' | 'team'
 
     // Toast
     const [toast, setToast] = useState({ open: false, msg: '' });
@@ -754,13 +757,19 @@ const LucHourlyTrackerPage = () => {
         setAiLoading(false);
     };
 
-    const handleLeaderboard = async () => {
+    // Fetch the leaderboard for the current kind + groupBy. Called both from
+    // the entry handlers and from the Consultants/Teams toggle inside the
+    // dialog.
+    const fetchLeaderboard = async (kind, groupBy) => {
         setLbLoading(true);
-        setLbOpen(true);
         setLbData('');
-        setLbKind('daily');
         try {
-            const res = await hourlyService.getLeaderboard(formatDateStr(currentDate));
+            const fetcher =
+                kind === 'weekly'
+                    ? hourlyService.getWeeklyLeaderboard
+                    : hourlyService.getLeaderboard;
+            const opts = groupBy === 'team' ? { groupBy: 'team' } : {};
+            const res = await fetcher(formatDateStr(currentDate), opts);
             setLbData(res.data || 'No data available');
         } catch (err) {
             setLbData(err.response?.data?.message || 'Failed to generate leaderboard');
@@ -768,18 +777,24 @@ const LucHourlyTrackerPage = () => {
         setLbLoading(false);
     };
 
-    const handleWeeklyLeaderboard = async () => {
-        setLbLoading(true);
+    const handleLeaderboard = async () => {
         setLbOpen(true);
-        setLbData('');
+        setLbKind('daily');
+        setLbGroupBy('consultant');
+        await fetchLeaderboard('daily', 'consultant');
+    };
+
+    const handleWeeklyLeaderboard = async () => {
+        setLbOpen(true);
         setLbKind('weekly');
-        try {
-            const res = await hourlyService.getWeeklyLeaderboard(formatDateStr(currentDate));
-            setLbData(res.data || 'No data available');
-        } catch (err) {
-            setLbData(err.response?.data?.message || 'Failed to generate weekly leaderboard');
-        }
-        setLbLoading(false);
+        setLbGroupBy('consultant');
+        await fetchLeaderboard('weekly', 'consultant');
+    };
+
+    const handleLbGroupByChange = async (next) => {
+        if (!next || next === lbGroupBy) return;
+        setLbGroupBy(next);
+        await fetchLeaderboard(lbKind, next);
     };
 
     // Admin team filter — derived list
@@ -1755,6 +1770,22 @@ const LucHourlyTrackerPage = () => {
                         </Box>
                         <IconButton size="small" onClick={() => setLbOpen(false)} sx={{ width: 28, height: 28, borderRadius: '6px', border: '1px solid #dde3ed' }}>✕</IconButton>
                     </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                        <ToggleButtonGroup
+                            value={lbGroupBy}
+                            exclusive
+                            size="small"
+                            onChange={(_e, next) => handleLbGroupByChange(next)}
+                            disabled={lbLoading}
+                        >
+                            <ToggleButton value="consultant" sx={{ textTransform: 'none', px: 2 }}>
+                                Consultants
+                            </ToggleButton>
+                            <ToggleButton value="team" sx={{ textTransform: 'none', px: 2 }}>
+                                Teams
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
                     {lbLoading ? (
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6, gap: 2 }}>
                             <CircularProgress size={36} sx={{ color: '#f59e0b' }} />
@@ -1828,6 +1859,7 @@ const LucHourlyTrackerPage = () => {
                                             { l: 'DRIPS', c: '#fcd34d' }, { l: 'OFFLINE MTG', c: '#86efac' }, { l: 'ZOOM', c: '#818cf8' },
                                             { l: 'OUT MTG', c: '#a78bfa' }, { l: 'TEAM MTG', c: '#f472b6' }, { l: "TL'S MTG", c: '#5eead4' },
                                             { l: 'MTG HOURS', c: '#94a3b8' },
+                                            { l: 'REFERENCE', c: '#f9a8d4' }, { l: 'ADMISSIONS', c: '#f9a8d4' },
                                         ].map((h) => (
                                             <th key={h.l} style={{ ...S.th, position: 'sticky', top: 0, zIndex: 7, minWidth: 75, background: '#2a2010', color: h.c, fontSize: 9, fontWeight: 700, letterSpacing: '.04em' }}>{h.l}</th>
                                         ))}
@@ -1884,6 +1916,8 @@ const LucHourlyTrackerPage = () => {
                                                         { v: os.teamMtgs, c: '#be185d', types: ['teammeet'], title: 'Team Meeting' },
                                                         { v: os.tlMtgs, c: '#0d9488', types: ['tlmeet'], title: "TL's Team Meeting" },
                                                         { v: os.meetHrs, c: '#44556a', suf: 'h' },
+                                                        { v: getReference(c._id) || 0, c: '#be185d' },
+                                                        { v: getAdmission(c._id) || 0, c: '#be185d' },
                                                     ].map((sv, i) => (
                                                         <td key={`s${i}`} style={{ minWidth: 75, padding: '4px 6px', textAlign: 'center', borderRight: '1px solid #e5dab8', borderBottom: '1px solid #efe6cc' }}>
                                                             <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 13, fontWeight: 600, color: sv.v === 0 ? '#d4c9a8' : sv.c }}>

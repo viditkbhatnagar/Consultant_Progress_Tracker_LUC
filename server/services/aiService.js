@@ -13,20 +13,26 @@ const getClient = () => {
     return openai;
 };
 
-// Aggregate organization-wide data for admin analysis
-const aggregateAdminData = async (startDate, endDate) => {
+// Aggregate organization-wide data for admin analysis.
+// `organization` is an optional tenant filter (e.g. 'luc') — passing it lets
+// us reuse the admin aggregation for LUC team leads who see org-wide data
+// but only their own tenant. Leave undefined to match all tenants (admin).
+const aggregateAdminData = async (startDate, endDate, organization = null) => {
     const dateFilter = {
         weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
     };
+    if (organization) dateFilter.organization = organization;
 
     const commitments = await Commitment.find(dateFilter)
         .populate('teamLead', 'name teamName')
         .lean();
 
     // Student data for the same period (by closingDate)
-    const students = await Student.find({
+    const studentFilter = {
         closingDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
-    }).lean();
+    };
+    if (organization) studentFilter.organization = organization;
+    const students = await Student.find(studentFilter).lean();
 
     if (commitments.length === 0 && students.length === 0) {
         return null;
