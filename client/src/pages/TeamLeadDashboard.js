@@ -1,14 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Container,
     Box,
     Typography,
-    Grid,
-    Card,
-    CardContent,
     Table,
     TableBody,
-    TablePagination,
     TableCell,
     TableContainer,
     TableHead,
@@ -22,55 +17,51 @@ import {
     DialogContent,
     DialogActions,
     Alert,
-    CircularProgress,
-    Tabs,
-    Tab,
     Menu,
     MenuItem,
-    CardActionArea,
-    Avatar,
-    Tooltip,
 } from '@mui/material';
 import {
     Edit as EditIcon,
-    Logout as LogoutIcon,
-    Download as DownloadIcon,
-    CheckCircle as CheckCircleIcon,
     Close as CloseIcon,
-    TrendingUp as TrendingUpIcon,
-    AddCircleOutline as AddCircleIcon,
-    Person as PersonIcon,
     Add as AddIcon,
-    Visibility as VisibilityIcon,
-    Comment as CommentIcon,
     AutoAwesome as AutoAwesomeIcon,
     FactCheck as CommitmentsIcon,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import exportService from '../services/exportService';
 import consultantService from '../services/consultantService';
-import NotificationBell from '../components/NotificationBell';
-import CommitmentFilters from '../components/CommitmentFilters';
 import DateRangeSelector from '../components/DateRangeSelector';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
 import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
-import Sidebar, { DRAWER_WIDTH } from '../components/Sidebar';
+import Sidebar from '../components/Sidebar';
 import AISummaryCard from '../components/AISummaryCard';
-import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
-import { getWeekInfo, formatWeekDisplay, formatWeekOfMonth } from '../utils/weekUtils';
-import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
+import { LeadStageChart } from '../components/Charts';
+import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
+
+import DashboardShell from '../components/dashboard/DashboardShell';
+import DashboardHero from '../components/dashboard/DashboardHero';
+import SectionCard from '../components/dashboard/SectionCard';
+import KPIStrip from '../components/dashboard/KPIStrip';
+import DashboardTabs, { AnimatedTabPanel } from '../components/dashboard/DashboardTabs';
+import PerformerCard from '../components/dashboard/PerformerCard';
+import PerformerGrid from '../components/dashboard/PerformerGrid';
+import ProgressBar from '../components/dashboard/ProgressBar';
+import { useDashboardThemeState } from '../utils/dashboardTheme';
+import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion';
 
 const TeamLeadDashboard = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const weekInfo = getWeekInfo();
+    const themeState = useDashboardThemeState('dashboard-theme-mode');
+    const riseV = useReducedMotionVariants(riseVariants);
 
     const [commitments, setCommitments] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedCommitment, setSelectedCommitment] = useState(null);
     const [correctiveDialogOpen, setCorrectiveDialogOpen] = useState(false);
@@ -78,37 +69,28 @@ const TeamLeadDashboard = () => {
     const [tabValue, setTabValue] = useState(0);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
+    const [filters] = useState({ search: '', stage: '', status: '', consultant: '' });
 
-    // Consultant management state
     const [consultants, setConsultants] = useState([]);
     const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
     const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
-    const [filters, setFilters] = useState({ search: '', stage: '', status: '', consultant: '' });
-    // Pagination for the All Team Commitments table. 20 rows per page.
-    const COMMITMENTS_PAGE_SIZE = 20;
-    const [commitmentsPage, setCommitmentsPage] = useState(0);
 
-    // Date range state
     const [dateRange, setDateRange] = useState({
         startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         viewType: 'current-week',
     });
 
-    // Consultant detail dialog state
     const [selectedConsultant, setSelectedConsultant] = useState(null);
     const [consultantDetailOpen, setConsultantDetailOpen] = useState(false);
     const [consultantPerformance, setConsultantPerformance] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(false);
 
-    // Commitment form dialog state
     const [commitmentDialogOpen, setCommitmentDialogOpen] = useState(false);
     const [editingCommitment, setEditingCommitment] = useState(null);
 
-    // Load commitments by date range - use useCallback to fix dependency warning
     const loadCommitments = useCallback(async () => {
         try {
-            setLoading(true);
             if (!dateRange.startDate || !dateRange.endDate) return;
             const data = await commitmentService.getCommitmentsByDateRange(
                 dateRange.startDate,
@@ -118,12 +100,9 @@ const TeamLeadDashboard = () => {
             setError('');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load commitments');
-        } finally {
-            setLoading(false);
         }
     }, [dateRange.startDate, dateRange.endDate]);
 
-    // Load consultants
     const loadConsultants = useCallback(async () => {
         try {
             const response = await consultantService.getConsultants();
@@ -133,21 +112,15 @@ const TeamLeadDashboard = () => {
         }
     }, []);
 
-    // Consultant CRUD handlers
     const handleSaveConsultant = async (consultantData) => {
-        try {
-            if (selectedConsultantForEdit) {
-                await consultantService.updateConsultant(selectedConsultantForEdit._id, consultantData);
-            } else {
-                await consultantService.createConsultant(consultantData);
-            }
-            await loadConsultants();
-            setConsultantDialogOpen(false);
-            setSelectedConsultantForEdit(null);
-        } catch (err) {
-            console.error('Failed to save consultant:', err);
-            throw err;
+        if (selectedConsultantForEdit) {
+            await consultantService.updateConsultant(selectedConsultantForEdit._id, consultantData);
+        } else {
+            await consultantService.createConsultant(consultantData);
         }
+        await loadConsultants();
+        setConsultantDialogOpen(false);
+        setSelectedConsultantForEdit(null);
     };
 
     const handleDeactivateConsultant = async (consultantId) => {
@@ -171,54 +144,33 @@ const TeamLeadDashboard = () => {
         }
     }, [dateRange, loadCommitments]);
 
-    // Filter commitments
     useEffect(() => {
         let filtered = [...commitments];
-
         if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
+            const s = filters.search.toLowerCase();
             filtered = filtered.filter(c =>
-                c.studentName?.toLowerCase().includes(searchLower) ||
-                c.commitmentMade?.toLowerCase().includes(searchLower) ||
-                c.consultantName?.toLowerCase().includes(searchLower)
+                c.studentName?.toLowerCase().includes(s) ||
+                c.commitmentMade?.toLowerCase().includes(s) ||
+                c.consultantName?.toLowerCase().includes(s)
             );
         }
-
-        if (filters.stage) {
-            filtered = filtered.filter(c => c.leadStage === filters.stage);
-        }
-
-        if (filters.status) {
-            filtered = filtered.filter(c => c.status === filters.status);
-        }
-
+        if (filters.stage) filtered = filtered.filter(c => c.leadStage === filters.stage);
+        if (filters.status) filtered = filtered.filter(c => c.status === filters.status);
         if (filters.consultant) {
-            filtered = filtered.filter(c => {
-                const consultantName = c.consultantName || '';
-                return consultantName.trim() === filters.consultant.trim();
-            });
+            filtered = filtered.filter(c => (c.consultantName || '').trim() === filters.consultant.trim());
         }
-
         setFilteredCommitments(filtered);
     }, [commitments, filters]);
 
-    const handleFilterChange = (newFilters) => {
-        setFilters(newFilters);
-        setCommitmentsPage(0);
-    };
-
     const handleDateRangeChange = (newRange) => {
         setDateRange(newRange);
-        setCommitmentsPage(0);
     };
 
     const handleConsultantClick = async (consultant) => {
         setSelectedConsultant(consultant);
         setConsultantDetailOpen(true);
         setPerformanceLoading(true);
-
         try {
-            // Use consultant name instead of ID
             const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
             const data = await commitmentService.getConsultantPerformance(consultantName, {
                 startDate: dateRange.startDate,
@@ -232,8 +184,6 @@ const TeamLeadDashboard = () => {
         }
     };
 
-
-
     const handleSaveCorrective = async () => {
         try {
             await commitmentService.updateCommitment(selectedCommitment._id, {
@@ -246,6 +196,11 @@ const TeamLeadDashboard = () => {
             setError(err.response?.data?.message || 'Failed to update commitment');
         }
     };
+
+    const displayCommitments =
+        filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant
+            ? filteredCommitments
+            : commitments;
 
     const handleExportExcel = () => {
         const periodLabel = dateRange.viewType.replace('-', '_');
@@ -280,501 +235,339 @@ const TeamLeadDashboard = () => {
     };
 
     const handleSaveCommitment = async (commitmentData) => {
-        try {
-            if (editingCommitment) {
-                // Update existing commitment
-                await commitmentService.updateCommitment(editingCommitment._id, commitmentData);
-            } else {
-                // Create new commitment
-                await commitmentService.createCommitment(commitmentData);
-            }
-
-            // Reload commitments
-            await loadCommitments();
-
-            // If consultant detail dialog is open, refresh its data to show the new/updated commitment
-            if (consultantDetailOpen && selectedConsultant) {
-                setPerformanceLoading(true);
-                try {
-                    const consultantName = typeof selectedConsultant === 'string' ? selectedConsultant : selectedConsultant.name;
-                    const data = await commitmentService.getConsultantPerformance(consultantName, {
-                startDate: dateRange.startDate,
-                endDate: dateRange.endDate,
-            });
-                    setConsultantPerformance(data);
-                } catch (err) {
-                    console.error('Failed to refresh consultant performance:', err);
-                } finally {
-                    setPerformanceLoading(false);
-                }
-            }
-
-            // Close the commitment dialog
-            setCommitmentDialogOpen(false);
-            setEditingCommitment(null);
-        } catch (err) {
-            console.error('Error saving commitment:', err);
-            throw err;
+        if (editingCommitment) {
+            await commitmentService.updateCommitment(editingCommitment._id, commitmentData);
+        } else {
+            await commitmentService.createCommitment(commitmentData);
         }
+        await loadCommitments();
+        if (consultantDetailOpen && selectedConsultant) {
+            setPerformanceLoading(true);
+            try {
+                const consultantName = typeof selectedConsultant === 'string' ? selectedConsultant : selectedConsultant.name;
+                const data = await commitmentService.getConsultantPerformance(consultantName, {
+                    startDate: dateRange.startDate,
+                    endDate: dateRange.endDate,
+                });
+                setConsultantPerformance(data);
+            } catch (err) {
+                console.error('Failed to refresh consultant performance:', err);
+            } finally {
+                setPerformanceLoading(false);
+            }
+        }
+        setCommitmentDialogOpen(false);
+        setEditingCommitment(null);
     };
+
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // Display commitments
-    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant
-        ? filteredCommitments
-        : commitments;
-
-    // Calculate consultant stats from displayed (filtered) commitments
-    const consultantStats = displayCommitments.reduce((acc, commitment) => {
-        const consultantName = commitment.consultantName || 'Unknown';
-
-        if (!acc[consultantName]) {
-            acc[consultantName] = {
-                consultant: consultantName, // Store name as string
-                total: 0,
-                achieved: 0,
-                meetings: 0,
-                closed: 0,
-            };
-        }
-
-        acc[consultantName].total++;
-        acc[consultantName].meetings += commitment.meetingsDone || 0;
-        if (commitment.status === 'achieved' || commitment.admissionClosed) acc[consultantName].achieved++;
-        if (commitment.admissionClosed) acc[consultantName].closed++;
-
+    // Derived metrics
+    const consultantStats = displayCommitments.reduce((acc, c) => {
+        const name = c.consultantName || 'Unknown';
+        if (!acc[name]) acc[name] = { consultant: name, total: 0, achieved: 0, meetings: 0, closed: 0 };
+        acc[name].total++;
+        acc[name].meetings += c.meetingsDone || 0;
+        if (c.status === 'achieved' || c.admissionClosed) acc[name].achieved++;
+        if (c.admissionClosed) acc[name].closed++;
         return acc;
     }, {});
-
-    const consultantStatsArray = Object.values(consultantStats).map(stat => ({
-        ...stat,
-        achievementRate: stat.total > 0 ? Math.round((stat.achieved / stat.total) * 100) : 0,
+    const consultantStatsArray = Object.values(consultantStats).map(s => ({
+        ...s,
+        achievementRate: s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0,
     }));
+    // Sort for top performer highlight.
+    const sortedStats = [...consultantStatsArray].sort((a, b) => b.achievementRate - a.achievementRate);
+    const topPerformer = sortedStats[0]?.achievementRate >= 70 ? sortedStats[0].consultant : null;
 
-    // Extract unique consultants for form dropdown - use actual consultants, not stats
-    const teamConsultants = consultants.map(consultant => ({
-        name: consultant.name,
-        _id: consultant._id,
-    }));
+    const teamConsultants = consultants.map(c => ({ name: c.name, _id: c._id }));
 
-
-    // Overall team metrics (from displayed/filtered commitments)
     const totalCommitments = displayCommitments.length;
     const totalAchieved = displayCommitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
     const totalMeetings = displayCommitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
     const totalClosed = displayCommitments.filter(c => c.admissionClosed).length;
     const teamAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
 
+    const sidebar = (
+        <Sidebar
+            onAddCommitment={handleAddCommitment}
+            onExport={setExportMenuAnchor}
+            onLogout={handleLogout}
+            onAIAnalysis={() => setTabValue(2)}
+            onDashboard={() => setTabValue(0)}
+            aiAnalysisActive={tabValue === 2}
+        />
+    );
+
+    const kpiItems = [
+        {
+            label: 'Total Commitments',
+            value: totalCommitments,
+            sub: `${consultantStatsArray.length} consultants`,
+            accent: 'accent',
+        },
+        {
+            label: 'Team Achievement',
+            value: teamAchievementRate,
+            format: (v) => `${v}%`,
+            sub: `${totalAchieved} of ${totalCommitments} achieved`,
+            accent: teamAchievementRate >= 70 ? 'success' : teamAchievementRate >= 40 ? 'warm' : 'danger',
+        },
+        {
+            label: 'Total Meetings',
+            value: totalMeetings,
+            sub: 'Across all consultants',
+            accent: 'accent',
+        },
+        {
+            label: 'Admissions Closed',
+            value: totalClosed,
+            sub: 'Successful conversions',
+            accent: 'warm',
+        },
+    ];
+
+    const tabs = [
+        { value: 0, label: 'Team Overview' },
+        {
+            value: 'commitments',
+            label: 'Commitments',
+            icon: <CommitmentsIcon sx={{ fontSize: 18 }} />,
+        },
+        { value: 2, label: 'AI Analysis', icon: <AutoAwesomeIcon sx={{ fontSize: 18 }} /> },
+    ];
+
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#A0D2EB' }}>
-            {/* Sidebar */}
-            <Sidebar
-                onAddCommitment={handleAddCommitment}
-                onExport={setExportMenuAnchor}
-                onLogout={handleLogout}
-                onAIAnalysis={() => setTabValue(2)}
-                onDashboard={() => setTabValue(0)}
-                aiAnalysisActive={tabValue === 2}
+        <DashboardShell sidebar={sidebar} themeState={themeState}>
+            <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={() => setExportMenuAnchor(null)}
+            >
+                <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
+                <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
+            </Menu>
+
+            <DashboardHero
+                eyebrow="Team Lead"
+                title={`${user?.teamName || 'My Team'} Dashboard`}
+                subtitle={formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
             />
 
-            {/* Main Content */}
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    width: `calc(100% - ${DRAWER_WIDTH}px)`,
-                    backgroundColor: '#A0D2EB', // Light Blue
-                    minHeight: '100vh',
-                }}
-            >
-                {/* Export Menu */}
-                <Menu
-                    anchorEl={exportMenuAnchor}
-                    open={Boolean(exportMenuAnchor)}
-                    onClose={() => setExportMenuAnchor(null)}
-                >
-                    <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
-                    <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
-                </Menu>
+            <SectionCard eyebrow="Date range" padding={18}>
+                <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+            </SectionCard>
 
-                <Container maxWidth="xl" sx={{ py: 2 }}>
-                    {/* Header */}
-                    <Box sx={{ mb: 3 }}>
-                        <Typography variant="h4" gutterBottom sx={{ color: '#2C3E50', fontWeight: 700 }}>
-                            Team Dashboard - {user?.teamName}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#34495E', opacity: 0.9 }}>
-                            {formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
-                        </Typography>
-                    </Box>
+            {error && (
+                <motion.div variants={riseV} style={{ marginBottom: 24 }}>
+                    <Alert severity="error" onClose={() => setError('')}>
+                        {error}
+                    </Alert>
+                </motion.div>
+            )}
 
-                    {/* Date Range Selector */}
-                    <Card elevation={0} sx={{ mb: 3, backgroundColor: '#E5EAF5', borderRadius: 2 }}>
-                        <CardContent>
-                            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-                        </CardContent>
-                    </Card>
+            <KPIStrip items={kpiItems} />
 
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
-                    )}
-
-                    {/* Team Metrics Cards */}
-                    <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-                        <Card
-                            elevation={0}
+            {commitments.length > 0 && (
+                <SectionCard title="Team Analytics" eyebrow="This period">
+                    <Box
+                        sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                            gap: 2.5,
+                        }}
+                    >
+                        <Box sx={{ minWidth: 0 }}>
+                            <LeadStageChart commitments={displayCommitments} />
+                        </Box>
+                        <Box
                             sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
+                                minWidth: 0,
+                                backgroundColor: 'var(--d-surface-muted)',
+                                border: '1px solid var(--d-border-soft)',
+                                borderRadius: '12px',
+                                p: 2,
                             }}
                         >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.95, mb: 1, fontWeight: 600 }}>
-                                    Total Commitments
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalCommitments}</Typography>
-                                <Typography sx={{ opacity: 0.9, fontSize: '0.875rem' }}>
-                                    {consultantStatsArray.length} Consultants
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.95, mb: 1, fontWeight: 600 }}>
-                                    Team Achievement
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                                    {teamAchievementRate}%
-                                </Typography>
-                                <Typography sx={{ opacity: 0.9, fontSize: '0.875rem' }}>
-                                    {totalAchieved} of {totalCommitments} achieved
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.95, mb: 1, fontWeight: 600 }}>
-                                    Total Meetings
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalMeetings}</Typography>
-                                <Typography sx={{ opacity: 0.9, fontSize: '0.875rem' }}>
-                                    Across all consultants
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.95, mb: 1, fontWeight: 600 }}>
-                                    Admissions Closed
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                                    {totalClosed}
-                                </Typography>
-                                <Typography sx={{ opacity: 0.9, fontSize: '0.875rem' }}>
-                                    Successful conversions
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Box>
-
-                    {/* Analytics Charts and Heatmap */}
-                    {commitments.length > 0 && (
-                        <Box sx={{ mb: 4 }}>
-                            <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 700, color: '#2C3E50' }}>
-                                Team Analytics
+                            <Typography
+                                sx={{
+                                    fontSize: 13,
+                                    color: 'var(--d-text-muted)',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.06em',
+                                    fontWeight: 600,
+                                    mb: 1.5,
+                                }}
+                            >
+                                Consultant performance
                             </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                {/* Charts Row */}
-                                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                    <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <LeadStageChart commitments={displayCommitments} />
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+                                {consultantStatsArray.map((stat) => (
+                                    <Box key={stat.consultant}>
+                                        <ProgressBar
+                                            label={stat.consultant}
+                                            value={stat.achievementRate}
+                                        />
+                                        <Typography
+                                            sx={{
+                                                mt: 0.5,
+                                                fontSize: 11.5,
+                                                color: 'var(--d-text-muted)',
+                                            }}
+                                        >
+                                            {stat.total} commitments · {stat.meetings} meetings · {stat.closed} closed
+                                        </Typography>
                                     </Box>
-                                    <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <Card elevation={0} sx={{ height: '100%', backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                                            <CardContent sx={{ p: 3 }}>
-                                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-                                                    Consultant Performance
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                    {consultantStatsArray.map(stat => (
-                                                        <Box key={stat.consultant}>
-                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                    {stat.consultant}
-                                                                </Typography>
-                                                                <Typography
-                                                                    variant="body2"
-                                                                    sx={{ color: getAchievementColor(stat.achievementRate), fontWeight: 700 }}
-                                                                >
-                                                                    {stat.achievementRate}%
-                                                                </Typography>
-                                                            </Box>
-                                                            <Box
-                                                                sx={{
-                                                                    height: 10,
-                                                                    bgcolor: 'grey.100',
-                                                                    borderRadius: 5,
-                                                                    overflow: 'hidden',
-                                                                }}
-                                                            >
-                                                                <Box
-                                                                    sx={{
-                                                                        height: '100%',
-                                                                        width: `${stat.achievementRate}%`,
-                                                                        background: stat.achievementRate >= 70
-                                                                            ? 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)'
-                                                                            : stat.achievementRate >= 40
-                                                                                ? 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)'
-                                                                                : 'linear-gradient(90deg, #eb3349 0%, #f45c43 100%)',
-                                                                        borderRadius: 5,
-                                                                        transition: 'width 0.5s ease',
-                                                                    }}
-                                                                />
-                                                            </Box>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {stat.total} commitments • {stat.meetings} meetings • {stat.closed} closed
-                                                            </Typography>
-                                                        </Box>
-                                                    ))}
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
-                                    </Box>
-                                </Box>
+                                ))}
+                                {consultantStatsArray.length === 0 && (
+                                    <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted)' }}>
+                                        No consultant activity yet in this period.
+                                    </Typography>
+                                )}
                             </Box>
                         </Box>
-                    )}
-
-                    {/* Tabs */}
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                        <Tabs
-                            value={tabValue}
-                            onChange={(e, newValue) => {
-                                if (newValue === 'commitments') {
-                                    navigate('/commitments');
-                                    return;
-                                }
-                                setTabValue(newValue);
-                            }}
-                        >
-                            <Tab value={0} label="Team Overview" />
-                            <Tab
-                                value="commitments"
-                                label="Commitments"
-                                icon={<CommitmentsIcon sx={{ fontSize: 18 }} />}
-                                iconPosition="start"
-                            />
-                            <Tab value={2} label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
-                        </Tabs>
                     </Box>
+                </SectionCard>
+            )}
 
-                    {/* Tab Content */}
-                    {tabValue === 0 && (
-                        // Team Overview Tab
-                        <Box>
-                            {/* Consultant Management Card */}
-                            <Card sx={{ mb: 3, backgroundColor: '#E5EAF5', borderRadius: 3 }}>
-                                <CardContent>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                        <Typography variant="h6">My Team Consultants</Typography>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<AddIcon />}
-                                            onClick={() => {
-                                                setSelectedConsultantForEdit(null);
-                                                setConsultantDialogOpen(true);
-                                            }}
-                                        >
-                                            Add Consultant
-                                        </Button>
-                                    </Box>
-                                    <TableContainer>
-                                        <Table size="small">
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Name</TableCell>
-                                                    <TableCell>Email</TableCell>
-                                                    <TableCell>Phone</TableCell>
-                                                    <TableCell>Status</TableCell>
-                                                    <TableCell align="center">Actions</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {consultants.map((consultant) => (
-                                                    <TableRow key={consultant._id} hover>
-                                                        <TableCell>{consultant.name}</TableCell>
-                                                        <TableCell>{consultant.email || '--'}</TableCell>
-                                                        <TableCell>{consultant.phone || '--'}</TableCell>
-                                                        <TableCell>
-                                                            <Chip
-                                                                label={consultant.isActive !== false ? 'Active' : 'Inactive'}
-                                                                size="small"
-                                                                color={consultant.isActive !== false ? 'success' : 'default'}
-                                                            />
-                                                        </TableCell>
-                                                        <TableCell align="center">
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() => {
-                                                                    setSelectedConsultantForEdit(consultant);
-                                                                    setConsultantDialogOpen(true);
-                                                                }}
-                                                                title="Edit consultant"
-                                                            >
-                                                                <EditIcon fontSize="small" />
-                                                            </IconButton>
-                                                            <IconButton
-                                                                size="small"
-                                                                color="error"
-                                                                onClick={() => handleDeactivateConsultant(consultant._id)}
-                                                                title="Deactivate consultant"
-                                                                disabled={consultant.isActive === false}
-                                                            >
-                                                                <CloseIcon fontSize="small" />
-                                                            </IconButton>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </TableContainer>
-                                </CardContent>
-                            </Card>
+            <DashboardTabs
+                value={tabValue}
+                onChange={(v) => {
+                    if (v === 'commitments') {
+                        navigate('/commitments');
+                        return;
+                    }
+                    setTabValue(v);
+                }}
+                tabs={tabs}
+            />
 
-                            <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-                                Consultant Performance - Click to View Details
-                            </Typography>
-                            <Grid container spacing={3}>
-                                {consultantStatsArray.map(stat => (
-                                    <Grid item xs={12} sm={6} lg={4} key={stat.consultant}>
-                                        <Card
-                                            elevation={0}
-                                            sx={{
-                                                height: '100%',
-                                                backgroundColor: '#E5EAF5',
-                                                borderRadius: 3,
-                                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                                                transition: 'all 0.3s ease',
-                                                '&:hover': {
-                                                    transform: 'translateY(-8px)',
-                                                    boxShadow: '0 8px 24px rgba(160, 210, 235, 0.4)',
-                                                    cursor: 'pointer',
-                                                },
-                                            }}
-                                        >
-                                            <CardActionArea onClick={() => handleConsultantClick(stat.consultant)}>
-                                                <CardContent>
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                            <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                                                                <PersonIcon />
-                                                            </Avatar>
-                                                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                                                {stat.consultant}
-                                                            </Typography>
-                                                        </Box>
-                                                        <IconButton size="small" color="primary">
-                                                            <TrendingUpIcon />
-                                                        </IconButton>
-                                                    </Box>
-                                                    <Grid container spacing={2}>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                                Commitments
-                                                            </Typography>
-                                                            <Typography variant="h4" sx={{ fontWeight: 600 }}>{stat.total}</Typography>
-                                                        </Grid>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                                Achievement
-                                                            </Typography>
-                                                            <Typography
-                                                                variant="h4"
-                                                                sx={{ color: getAchievementColor(stat.achievementRate), fontWeight: 600 }}
-                                                            >
-                                                                {stat.achievementRate}%
-                                                            </Typography>
-                                                        </Grid>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                                Meetings
-                                                            </Typography>
-                                                            <Typography variant="h5" sx={{ fontWeight: 600 }}>{stat.meetings}</Typography>
-                                                        </Grid>
-                                                        <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                                Closed
-                                                            </Typography>
-                                                            <Typography variant="h5" sx={{ color: '#4CAF50', fontWeight: 600 }}>
-                                                                {stat.closed}
-                                                            </Typography>
-                                                        </Grid>
-                                                    </Grid>
-                                                    <Box sx={{ mt: 2, textAlign: 'center' }}>
-                                                        <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
-                                                            Click to view full details →
-                                                        </Typography>
-                                                    </Box>
-                                                </CardContent>
-                                            </CardActionArea>
-                                        </Card>
-                                    </Grid>
+            <AnimatedTabPanel panelKey={tabValue}>
+                {tabValue === 0 && (
+                    <Box>
+                        <SectionCard
+                            title="My team consultants"
+                            right={
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<AddIcon />}
+                                    onClick={() => {
+                                        setSelectedConsultantForEdit(null);
+                                        setConsultantDialogOpen(true);
+                                    }}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 600,
+                                        background: 'var(--d-accent)',
+                                        '&:hover': { background: 'var(--d-accent-text)' },
+                                        boxShadow: 'none',
+                                    }}
+                                >
+                                    Add Consultant
+                                </Button>
+                            }
+                        >
+                            <TableContainer>
+                                <Table size="small" sx={{ '& .MuiTableCell-root': { borderColor: 'var(--d-border-soft)', color: 'var(--d-text-2)' } }}>
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</TableCell>
+                                            <TableCell sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</TableCell>
+                                            <TableCell sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone</TableCell>
+                                            <TableCell sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</TableCell>
+                                            <TableCell align="center" sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {consultants.map((consultant) => (
+                                            <TableRow
+                                                key={consultant._id}
+                                                sx={{
+                                                    transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                                    '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
+                                                }}
+                                            >
+                                                <TableCell>{consultant.name}</TableCell>
+                                                <TableCell>{consultant.email || '--'}</TableCell>
+                                                <TableCell>{consultant.phone || '--'}</TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={consultant.isActive !== false ? 'Active' : 'Inactive'}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 600,
+                                                            fontSize: 11,
+                                                            height: 22,
+                                                            backgroundColor: consultant.isActive !== false ? 'var(--d-success-bg)' : 'var(--d-surface-muted)',
+                                                            color: consultant.isActive !== false ? 'var(--d-success-text)' : 'var(--d-text-muted)',
+                                                            border: '1px solid',
+                                                            borderColor: consultant.isActive !== false ? 'transparent' : 'var(--d-border)',
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => {
+                                                            setSelectedConsultantForEdit(consultant);
+                                                            setConsultantDialogOpen(true);
+                                                        }}
+                                                        sx={{ color: 'var(--d-accent)' }}
+                                                    >
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleDeactivateConsultant(consultant._id)}
+                                                        disabled={consultant.isActive === false}
+                                                        sx={{ color: 'var(--d-danger)' }}
+                                                    >
+                                                        <CloseIcon fontSize="small" />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </SectionCard>
+
+                        <SectionCard title="Consultant performance" eyebrow="Click a card to drill in">
+                            <PerformerGrid>
+                                {consultantStatsArray.map((stat) => (
+                                    <PerformerCard
+                                        key={stat.consultant}
+                                        name={stat.consultant}
+                                        subtitle={`${stat.total} commitments · ${stat.meetings} meetings`}
+                                        metricLabel="Achievement"
+                                        metricValue={stat.achievementRate}
+                                        stats={[
+                                            { label: 'Commitments', value: stat.total },
+                                            { label: 'Meetings', value: stat.meetings },
+                                            { label: 'Closed', value: stat.closed },
+                                        ]}
+                                        onClick={() => handleConsultantClick(stat.consultant)}
+                                        highlight={stat.consultant === topPerformer}
+                                    />
                                 ))}
-                            </Grid>
-                        </Box>
-                    )}
+                                {consultantStatsArray.length === 0 && (
+                                    <Typography sx={{ color: 'var(--d-text-muted)', fontSize: 14 }}>
+                                        No commitments in this period yet.
+                                    </Typography>
+                                )}
+                            </PerformerGrid>
+                        </SectionCard>
+                    </Box>
+                )}
 
+                {tabValue === 2 && <AISummaryCard />}
+            </AnimatedTabPanel>
 
-                    {/* AI Analysis Tab */}
-                    {tabValue === 2 && (
-                        <AISummaryCard />
-                    )}
-
-                </Container>
-            </Box>
-
-            {/* Corrective Action Dialog */}
+            {/* Dialogs */}
             <Dialog
                 open={correctiveDialogOpen}
                 onClose={() => setCorrectiveDialogOpen(false)}
@@ -790,7 +583,6 @@ const TeamLeadDashboard = () => {
                         <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
                             Commitment: {selectedCommitment?.commitmentMade}
                         </Typography>
-
                         <TextField
                             fullWidth
                             multiline
@@ -811,7 +603,6 @@ const TeamLeadDashboard = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* Consultant Detail Dialog */}
             <ConsultantDetailDialog
                 open={consultantDetailOpen}
                 onClose={() => {
@@ -831,7 +622,6 @@ const TeamLeadDashboard = () => {
                 userRole="team_lead"
             />
 
-            {/* Add/Edit Commitment Dialog */}
             <TeamLeadCommitmentDialog
                 open={commitmentDialogOpen}
                 onClose={() => {
@@ -844,7 +634,6 @@ const TeamLeadDashboard = () => {
                 user={user}
             />
 
-            {/* Consultant Management Dialog */}
             <ConsultantManagementDialog
                 open={consultantDialogOpen}
                 onClose={() => {
@@ -857,7 +646,7 @@ const TeamLeadDashboard = () => {
                 currentUserRole="team_lead"
                 currentUserTeamName={user?.teamName}
             />
-        </Box>
+        </DashboardShell>
     );
 };
 

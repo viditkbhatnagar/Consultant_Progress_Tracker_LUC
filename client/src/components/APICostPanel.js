@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box,
-    Card,
-    CardContent,
     Typography,
     Table,
     TableBody,
@@ -20,42 +18,93 @@ import {
     Analytics as AnalyticsIcon,
     History as HistoryIcon,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import aiService from '../services/aiService';
+import {
+    gridStagger,
+    riseItemVariants,
+    useReducedMotionVariants,
+} from '../utils/dashboardMotion';
 
-const StatCard = ({ title, value, subtitle, icon: Icon }) => (
-    <Card
-        elevation={0}
+const Surface = ({ children, padding = 20, sx = {} }) => (
+    <Box
         sx={{
-            flex: '1 1 200px',
-            minWidth: 200,
-            backgroundColor: '#E5EAF5',
-            borderRadius: 3,
-            boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
+            backgroundColor: 'var(--d-surface, #FFFFFF)',
+            border: '1px solid var(--d-border, #E6E3DC)',
+            borderRadius: '14px',
+            boxShadow: 'var(--d-shadow-card-sm)',
+            p: `${padding}px`,
+            ...sx,
         }}
     >
-        <CardContent sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Icon sx={{ color: '#5c6bc0', fontSize: 22 }} />
-                <Typography sx={{ color: '#7f8c8d', fontWeight: 500, fontSize: '0.85rem' }}>
-                    {title}
-                </Typography>
-            </Box>
-            <Typography variant="h3" sx={{ fontWeight: 700, color: '#2C3E50', mb: 0.5 }}>
-                {value}
-            </Typography>
-            {subtitle && (
-                <Typography sx={{ color: '#7f8c8d', fontSize: '0.8rem' }}>
-                    {subtitle}
-                </Typography>
-            )}
-        </CardContent>
-    </Card>
+        {children}
+    </Box>
 );
+
+const StatCard = ({ title, value, subtitle, icon: Icon }) => (
+    <Surface sx={{ flex: '1 1 220px', minWidth: 220 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
+            <Icon sx={{ color: 'var(--d-accent, #2383E2)', fontSize: 20 }} />
+            <Typography
+                sx={{
+                    color: 'var(--d-text-muted, #8A887E)',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                }}
+            >
+                {title}
+            </Typography>
+        </Box>
+        <Typography
+            sx={{
+                fontSize: 28,
+                fontWeight: 700,
+                color: 'var(--d-text, #191918)',
+                letterSpacing: '-0.02em',
+                fontVariantNumeric: 'tabular-nums',
+                mb: 0.5,
+                lineHeight: 1.1,
+            }}
+        >
+            {value}
+        </Typography>
+        {subtitle && (
+            <Typography sx={{ color: 'var(--d-text-muted, #8A887E)', fontSize: 12 }}>
+                {subtitle}
+            </Typography>
+        )}
+    </Surface>
+);
+
+const tableSx = {
+    '& .MuiTableCell-root': {
+        borderColor: 'var(--d-border-soft, #ECE9E2)',
+        color: 'var(--d-text-2, #2A2927)',
+    },
+    '& .MuiTableCell-head': {
+        color: 'var(--d-text-muted, #8A887E)',
+        fontWeight: 600,
+        fontSize: 11,
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+    },
+    '& tbody tr': {
+        transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+    },
+    '& tbody tr:hover': {
+        backgroundColor: 'var(--d-surface-hover, #EFEDE8)',
+    },
+};
 
 const APICostPanel = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+
+    const stagger = useReducedMotionVariants(gridStagger);
+    const item = useReducedMotionVariants(riseItemVariants);
 
     useEffect(() => {
         const fetchUsage = async () => {
@@ -78,26 +127,22 @@ const APICostPanel = () => {
 
     if (loading) {
         return (
-            <Box>
-                <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
-                    {[1, 2, 3].map((i) => (
-                        <Box key={i} sx={{ flex: '1 1 200px', minWidth: 200 }}>
-                            <Card elevation={0} sx={{ backgroundColor: '#E5EAF5', borderRadius: 3 }}>
-                                <CardContent sx={{ p: 3 }}>
-                                    <Skeleton variant="text" width="60%" height={20} />
-                                    <Skeleton variant="text" width="40%" height={40} />
-                                    <Skeleton variant="text" width="50%" height={16} />
-                                </CardContent>
-                            </Card>
-                        </Box>
-                    ))}
-                </Box>
+            <Box sx={{ display: 'flex', gap: 2.5, flexWrap: 'wrap' }}>
+                {[1, 2, 3].map((i) => (
+                    <Box key={i} sx={{ flex: '1 1 220px', minWidth: 220 }}>
+                        <Surface>
+                            <Skeleton variant="text" width="60%" height={18} />
+                            <Skeleton variant="text" width="40%" height={36} />
+                            <Skeleton variant="text" width="50%" height={14} />
+                        </Surface>
+                    </Box>
+                ))}
             </Box>
         );
     }
 
     if (error) {
-        return <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>;
+        return <Alert severity="error" sx={{ borderRadius: '10px' }}>{error}</Alert>;
     }
 
     if (!data) return null;
@@ -106,169 +151,206 @@ const APICostPanel = () => {
 
     return (
         <Box>
-            {/* Header */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-                <MoneyIcon sx={{ color: '#5c6bc0', fontSize: 28 }} />
-                <Typography variant="h5" sx={{ fontWeight: 700, color: '#2C3E50' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2.5 }}>
+                <MoneyIcon sx={{ color: 'var(--d-accent, #2383E2)', fontSize: 26 }} />
+                <Typography
+                    sx={{
+                        fontSize: 22,
+                        fontWeight: 700,
+                        color: 'var(--d-text, #191918)',
+                        letterSpacing: '-0.01em',
+                    }}
+                >
                     API Cost Tracker
                 </Typography>
             </Box>
 
-            {/* Summary Cards */}
-            <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-                <StatCard
-                    title="Total API Calls"
-                    value={summary.totalCalls}
-                    subtitle="All-time usage"
-                    icon={AnalyticsIcon}
-                />
-                <StatCard
-                    title="Total Tokens Used"
-                    value={formatTokens(summary.totalTokens)}
-                    subtitle="Prompt + Completion"
-                    icon={TokenIcon}
-                />
-                <StatCard
-                    title="Total Cost"
-                    value={formatCost(summary.totalCost)}
-                    subtitle="GPT-4o-mini pricing"
-                    icon={MoneyIcon}
-                />
-            </Box>
+            <motion.div variants={stagger} initial="hidden" animate="show">
+                <Box sx={{ display: 'flex', gap: 2.5, mb: 3, flexWrap: 'wrap' }}>
+                    <motion.div variants={item} style={{ flex: '1 1 220px', minWidth: 220, display: 'flex' }}>
+                        <StatCard title="Total API Calls" value={summary.totalCalls} subtitle="All-time usage" icon={AnalyticsIcon} />
+                    </motion.div>
+                    <motion.div variants={item} style={{ flex: '1 1 220px', minWidth: 220, display: 'flex' }}>
+                        <StatCard title="Total Tokens" value={formatTokens(summary.totalTokens)} subtitle="Prompt + completion" icon={TokenIcon} />
+                    </motion.div>
+                    <motion.div variants={item} style={{ flex: '1 1 220px', minWidth: 220, display: 'flex' }}>
+                        <StatCard title="Total Cost" value={formatCost(summary.totalCost)} subtitle="GPT-4o-mini pricing" icon={MoneyIcon} />
+                    </motion.div>
+                </Box>
+            </motion.div>
 
-            {/* Usage by User */}
             {byUser.length > 0 && (
-                <Card elevation={0} sx={{ mb: 4, backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                    <CardContent sx={{ p: 3 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#2C3E50', mb: 2 }}>
-                            Usage by User
-                        </Typography>
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>User</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>Role</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Calls</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Tokens</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Cost</TableCell>
+                <Surface sx={{ mb: 3 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: 'var(--d-text, #191918)',
+                            letterSpacing: '-0.01em',
+                            mb: 1.5,
+                        }}
+                    >
+                        Usage by User
+                    </Typography>
+                    <TableContainer>
+                        <Table size="small" sx={tableSx}>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>User</TableCell>
+                                    <TableCell>Role</TableCell>
+                                    <TableCell align="right">Calls</TableCell>
+                                    <TableCell align="right">Tokens</TableCell>
+                                    <TableCell align="right">Cost</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {byUser.map((u) => (
+                                    <TableRow key={u.name}>
+                                        <TableCell>{u.name}</TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                label={u.role === 'admin' ? 'Admin' : 'Team Lead'}
+                                                size="small"
+                                                sx={{
+                                                    fontWeight: 600,
+                                                    fontSize: 11,
+                                                    height: 22,
+                                                    backgroundColor:
+                                                        u.role === 'admin'
+                                                            ? 'var(--d-warm-bg, rgba(217,119,6,0.08))'
+                                                            : 'var(--d-accent-bg, rgba(35,131,226,0.08))',
+                                                    color:
+                                                        u.role === 'admin'
+                                                            ? 'var(--d-warm-text, #B45309)'
+                                                            : 'var(--d-accent-text, #1F6FBF)',
+                                                }}
+                                            />
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {u.calls}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatTokens(u.tokens)}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatCost(u.cost)}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {byUser.map((u) => (
-                                        <TableRow key={u.name}>
-                                            <TableCell sx={{ color: '#34495E' }}>{u.name}</TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={u.role === 'admin' ? 'Admin' : 'Team Lead'}
-                                                    size="small"
-                                                    sx={{
-                                                        backgroundColor: u.role === 'admin' ? '#5c6bc0' : '#A0D2EB',
-                                                        color: u.role === 'admin' ? '#fff' : '#2C3E50',
-                                                        fontWeight: 600,
-                                                        fontSize: '0.75rem',
-                                                    }}
-                                                />
-                                            </TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{u.calls}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{formatTokens(u.tokens)}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E', fontWeight: 600 }}>{formatCost(u.cost)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </CardContent>
-                </Card>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Surface>
             )}
 
-            {/* Daily Usage (last 30 days) */}
             {daily.length > 0 && (
-                <Card elevation={0} sx={{ mb: 4, backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                    <CardContent sx={{ p: 3 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#2C3E50', mb: 2 }}>
-                            Daily Usage (Last 30 Days)
-                        </Typography>
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>Date</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Calls</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Tokens</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Cost</TableCell>
+                <Surface sx={{ mb: 3 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: 'var(--d-text, #191918)',
+                            letterSpacing: '-0.01em',
+                            mb: 1.5,
+                        }}
+                    >
+                        Daily Usage (last 30 days)
+                    </Typography>
+                    <TableContainer>
+                        <Table size="small" sx={tableSx}>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Date</TableCell>
+                                    <TableCell align="right">Calls</TableCell>
+                                    <TableCell align="right">Tokens</TableCell>
+                                    <TableCell align="right">Cost</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {daily.map((d) => (
+                                    <TableRow key={d.date}>
+                                        <TableCell>{d.date}</TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {d.calls}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatTokens(d.tokens)}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatCost(d.cost)}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {daily.map((d) => (
-                                        <TableRow key={d.date}>
-                                            <TableCell sx={{ color: '#34495E' }}>{d.date}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{d.calls}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{formatTokens(d.tokens)}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E', fontWeight: 600 }}>{formatCost(d.cost)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </CardContent>
-                </Card>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Surface>
             )}
 
-            {/* Recent Calls */}
             {recentCalls.length > 0 && (
-                <Card elevation={0} sx={{ backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                    <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                            <HistoryIcon sx={{ color: '#5c6bc0', fontSize: 22 }} />
-                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#2C3E50' }}>
-                                Recent API Calls
-                            </Typography>
-                        </Box>
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>Time</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>User</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Prompt</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Completion</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Total</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: '#2C3E50' }}>Cost</TableCell>
-                                        <TableCell sx={{ fontWeight: 700, color: '#2C3E50' }}>Date Range</TableCell>
+                <Surface>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                        <HistoryIcon sx={{ color: 'var(--d-accent, #2383E2)', fontSize: 20 }} />
+                        <Typography
+                            sx={{
+                                fontSize: 15,
+                                fontWeight: 700,
+                                color: 'var(--d-text, #191918)',
+                                letterSpacing: '-0.01em',
+                            }}
+                        >
+                            Recent API Calls
+                        </Typography>
+                    </Box>
+                    <TableContainer>
+                        <Table size="small" sx={tableSx}>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Time</TableCell>
+                                    <TableCell>User</TableCell>
+                                    <TableCell align="right">Prompt</TableCell>
+                                    <TableCell align="right">Completion</TableCell>
+                                    <TableCell align="right">Total</TableCell>
+                                    <TableCell align="right">Cost</TableCell>
+                                    <TableCell>Date Range</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {recentCalls.map((call, idx) => (
+                                    <TableRow key={idx}>
+                                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                            {new Date(call.createdAt).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell>{call.user}</TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatTokens(call.promptTokens)}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatTokens(call.completionTokens)}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatTokens(call.totalTokens)}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                                            {formatCost(call.cost)}
+                                        </TableCell>
+                                        <TableCell sx={{ color: 'var(--d-text-muted, #8A887E)', fontSize: 12 }}>
+                                            {call.dateRange?.startDate} to {call.dateRange?.endDate}
+                                        </TableCell>
                                     </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {recentCalls.map((call, idx) => (
-                                        <TableRow key={idx}>
-                                            <TableCell sx={{ color: '#34495E', whiteSpace: 'nowrap' }}>
-                                                {new Date(call.createdAt).toLocaleString()}
-                                            </TableCell>
-                                            <TableCell sx={{ color: '#34495E' }}>{call.user}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{formatTokens(call.promptTokens)}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E' }}>{formatTokens(call.completionTokens)}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E', fontWeight: 600 }}>{formatTokens(call.totalTokens)}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#34495E', fontWeight: 600 }}>{formatCost(call.cost)}</TableCell>
-                                            <TableCell sx={{ color: '#7f8c8d', fontSize: '0.8rem' }}>
-                                                {call.dateRange?.startDate} to {call.dateRange?.endDate}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </CardContent>
-                </Card>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Surface>
             )}
 
             {summary.totalCalls === 0 && (
-                <Card elevation={0} sx={{ backgroundColor: '#E5EAF5', borderRadius: 3 }}>
-                    <CardContent sx={{ p: 4, textAlign: 'center' }}>
-                        <Typography sx={{ color: '#7f8c8d' }}>
-                            No API calls have been made yet. Generate an AI analysis to see usage data here.
-                        </Typography>
-                    </CardContent>
-                </Card>
+                <Surface sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ color: 'var(--d-text-muted, #8A887E)' }}>
+                        No API calls have been made yet. Generate an AI analysis to see usage data here.
+                    </Typography>
+                </Surface>
             )}
         </Box>
     );

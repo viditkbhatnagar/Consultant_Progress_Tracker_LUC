@@ -48,12 +48,44 @@ const ActivateStudentDialog = ({ open, onClose, onConfirm, student }) => {
     };
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Mark as Active Student</DialogTitle>
-            <DialogContent dividers>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    backgroundColor: 'var(--d-surface)',
+                    color: 'var(--d-text)',
+                    border: '1px solid var(--d-border)',
+                },
+            }}
+        >
+            <DialogTitle
+                sx={{
+                    backgroundColor: 'var(--d-success-bg)',
+                    color: 'var(--d-success-text)',
+                    fontWeight: 700,
+                    borderBottom: '1px solid var(--d-border-soft)',
+                }}
+            >
+                Mark as Active Student
+            </DialogTitle>
+            <DialogContent
+                dividers
+                sx={{
+                    backgroundColor: 'var(--d-surface-muted)',
+                    color: 'var(--d-text)',
+                    borderColor: 'var(--d-border)',
+                    '& .MuiInputBase-input': { color: 'var(--d-text)' },
+                    '& .MuiInputLabel-root': { color: 'var(--d-text-muted)' },
+                    '& .MuiOutlinedInput-root': { backgroundColor: 'var(--d-surface)' },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--d-border)' },
+                }}
+            >
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                    Confirm activation for <strong>{student?.studentName}</strong>
+                <Typography variant="body2" sx={{ mb: 2, color: 'var(--d-text-3)' }}>
+                    Confirm activation for <strong style={{ color: 'var(--d-text)' }}>{student?.studentName}</strong>
                     {student?.enrollmentNumber && (
                         <> ({student.enrollmentNumber})</>
                     )}. This will move the record to the Active Students tab.
@@ -77,8 +109,13 @@ const ActivateStudentDialog = ({ open, onClose, onConfirm, student }) => {
                     </Grid>
                 </Grid>
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Cancel</Button>
+            <DialogActions
+                sx={{
+                    backgroundColor: 'var(--d-surface-elev)',
+                    borderTop: '1px solid var(--d-border)',
+                }}
+            >
+                <Button onClick={onClose} sx={{ color: 'var(--d-text-3)' }}>Cancel</Button>
                 <Button onClick={handleConfirm} variant="contained" color="success" disabled={saving}>
                     {saving ? 'Activating…' : 'Mark Active'}
                 </Button>

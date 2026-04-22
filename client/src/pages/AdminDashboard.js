@@ -1,47 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Container,
     Box,
     Typography,
-    Grid,
-    Card,
-    CardContent,
     Table,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
-    TablePagination,
     Chip,
     IconButton,
     Button,
     Alert,
-    CircularProgress,
-    Tabs,
-    Tab,
     Menu,
     MenuItem,
-    CardActionArea,
-    Avatar,
-    Tooltip as MuiTooltip,
 } from '@mui/material';
 import {
-    Logout as LogoutIcon,
-    Download as DownloadIcon,
     CheckCircle as CheckCircleIcon,
     Groups as GroupsIcon,
-    TrendingUp as TrendingUpIcon,
-    Comment as CommentIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
-    Visibility as VisibilityIcon,
     AutoAwesome as AutoAwesomeIcon,
-    Add as AddIcon,
     VideoCall as VideoCallIcon,
     AccessTime as AccessTimeIcon,
     FactCheck as CommitmentsIcon,
+    AccountTree as HierarchyIcon,
+    ManageAccounts as UsersIcon,
+    AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
@@ -49,9 +36,7 @@ import { getUsers } from '../services/authService';
 import exportService from '../services/exportService';
 import consultantService from '../services/consultantService';
 import { API_BASE_URL } from '../utils/constants';
-import { setAdminOrgScope } from '../utils/adminOrgScope';
-import NotificationBell from '../components/NotificationBell';
-import CommitmentFilters from '../components/CommitmentFilters';
+import { setAdminOrgScope, getAdminOrgScope } from '../utils/adminOrgScope';
 import DateRangeSelector from '../components/DateRangeSelector';
 import TeamDetailDialog from '../components/TeamDetailDialog';
 import ConsultantDetailDialog from '../components/ConsultantDetailDialog';
@@ -60,43 +45,118 @@ import AdminCommitmentDialog from '../components/AdminCommitmentDialog';
 import AdminAddCommitmentDialog from '../components/AdminAddCommitmentDialog';
 import UserManagementDialog from '../components/UserManagementDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
-import AdminSidebar, { DRAWER_WIDTH } from '../components/AdminSidebar';
+import AdminSidebar from '../components/AdminSidebar';
 import AISummaryCard from '../components/AISummaryCard';
 import APICostPanel from '../components/APICostPanel';
 import AdminSkillhubView from '../components/skillhub/AdminSkillhubView';
 import { LeadStageChart } from '../components/Charts';
-import { getWeekInfo, formatWeekDisplay, formatWeekOfMonth } from '../utils/weekUtils';
-import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
+import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
+
+import DashboardShell from '../components/dashboard/DashboardShell';
+import DashboardHero from '../components/dashboard/DashboardHero';
+import SectionCard from '../components/dashboard/SectionCard';
+import KPIStrip from '../components/dashboard/KPIStrip';
+import DashboardTabs, { AnimatedTabPanel } from '../components/dashboard/DashboardTabs';
+import PerformerCard from '../components/dashboard/PerformerCard';
+import PerformerGrid from '../components/dashboard/PerformerGrid';
+import ProgressBar from '../components/dashboard/ProgressBar';
+import { useDashboardThemeState } from '../utils/dashboardTheme';
+import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion';
+
+// Pill-style switcher for LUC / Skillhub. Uses the dashboard tokens so it
+// adapts to light/dark and reads clean next to the hero.
+const OrgSwitcher = ({ value, onChange }) => (
+    <Box
+        role="tablist"
+        sx={{
+            display: 'inline-flex',
+            backgroundColor: 'var(--d-surface-muted)',
+            border: '1px solid var(--d-border)',
+            borderRadius: '10px',
+            padding: '3px',
+            gap: '2px',
+        }}
+    >
+        {['luc', 'skillhub'].map((v) => {
+            const active = value === v;
+            return (
+                <Box
+                    key={v}
+                    component="button"
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => onChange(v)}
+                    sx={{
+                        border: 0,
+                        background: active ? 'var(--d-surface)' : 'transparent',
+                        color: active ? 'var(--d-text)' : 'var(--d-text-muted)',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        letterSpacing: '0.01em',
+                        px: 2,
+                        py: '6px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        boxShadow: active ? 'var(--d-shadow-card-sm)' : 'none',
+                        transition: 'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter)',
+                        '&:focus-visible': {
+                            outline: '2px solid var(--d-accent)',
+                            outlineOffset: 2,
+                        },
+                    }}
+                >
+                    {v === 'luc' ? 'LUC' : 'Skillhub'}
+                </Box>
+            );
+        })}
+    </Box>
+);
 
 const AdminDashboard = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const weekInfo = getWeekInfo();
+    const themeState = useDashboardThemeState('dashboard-theme-mode');
+    const riseV = useReducedMotionVariants(riseVariants);
 
     const [commitments, setCommitments] = useState([]);
     const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [tabValue, setTabValue] = useState(0);
-    // Top-level org section: 'luc' (existing dashboard) or 'skillhub' (AdminSkillhubView)
-    const [orgSection, setOrgSection] = useState('luc');
+    // Seed orgSection from the persisted admin org scope so a refresh while
+    // viewing Skillhub preserves the user's context.
+    const [orgSection, setOrgSection] = useState(() => (
+        getAdminOrgScope() === 'luc' ? 'luc' : 'skillhub'
+    ));
+
+    // Keep the global admin-org-scope in lockstep with orgSection. Without
+    // this, a previous session's scope (e.g. 'skillhub_training') stays in
+    // localStorage and the axios interceptor silently filters every admin
+    // GET to that org — including /api/users, which then returns only the
+    // single Skillhub branch user instead of all team leads.
+    useEffect(() => {
+        if (orgSection === 'luc') {
+            setAdminOrgScope('luc');
+        } else if (getAdminOrgScope() === 'luc') {
+            // Switching into Skillhub: if the persisted scope is still 'luc',
+            // default to the Training branch. AdminSkillhubView's branch
+            // switcher then owns further changes.
+            setAdminOrgScope('skillhub_training');
+        }
+    }, [orgSection]);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [addCommitmentOpen, setAddCommitmentOpen] = useState(false);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
-    const [filters, setFilters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
-    // Pagination for the All Commitments table. 20 rows per page.
-    const COMMITMENTS_PAGE_SIZE = 20;
-    const [commitmentsPage, setCommitmentsPage] = useState(0);
+    const [filters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
 
-    // Date range state
     const [dateRange, setDateRange] = useState({
         startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         viewType: 'current-week',
     });
 
-    // Dialog states
     const [selectedTeam, setSelectedTeam] = useState(null);
     const [teamDetailOpen, setTeamDetailOpen] = useState(false);
     const [teamCommitments, setTeamCommitments] = useState([]);
@@ -106,24 +166,17 @@ const AdminDashboard = () => {
     const [consultantPerformance, setConsultantPerformance] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(false);
 
-    // Admin comment dialog state
     const [selectedCommitment, setSelectedCommitment] = useState(null);
     const [adminCommentDialogOpen, setAdminCommentDialogOpen] = useState(false);
 
-    // User management dialog state
     const [userDialogOpen, setUserDialogOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
 
-    // Consultant management state
     const [consultants, setConsultants] = useState([]);
     const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
-    // Reusing selectedConsultant state from line 85
 
-    // Load commitments by date range (LUC section only — Skillhub data shown
-    // separately under the Skillhub top-level tab)
     const loadCommitments = useCallback(async () => {
         try {
-            setLoading(true);
             const data = await commitmentService.getCommitmentsByDateRange(
                 dateRange.startDate,
                 dateRange.endDate,
@@ -134,12 +187,9 @@ const AdminDashboard = () => {
             setError('');
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to load commitments');
-        } finally {
-            setLoading(false);
         }
     }, [dateRange.startDate, dateRange.endDate]);
 
-    // Load users
     const loadUsers = async () => {
         try {
             const data = await getUsers();
@@ -149,7 +199,6 @@ const AdminDashboard = () => {
         }
     };
 
-    // Load consultants — LUC only for the admin's LUC view
     const loadConsultants = useCallback(async () => {
         try {
             const response = await consultantService.getConsultants({ organization: 'luc' });
@@ -159,35 +208,23 @@ const AdminDashboard = () => {
         }
     }, []);
 
-    // Consultant CRUD handlers
     const handleCreateConsultant = async (consultantData) => {
-        try {
-            await consultantService.createConsultant(consultantData);
-            await loadConsultants();
-            setConsultantDialogOpen(false);
-            setSelectedConsultant(null);
-        } catch (err) {
-            throw err;
-        }
+        await consultantService.createConsultant(consultantData);
+        await loadConsultants();
+        setConsultantDialogOpen(false);
+        setSelectedConsultant(null);
     };
 
     const handleUpdateConsultant = async (consultantData) => {
-        try {
-            await consultantService.updateConsultant(selectedConsultant._id, consultantData);
-            await loadConsultants();
-            setConsultantDialogOpen(false);
-            setSelectedConsultant(null);
-        } catch (err) {
-            throw err;
-        }
+        await consultantService.updateConsultant(selectedConsultant._id, consultantData);
+        await loadConsultants();
+        setConsultantDialogOpen(false);
+        setSelectedConsultant(null);
     };
 
     const handleSaveConsultant = async (consultantData) => {
-        if (selectedConsultant) {
-            await handleUpdateConsultant(consultantData);
-        } else {
-            await handleCreateConsultant(consultantData);
-        }
+        if (selectedConsultant) await handleUpdateConsultant(consultantData);
+        else await handleCreateConsultant(consultantData);
     };
 
     const handleDeactivateConsultant = async (consultantId) => {
@@ -201,63 +238,39 @@ const AdminDashboard = () => {
         }
     };
 
-
     useEffect(() => {
         loadUsers();
         loadConsultants();
     }, [loadConsultants]);
 
     useEffect(() => {
-        if (dateRange.startDate && dateRange.endDate) {
-            loadCommitments();
-        }
+        if (dateRange.startDate && dateRange.endDate) loadCommitments();
     }, [dateRange, loadCommitments]);
 
-    // Filter commitments
     useEffect(() => {
         let filtered = [...commitments];
-
         if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
+            const s = filters.search.toLowerCase();
             filtered = filtered.filter(c =>
-                c.studentName?.toLowerCase().includes(searchLower) ||
-                c.commitmentMade?.toLowerCase().includes(searchLower) ||
-                c.consultantName?.toLowerCase().includes(searchLower) ||
-                c.teamName?.toLowerCase().includes(searchLower)
+                c.studentName?.toLowerCase().includes(s) ||
+                c.commitmentMade?.toLowerCase().includes(s) ||
+                c.consultantName?.toLowerCase().includes(s) ||
+                c.teamName?.toLowerCase().includes(s)
             );
         }
-
-        if (filters.stage) {
-            filtered = filtered.filter(c => c.leadStage === filters.stage);
-        }
-
-        if (filters.status) {
-            filtered = filtered.filter(c => c.status === filters.status);
-        }
-
-        if (filters.teamLead) {
-            filtered = filtered.filter(c => c.teamLead?._id === filters.teamLead || c.teamLead === filters.teamLead);
-        }
-
-        if (filters.consultant) {
-            filtered = filtered.filter(c => {
-                const consultantName = c.consultantName || '';
-                return consultantName.trim() === filters.consultant.trim();
-            });
-        }
-
+        if (filters.stage) filtered = filtered.filter(c => c.leadStage === filters.stage);
+        if (filters.status) filtered = filtered.filter(c => c.status === filters.status);
+        if (filters.teamLead) filtered = filtered.filter(c => c.teamLead?._id === filters.teamLead || c.teamLead === filters.teamLead);
+        if (filters.consultant) filtered = filtered.filter(c => (c.consultantName || '').trim() === filters.consultant.trim());
         setFilteredCommitments(filtered);
     }, [commitments, filters]);
 
-    const handleFilterChange = (newFilters) => {
-        setFilters(newFilters);
-        setCommitmentsPage(0);
-    };
+    const handleDateRangeChange = (newRange) => setDateRange(newRange);
 
-    const handleDateRangeChange = (newRange) => {
-        setDateRange(newRange);
-        setCommitmentsPage(0);
-    };
+    const displayCommitments =
+        filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant || filters.teamLead
+            ? filteredCommitments
+            : commitments;
 
     const handleTeamClick = (team) => {
         setSelectedTeam(team);
@@ -270,7 +283,6 @@ const AdminDashboard = () => {
         setSelectedConsultant(consultant);
         setConsultantDetailOpen(true);
         setPerformanceLoading(true);
-
         try {
             const consultantName = typeof consultant === 'string' ? consultant : consultant.name;
             const data = await commitmentService.getConsultantPerformance(consultantName, {
@@ -321,102 +333,53 @@ const AdminDashboard = () => {
     const handleSaveAdminComment = async (commitmentId, data) => {
         try {
             await commitmentService.updateCommitment(commitmentId, data);
-            // Reload commitments
             await loadCommitments();
         } catch (err) {
             setError('Failed to save admin comment');
         }
     };
 
-    const handleDeleteCommitment = async (commitmentId) => {
-        if (!window.confirm('Are you sure you want to delete this commitment? This action cannot be undone.')) {
-            return;
-        }
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/commitments/${commitmentId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.message || 'Failed to delete commitment');
-            }
-
-            // Reload commitments after successful delete
-            await loadCommitments();
-        } catch (err) {
-            setError(err.message || 'Failed to delete commitment');
-        }
-    };
-
-    // User management handlers
     const handleCreateUser = async (userData) => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/auth/register`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    ...userData,
-                    role: 'team_lead' // Only create team leads
-                })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to create user');
-            }
-
-            await loadUsers();
-            setUserDialogOpen(false);
-            setSelectedUser(null);
-        } catch (err) {
-            throw err;
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify({ ...userData, role: 'team_lead' }),
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.message || 'Failed to create user');
         }
+        await loadUsers();
+        setUserDialogOpen(false);
+        setSelectedUser(null);
     };
 
     const handleUpdateUser = async (userData) => {
-        try {
-            const updateData = {
-                name: userData.name,
-                teamName: userData.teamName,
-                isActive: userData.isActive
-            };
-
-            // Only include password if it was provided
-            if (userData.password) {
-                updateData.password = userData.password;
-            }
-
-            await fetch(`${API_BASE_URL}/users/${selectedUser._id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(updateData)
-            });
-
-            await loadUsers();
-            setUserDialogOpen(false);
-            setSelectedUser(null);
-        } catch (err) {
-            throw err;
-        }
+        const updateData = {
+            name: userData.name,
+            teamName: userData.teamName,
+            isActive: userData.isActive,
+        };
+        if (userData.password) updateData.password = userData.password;
+        await fetch(`${API_BASE_URL}/users/${selectedUser._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify(updateData),
+        });
+        await loadUsers();
+        setUserDialogOpen(false);
+        setSelectedUser(null);
     };
 
     const handleSaveUser = async (userData) => {
-        if (selectedUser) {
-            await handleUpdateUser(userData);
-        } else {
-            await handleCreateUser(userData);
-        }
+        if (selectedUser) await handleUpdateUser(userData);
+        else await handleCreateUser(userData);
     };
 
     const handleDeactivateUser = async (userId) => {
@@ -424,9 +387,7 @@ const AdminDashboard = () => {
             try {
                 await fetch(`${API_BASE_URL}/users/${userId}`, {
                     method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 });
                 await loadUsers();
             } catch (err) {
@@ -440,9 +401,7 @@ const AdminDashboard = () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/users/${userId}/permanent`, {
                     method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 });
                 const data = await response.json();
                 if (!response.ok) {
@@ -461,9 +420,7 @@ const AdminDashboard = () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/consultants/${consultantId}/permanent`, {
                     method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 });
                 const data = await response.json();
                 if (!response.ok) {
@@ -477,22 +434,11 @@ const AdminDashboard = () => {
         }
     };
 
-    // Display commitments
-    const displayCommitments = filteredCommitments.length > 0 || filters.search || filters.stage || filters.status || filters.consultant || filters.teamLead
-        ? filteredCommitments
-        : commitments;
-
-    // Organize teams
+    // Derived: teams
     const teamLeads = users.filter(u => u.role === 'team_lead');
-
     const teams = teamLeads.map(tl => {
-        // Get all commitments for this team (from displayed/filtered commitments)
         const teamComms = displayCommitments.filter(c => c.teamName === tl.teamName);
-
-        // Get unique consultant names from commitments
         const consultantNames = [...new Set(teamComms.map(c => c.consultantName))];
-
-        // Build consultant stats from commitments
         const consultantsStats = consultantNames.map(consultantName => {
             const consultantComms = teamComms.filter(c => c.consultantName === consultantName);
             return {
@@ -502,7 +448,6 @@ const AdminDashboard = () => {
                 meetingsTotal: consultantComms.reduce((sum, c) => sum + (c.meetingsDone || 0), 0),
             };
         });
-
         return {
             teamName: tl.teamName,
             teamLead: tl,
@@ -514,17 +459,21 @@ const AdminDashboard = () => {
         };
     });
 
-    // Organization metrics (from displayed/filtered commitments)
+    // Top team highlight
+    const teamsByRate = teams.map(t => ({
+        ...t,
+        rate: t.totalCommitments > 0 ? Math.round((t.achievedCommitments / t.totalCommitments) * 100) : 0,
+    }));
+    const topTeam = [...teamsByRate].sort((a, b) => b.rate - a.rate)[0];
+    const topTeamName = topTeam && topTeam.rate >= 70 ? topTeam.teamName : null;
+
     const totalCommitments = displayCommitments.length;
     const totalAchieved = displayCommitments.filter(c => c.status === 'achieved' || c.admissionClosed).length;
     const totalMeetings = displayCommitments.reduce((sum, c) => sum + (c.meetingsDone || 0), 0);
     const totalClosed = displayCommitments.filter(c => c.admissionClosed).length;
     const orgAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
-
-    // Calculate total consultants from teams
     const totalConsultants = teams.reduce((sum, team) => sum + team.consultants.length, 0);
 
-    // Build hierarchy from users + consultants (independent of date filters)
     const hierarchyTeams = teamLeads.map(tl => {
         const teamConsultants = consultants
             .filter(c => c.teamLead?._id === tl._id || c.teamName === tl.teamName)
@@ -538,682 +487,514 @@ const AdminDashboard = () => {
         };
     });
 
+    const sidebar = (
+        <AdminSidebar
+            onExport={setExportMenuAnchor}
+            onLogout={handleLogout}
+            onAIAnalysis={() => setTabValue(4)}
+            onAPICosts={() => setTabValue(5)}
+            onDashboard={() => setTabValue(0)}
+            aiAnalysisActive={tabValue === 4}
+            apiCostsActive={tabValue === 5}
+        />
+    );
+
+    const kpiItems = [
+        {
+            label: 'Total Commitments',
+            value: totalCommitments,
+            sub: `${teams.length} teams`,
+            accent: 'accent',
+        },
+        {
+            label: 'Org Achievement',
+            value: orgAchievementRate,
+            format: (v) => `${v}%`,
+            sub: `${totalAchieved} of ${totalCommitments} achieved`,
+            accent: orgAchievementRate >= 70 ? 'success' : orgAchievementRate >= 40 ? 'warm' : 'danger',
+        },
+        {
+            label: 'Total Meetings',
+            value: totalMeetings,
+            sub: `${totalConsultants} consultants`,
+            accent: 'accent',
+        },
+        {
+            label: 'Admissions Closed',
+            value: totalClosed,
+            sub: 'Successful conversions',
+            accent: 'warm',
+        },
+    ];
+
+    const tabs = [
+        { value: 0, label: 'Teams Overview' },
+        { value: 'commitments', label: 'Commitments', icon: <CommitmentsIcon sx={{ fontSize: 18 }} /> },
+        { value: 'meetings', label: 'Meetings', icon: <VideoCallIcon sx={{ fontSize: 18 }} /> },
+        { value: 'hourly', label: 'Hourly Tracker', icon: <AccessTimeIcon sx={{ fontSize: 18 }} /> },
+        { value: 2, label: 'Hierarchy', icon: <HierarchyIcon sx={{ fontSize: 18 }} /> },
+        { value: 3, label: 'User Management', icon: <UsersIcon sx={{ fontSize: 18 }} /> },
+        { value: 4, label: 'AI Analysis', icon: <AutoAwesomeIcon sx={{ fontSize: 18 }} /> },
+        { value: 5, label: 'API Costs', icon: <MoneyIcon sx={{ fontSize: 18 }} /> },
+    ];
+
+    const handleTabChange = (v) => {
+        if (v === 'commitments') {
+            navigate('/commitments');
+            return;
+        }
+        if (v === 'meetings') {
+            navigate('/meetings');
+            return;
+        }
+        if (v === 'hourly') {
+            setAdminOrgScope('luc');
+            navigate('/hourly-tracker');
+            return;
+        }
+        setTabValue(v);
+    };
+
     return (
-        <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#A0D2EB' }}>
-            {/* Sidebar */}
-            <AdminSidebar
-                onExport={setExportMenuAnchor}
-                onLogout={handleLogout}
-                onAIAnalysis={() => setTabValue(4)}
-                onAPICosts={() => setTabValue(5)}
-                onDashboard={() => setTabValue(0)}
-                aiAnalysisActive={tabValue === 4}
-                apiCostsActive={tabValue === 5}
+        <DashboardShell sidebar={sidebar} themeState={themeState}>
+            <Menu
+                anchorEl={exportMenuAnchor}
+                open={Boolean(exportMenuAnchor)}
+                onClose={() => setExportMenuAnchor(null)}
+            >
+                <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
+                <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
+            </Menu>
+
+            <DashboardHero
+                eyebrow="Administrator"
+                title="Organization Dashboard"
+                subtitle={formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
+                right={<OrgSwitcher value={orgSection} onChange={setOrgSection} />}
             />
 
-            {/* Main Content */}
-            <Box
-                component="main"
-                sx={{
-                    flexGrow: 1,
-                    p: 3,
-                    width: `calc(100% - ${DRAWER_WIDTH}px)`,
-                    backgroundColor: '#A0D2EB', // Light Blue
-                    minHeight: '100vh',
-                }}
-            >
-                {/* Export Menu */}
-                <Menu
-                    anchorEl={exportMenuAnchor}
-                    open={Boolean(exportMenuAnchor)}
-                    onClose={() => setExportMenuAnchor(null)}
-                >
-                    <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
-                    <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
-                </Menu>
-
-                <Container maxWidth="xl" sx={{ py: 2 }}>
-                    {/* Header */}
-                    <Box sx={{ mb: 3 }}>
-                        <Typography variant="h4" gutterBottom sx={{ color: '#2C3E50', fontWeight: 700 }}>
-                            Organization Dashboard
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#34495E', opacity: 0.9 }}>
-                            {formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
-                        </Typography>
-                    </Box>
-
-                    {/* Top-level organization section switcher */}
-                    <Box sx={{ mb: 3 }}>
-                        <Tabs
-                            value={orgSection}
-                            onChange={(_, v) => setOrgSection(v)}
-                            sx={{
-                                bgcolor: 'background.paper',
-                                borderRadius: 2,
-                                boxShadow: 1,
-                                '& .MuiTab-root': { fontWeight: 600, px: 4 },
-                            }}
-                        >
-                            <Tab label="LUC" value="luc" />
-                            <Tab label="Skillhub" value="skillhub" />
-                        </Tabs>
-                    </Box>
-
-                    {orgSection === 'skillhub' ? (
-                        <AdminSkillhubView />
-                    ) : (
-                    <>
-                    {/* Date Range Selector - hidden on AI Analysis and API Costs tabs */}
+            {orgSection === 'skillhub' ? (
+                <motion.div variants={riseV}>
+                    <AdminSkillhubView />
+                </motion.div>
+            ) : (
+                <>
                     {tabValue <= 3 && (
-                        <Card elevation={2} sx={{ mb: 3 }}>
-                            <CardContent>
-                                <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-                            </CardContent>
-                        </Card>
+                        <SectionCard eyebrow="Date range" padding={18}>
+                            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                        </SectionCard>
                     )}
 
                     {error && (
-                        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
-                            {error}
-                        </Alert>
+                        <motion.div variants={riseV} style={{ marginBottom: 24 }}>
+                            <Alert severity="error" onClose={() => setError('')}>
+                                {error}
+                            </Alert>
+                        </motion.div>
                     )}
 
-                    {/* Organization Metrics - hidden on AI Analysis and API Costs tabs */}
-                    {tabValue <= 3 && (
-                    <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
-                                    Total Commitments
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalCommitments}</Typography>
-                                <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
-                                    {teams.length} Teams
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
-                                    Organization Achievement
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                                    {orgAchievementRate}%
-                                </Typography>
-                                <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
-                                    {totalAchieved} of {totalCommitments} achieved
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
-                                    Total Meetings
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>{totalMeetings}</Typography>
-                                <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
-                                    {totalConsultants} Consultants
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            elevation={0}
-                            sx={{
-                                flex: '1 1 220px',
-                                minWidth: 220,
-                                background: '#E5EAF5',
-                                color: '#2C3E50',
-                                borderRadius: 3,
-                                boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                            }}
-                        >
-                            <CardContent sx={{ p: 3 }}>
-                                <Typography sx={{ opacity: 0.9, mb: 1, fontWeight: 500 }}>
-                                    Admissions Closed
-                                </Typography>
-                                <Typography variant="h2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                                    {totalClosed}
-                                </Typography>
-                                <Typography sx={{ opacity: 0.8, fontSize: '0.875rem' }}>
-                                    Successful conversions
-                                </Typography>
-                            </CardContent>
-                        </Card>
-                    </Box>
-                    )}
+                    {tabValue <= 3 && <KPIStrip items={kpiItems} />}
 
-                    {/* Analytics Charts and Heatmap - hidden on AI Analysis and API Costs tabs */}
                     {tabValue <= 3 && commitments.length > 0 && (
-                        <Box sx={{ mb: 4 }}>
-                            <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-                                Organization Analytics
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                {/* Charts Row */}
-                                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                    <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <LeadStageChart commitments={displayCommitments} />
-                                    </Box>
-                                    <Box sx={{ flex: '1 1 400px', minWidth: 300 }}>
-                                        <Card elevation={0} sx={{ height: '100%', backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                                            <CardContent sx={{ p: 3 }}>
-                                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
-                                                    Team Performance Overview
+                        <SectionCard title="Organization Analytics" eyebrow="This period">
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                    gap: 2.5,
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <LeadStageChart commitments={displayCommitments} />
+                                </Box>
+                                <Box
+                                    sx={{
+                                        minWidth: 0,
+                                        backgroundColor: 'var(--d-surface-muted)',
+                                        border: '1px solid var(--d-border-soft)',
+                                        borderRadius: '12px',
+                                        p: 2,
+                                    }}
+                                >
+                                    <Typography
+                                        sx={{
+                                            fontSize: 13,
+                                            color: 'var(--d-text-muted)',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.06em',
+                                            fontWeight: 600,
+                                            mb: 1.5,
+                                        }}
+                                    >
+                                        Team performance
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+                                        {teamsByRate.map(team => (
+                                            <Box key={team.teamName}>
+                                                <ProgressBar
+                                                    label={team.teamName}
+                                                    value={team.rate}
+                                                />
+                                                <Typography
+                                                    sx={{
+                                                        mt: 0.5,
+                                                        fontSize: 11.5,
+                                                        color: 'var(--d-text-muted)',
+                                                    }}
+                                                >
+                                                    {team.totalCommitments} commitments · {team.consultants.length} consultants
                                                 </Typography>
-                                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                                    {teams.map(team => {
-                                                        const achievementRate = team.totalCommitments > 0
-                                                            ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
-                                                            : 0;
-                                                        return (
-                                                            <Box key={team.teamName}>
-                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                        {team.teamName}
-                                                                    </Typography>
-                                                                    <Typography
-                                                                        variant="body2"
-                                                                        sx={{ color: getAchievementColor(achievementRate), fontWeight: 700 }}
-                                                                    >
-                                                                        {achievementRate}%
-                                                                    </Typography>
-                                                                </Box>
-                                                                <Box
-                                                                    sx={{
-                                                                        height: 10,
-                                                                        bgcolor: 'grey.100',
-                                                                        borderRadius: 5,
-                                                                        overflow: 'hidden',
-                                                                    }}
-                                                                >
-                                                                    <Box
-                                                                        sx={{
-                                                                            height: '100%',
-                                                                            width: `${achievementRate}%`,
-                                                                            background: achievementRate >= 70
-                                                                                ? 'linear-gradient(90deg, #11998e 0%, #38ef7d 100%)'
-                                                                                : achievementRate >= 40
-                                                                                    ? 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)'
-                                                                                    : 'linear-gradient(90deg, #eb3349 0%, #f45c43 100%)',
-                                                                            borderRadius: 5,
-                                                                            transition: 'width 0.5s ease',
-                                                                        }}
-                                                                    />
-                                                                </Box>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {team.totalCommitments} commitments • {team.consultants.length} consultants
-                                                                </Typography>
-                                                            </Box>
-                                                        );
-                                                    })}
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
+                                            </Box>
+                                        ))}
+                                        {teamsByRate.length === 0 && (
+                                            <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted)' }}>
+                                                No team activity yet in this period.
+                                            </Typography>
+                                        )}
                                     </Box>
                                 </Box>
                             </Box>
-                        </Box>
+                        </SectionCard>
                     )}
 
-                    {/* Tabs */}
-                    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                        <Tabs
-                            value={tabValue}
-                            variant="scrollable"
-                            scrollButtons="auto"
-                            allowScrollButtonsMobile
-                            onChange={(e, newValue) => {
-                                // "meetings" and "hourly" are shortcuts that
-                                // route to the dedicated pages rather than
-                                // rendering inline — don't mutate tabValue.
-                                if (newValue === 'commitments') {
-                                    navigate('/commitments');
-                                    return;
-                                }
-                                if (newValue === 'meetings') {
-                                    navigate('/meetings');
-                                    return;
-                                }
-                                if (newValue === 'hourly') {
-                                    // Force LUC on entry — admin can switch
-                                    // to Skillhub from the in-page tab.
-                                    setAdminOrgScope('luc');
-                                    navigate('/hourly-tracker');
-                                    return;
-                                }
-                                setTabValue(newValue);
-                            }}
-                        >
-                            <Tab value={0} label="Teams Overview" />
-                            <Tab
-                                value="commitments"
-                                label="Commitments"
-                                icon={<CommitmentsIcon sx={{ fontSize: 18 }} />}
-                                iconPosition="start"
-                            />
-                            <Tab
-                                value="meetings"
-                                label="Meetings"
-                                icon={<VideoCallIcon sx={{ fontSize: 18 }} />}
-                                iconPosition="start"
-                            />
-                            <Tab
-                                value="hourly"
-                                label="Hourly Tracker"
-                                icon={<AccessTimeIcon sx={{ fontSize: 18 }} />}
-                                iconPosition="start"
-                            />
-                            <Tab value={2} label="Organization Hierarchy" />
-                            <Tab value={3} label="User Management" />
-                            <Tab value={4} label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
-                            <Tab value={5} label="API Costs" />
-                        </Tabs>
-                    </Box>
+                    <DashboardTabs value={tabValue} onChange={handleTabChange} tabs={tabs} />
 
-                    {/* Tab Content */}
-                    {tabValue === 0 && (
-                        // Teams Overview Tab
-                        <Box>
-                            <Typography variant="h6" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-                                Teams - Click to View Details
-                            </Typography>
-                            <Grid container spacing={3}>
-                                {teams.map(team => {
-                                    const achievementRate = team.totalCommitments > 0
-                                        ? Math.round((team.achievedCommitments / team.totalCommitments) * 100)
-                                        : 0;
-                                    return (
-                                        <Grid item xs={12} sm={6} lg={4} key={team.teamName}>
-                                            <Card
-                                                elevation={0}
-                                                sx={{
-                                                    height: '100%',
-                                                    backgroundColor: '#E5EAF5',
-                                                    borderRadius: 3,
-                                                    boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)',
-                                                    transition: 'all 0.3s ease',
-                                                    '&:hover': {
-                                                        transform: 'translateY(-8px)',
-                                                        boxShadow: '0 8px 24px rgba(160, 210, 235, 0.4)',
-                                                        cursor: 'pointer',
-                                                    },
-                                                }}
-                                            >
-                                                <CardActionArea onClick={() => handleTeamClick(team)}>
-                                                    <CardContent>
-                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                                <Avatar sx={{ bgcolor: 'primary.main', mr: 1.5 }}>
-                                                                    <GroupsIcon />
-                                                                </Avatar>
-                                                                <Box>
-                                                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                                                        {team.teamName}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        {team.teamLead.name}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </Box>
-                                                            <TrendingUpIcon color="primary" />
-                                                        </Box>
-                                                        <Grid container spacing={2}>
-                                                            <Grid item xs={6}>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Commitments
-                                                                </Typography>
-                                                                <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                                                                    {team.totalCommitments}
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={6}>
-                                                                <Typography variant="caption" color="text.secondary" display="block">
-                                                                    Achievement
-                                                                </Typography>
-                                                                <Typography
-                                                                    variant="h4"
-                                                                    sx={{ color: getAchievementColor(achievementRate), fontWeight: 600 }}
-                                                                >
-                                                                    {achievementRate}%
-                                                                </Typography>
-                                                            </Grid>
-                                                            <Grid item xs={12}>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {team.consultants.length} Team Members
-                                                                </Typography>
-                                                            </Grid>
-                                                        </Grid>
-                                                        <Box sx={{ mt: 2, textAlign: 'center' }}>
-                                                            <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
-                                                                Click to view team details →
-                                                            </Typography>
-                                                        </Box>
-                                                    </CardContent>
-                                                </CardActionArea>
-                                            </Card>
-                                        </Grid>
-                                    );
-                                })}
-                            </Grid>
-                        </Box>
-                    )}
+                    <AnimatedTabPanel panelKey={tabValue}>
+                        {tabValue === 0 && (
+                            <SectionCard title="Teams" eyebrow="Click a team card to drill in">
+                                <PerformerGrid>
+                                    {teamsByRate.map(team => (
+                                        <PerformerCard
+                                            key={team.teamName}
+                                            name={team.teamName}
+                                            subtitle={team.teamLead.name}
+                                            avatarLabel={<GroupsIcon fontSize="small" />}
+                                            metricLabel="Achievement"
+                                            metricValue={team.rate}
+                                            stats={[
+                                                { label: 'Commitments', value: team.totalCommitments },
+                                                { label: 'Members', value: team.consultants.length },
+                                                { label: 'Closed', value: team.closedAdmissions },
+                                            ]}
+                                            onClick={() => handleTeamClick(team)}
+                                            highlight={team.teamName === topTeamName}
+                                        />
+                                    ))}
+                                    {teamsByRate.length === 0 && (
+                                        <Typography sx={{ color: 'var(--d-text-muted)', fontSize: 14 }}>
+                                            No teams match this date range / filter.
+                                        </Typography>
+                                    )}
+                                </PerformerGrid>
+                            </SectionCard>
+                        )}
 
+                        {tabValue === 2 && (
+                            <SectionCard title="Organization Hierarchy">
+                                <TeamHierarchyView
+                                    teams={hierarchyTeams}
+                                    adminUser={user}
+                                    onTeamClick={handleTeamClick}
+                                    onConsultantClick={handleConsultantClick}
+                                />
+                            </SectionCard>
+                        )}
 
-                    {tabValue === 2 && (
-                        // Organization Hierarchy Tab
-                        <TeamHierarchyView
-                            teams={hierarchyTeams}
-                            adminUser={user}
-                            onTeamClick={handleTeamClick}
-                            onConsultantClick={handleConsultantClick}
-                        />
-                    )}
-
-                    {tabValue === 3 && (
-                        // User Management Tab
-                        <Card>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                                    <Typography variant="h5">User Management</Typography>
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        onClick={() => {
-                                            setSelectedUser(null);
-                                            setUserDialogOpen(true);
-                                        }}
-                                    >
-                                        Add Team Lead
-                                    </Button>
-                                </Box>
-
-                                <TableContainer>
-                                    <Table>
-                                        <TableHead>
-                                            <TableRow>
-                                                <TableCell>Name</TableCell>
-                                                <TableCell>Email</TableCell>
-                                                <TableCell>Team Name</TableCell>
-                                                <TableCell>Role</TableCell>
-                                                <TableCell>Status</TableCell>
-                                                <TableCell align="center">Actions</TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {users.filter(u => u.role !== 'consultant').map((user) => (
-                                                <TableRow key={user._id} hover>
-                                                    <TableCell>{user.name}</TableCell>
-                                                    <TableCell>{user.email}</TableCell>
-                                                    <TableCell>{user.teamName || '--'}</TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={user.role === 'admin' ? 'Admin' : 'Team Lead'}
-                                                            size="small"
-                                                            color={user.role === 'admin' ? 'secondary' : 'primary'}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={user.isActive !== false ? 'Active' : 'Inactive'}
-                                                            size="small"
-                                                            color={user.isActive !== false ? 'success' : 'default'}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell align="center">
-                                                        <IconButton
-                                                            size="small"
-                                                            color="primary"
-                                                            onClick={() => {
-                                                                setSelectedUser(user);
-                                                                setUserDialogOpen(true);
-                                                            }}
-                                                            title="Edit user"
+                        {tabValue === 3 && (
+                            <>
+                                <SectionCard
+                                    title="User Management"
+                                    right={
+                                        <Button
+                                            variant="contained"
+                                            size="small"
+                                            onClick={() => {
+                                                setSelectedUser(null);
+                                                setUserDialogOpen(true);
+                                            }}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontWeight: 600,
+                                                background: 'var(--d-accent)',
+                                                '&:hover': { background: 'var(--d-accent-text)' },
+                                                boxShadow: 'none',
+                                            }}
+                                        >
+                                            Add Team Lead
+                                        </Button>
+                                    }
+                                >
+                                    <TableContainer>
+                                        <Table sx={{ '& .MuiTableCell-root': { borderColor: 'var(--d-border-soft)', color: 'var(--d-text-2)' } }}>
+                                            <TableHead>
+                                                <TableRow>
+                                                    {['Name', 'Email', 'Team', 'Role', 'Status', 'Actions'].map((h) => (
+                                                        <TableCell
+                                                            key={h}
+                                                            align={h === 'Actions' ? 'center' : 'left'}
+                                                            sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                                                         >
-                                                            <EditIcon />
-                                                        </IconButton>
-                                                        {user.role !== 'admin' && (
+                                                            {h}
+                                                        </TableCell>
+                                                    ))}
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {users.filter(u => u.role !== 'consultant').map((u) => (
+                                                    <TableRow
+                                                        key={u._id}
+                                                        sx={{
+                                                            transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                                            '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
+                                                        }}
+                                                    >
+                                                        <TableCell>{u.name}</TableCell>
+                                                        <TableCell>{u.email}</TableCell>
+                                                        <TableCell>{u.teamName || '--'}</TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={u.role === 'admin' ? 'Admin' : 'Team Lead'}
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 600,
+                                                                    fontSize: 11,
+                                                                    height: 22,
+                                                                    backgroundColor: u.role === 'admin' ? 'var(--d-warm-bg)' : 'var(--d-accent-bg)',
+                                                                    color: u.role === 'admin' ? 'var(--d-warm-text)' : 'var(--d-accent-text)',
+                                                                }}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={u.isActive !== false ? 'Active' : 'Inactive'}
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 600,
+                                                                    fontSize: 11,
+                                                                    height: 22,
+                                                                    backgroundColor: u.isActive !== false ? 'var(--d-success-bg)' : 'var(--d-surface-muted)',
+                                                                    color: u.isActive !== false ? 'var(--d-success-text)' : 'var(--d-text-muted)',
+                                                                }}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="center">
                                                             <IconButton
                                                                 size="small"
-                                                                color="warning"
-                                                                onClick={() => handleDeactivateUser(user._id)}
-                                                                title="Deactivate user"
-                                                                disabled={user.isActive === false}
+                                                                sx={{ color: 'var(--d-accent)' }}
+                                                                onClick={() => {
+                                                                    setSelectedUser(u);
+                                                                    setUserDialogOpen(true);
+                                                                }}
                                                             >
-                                                                <CheckCircleIcon />
+                                                                <EditIcon fontSize="small" />
                                                             </IconButton>
-                                                        )}
-                                                        {user.role !== 'admin' && (
+                                                            {u.role !== 'admin' && (
+                                                                <>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        sx={{ color: 'var(--d-warning)' }}
+                                                                        onClick={() => handleDeactivateUser(u._id)}
+                                                                        disabled={u.isActive === false}
+                                                                    >
+                                                                        <CheckCircleIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        sx={{ color: 'var(--d-danger)' }}
+                                                                        onClick={() => handlePermanentDeleteUser(u._id)}
+                                                                    >
+                                                                        <DeleteIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                </>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </SectionCard>
+
+                                <SectionCard
+                                    title="Consultant Management"
+                                    right={
+                                        <Button
+                                            variant="contained"
+                                            size="small"
+                                            onClick={() => {
+                                                setSelectedConsultant(null);
+                                                setConsultantDialogOpen(true);
+                                            }}
+                                            sx={{
+                                                textTransform: 'none',
+                                                fontWeight: 600,
+                                                background: 'var(--d-warm)',
+                                                '&:hover': { background: 'var(--d-warm-text)' },
+                                                boxShadow: 'none',
+                                            }}
+                                        >
+                                            Add Consultant
+                                        </Button>
+                                    }
+                                >
+                                    <TableContainer>
+                                        <Table sx={{ '& .MuiTableCell-root': { borderColor: 'var(--d-border-soft)', color: 'var(--d-text-2)' } }}>
+                                            <TableHead>
+                                                <TableRow>
+                                                    {['Name', 'Email', 'Phone', 'Team', 'Team Lead', 'Status', 'Actions'].map((h) => (
+                                                        <TableCell
+                                                            key={h}
+                                                            align={h === 'Actions' ? 'center' : 'left'}
+                                                            sx={{ color: 'var(--d-text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                                                        >
+                                                            {h}
+                                                        </TableCell>
+                                                    ))}
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {consultants.map((c) => (
+                                                    <TableRow
+                                                        key={c._id}
+                                                        sx={{
+                                                            transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                                            '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
+                                                        }}
+                                                    >
+                                                        <TableCell>{c.name}</TableCell>
+                                                        <TableCell>{c.email || '--'}</TableCell>
+                                                        <TableCell>{c.phone || '--'}</TableCell>
+                                                        <TableCell>{c.teamName}</TableCell>
+                                                        <TableCell>{c.teamLead?.name || '--'}</TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                label={c.isActive !== false ? 'Active' : 'Inactive'}
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 600,
+                                                                    fontSize: 11,
+                                                                    height: 22,
+                                                                    backgroundColor: c.isActive !== false ? 'var(--d-success-bg)' : 'var(--d-surface-muted)',
+                                                                    color: c.isActive !== false ? 'var(--d-success-text)' : 'var(--d-text-muted)',
+                                                                }}
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell align="center">
                                                             <IconButton
                                                                 size="small"
-                                                                color="error"
-                                                                onClick={() => handlePermanentDeleteUser(user._id)}
-                                                                title="Permanently delete user"
+                                                                sx={{ color: 'var(--d-accent)' }}
+                                                                onClick={() => {
+                                                                    setSelectedConsultant(c);
+                                                                    setConsultantDialogOpen(true);
+                                                                }}
                                                             >
-                                                                <DeleteIcon />
+                                                                <EditIcon fontSize="small" />
                                                             </IconButton>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
+                                                            <IconButton
+                                                                size="small"
+                                                                sx={{ color: 'var(--d-warning)' }}
+                                                                onClick={() => handleDeactivateConsultant(c._id)}
+                                                                disabled={c.isActive === false}
+                                                            >
+                                                                <CheckCircleIcon fontSize="small" />
+                                                            </IconButton>
+                                                            <IconButton
+                                                                size="small"
+                                                                sx={{ color: 'var(--d-danger)' }}
+                                                                onClick={() => handlePermanentDeleteConsultant(c._id)}
+                                                            >
+                                                                <DeleteIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                </SectionCard>
+                            </>
+                        )}
 
-                                {/* Divider */}
-                                <Box sx={{ my: 4, borderBottom: 1, borderColor: 'divider' }} />
+                        {tabValue === 4 && <AISummaryCard />}
+                        {tabValue === 5 && <APICostPanel />}
+                    </AnimatedTabPanel>
+                </>
+            )}
 
-                                {/* Consultant Management Section */}
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                                    <Typography variant="h5">Consultant Management</Typography>
-                                    <Button
-                                        variant="contained"
-                                        color="secondary"
-                                        onClick={() => {
-                                            setSelectedConsultant(null);
-                                            setConsultantDialogOpen(true);
-                                        }}
-                                    >
-                                        Add Consultant
-                                    </Button>
-                                </Box>
+            {/* Dialogs */}
+            <TeamDetailDialog
+                open={teamDetailOpen}
+                onClose={() => {
+                    setTeamDetailOpen(false);
+                    setSelectedTeam(null);
+                    setTeamCommitments([]);
+                }}
+                team={selectedTeam}
+                commitments={teamCommitments}
+                onConsultantClick={handleConsultantClick}
+                onEditCommitment={handleOpenAdminComment}
+                onOpenAdminComment={handleOpenAdminComment}
+            />
 
-                                <TableContainer>
-                                    <Table>
-                                        <TableHead>
-                                            <TableRow>
-                                                <TableCell>Name</TableCell>
-                                                <TableCell>Email</TableCell>
-                                                <TableCell>Phone</TableCell>
-                                                <TableCell>Team Name</TableCell>
-                                                <TableCell>Team Lead</TableCell>
-                                                <TableCell>Status</TableCell>
-                                                <TableCell align="center">Actions</TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {consultants.map((consultant) => (
-                                                <TableRow key={consultant._id} hover>
-                                                    <TableCell>{consultant.name}</TableCell>
-                                                    <TableCell>{consultant.email || '--'}</TableCell>
-                                                    <TableCell>{consultant.phone || '--'}</TableCell>
-                                                    <TableCell>{consultant.teamName}</TableCell>
-                                                    <TableCell>{consultant.teamLead?.name || '--'}</TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={consultant.isActive !== false ? 'Active' : 'Inactive'}
-                                                            size="small"
-                                                            color={consultant.isActive !== false ? 'success' : 'default'}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell align="center">
-                                                        <IconButton
-                                                            size="small"
-                                                            color="primary"
-                                                            onClick={() => {
-                                                                setSelectedConsultant(consultant);
-                                                                setConsultantDialogOpen(true);
-                                                            }}
-                                                            title="Edit consultant"
-                                                        >
-                                                            <EditIcon />
-                                                        </IconButton>
-                                                        <IconButton
-                                                            size="small"
-                                                            color="warning"
-                                                            onClick={() => handleDeactivateConsultant(consultant._id)}
-                                                            title="Deactivate consultant"
-                                                            disabled={consultant.isActive === false}
-                                                        >
-                                                            <CheckCircleIcon />
-                                                        </IconButton>
-                                                        <IconButton
-                                                            size="small"
-                                                            color="error"
-                                                            onClick={() => handlePermanentDeleteConsultant(consultant._id)}
-                                                            title="Permanently delete consultant"
-                                                        >
-                                                            <DeleteIcon />
-                                                        </IconButton>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </CardContent>
-                        </Card>
-                    )}
+            <ConsultantDetailDialog
+                open={consultantDetailOpen}
+                onClose={() => {
+                    setConsultantDetailOpen(false);
+                    setSelectedConsultant(null);
+                    setConsultantPerformance(null);
+                }}
+                consultant={selectedConsultant}
+                performanceData={consultantPerformance}
+                loading={performanceLoading}
+                onEditCommitment={handleOpenAdminComment}
+                onOpenTLComment={(commitment) => handleOpenAdminComment(commitment)}
+                userRole="admin"
+            />
 
-                    {/* AI Analysis Tab */}
-                    {tabValue === 4 && (
-                        <AISummaryCard />
-                    )}
+            <AdminCommitmentDialog
+                open={adminCommentDialogOpen}
+                onClose={() => {
+                    setAdminCommentDialogOpen(false);
+                    setSelectedCommitment(null);
+                }}
+                commitment={selectedCommitment}
+                onSave={handleSaveAdminComment}
+            />
 
-                    {/* API Costs Tab */}
-                    {tabValue === 5 && (
-                        <APICostPanel />
-                    )}
-                    </>
-                    )}
-                </Container>
+            <AdminAddCommitmentDialog
+                open={addCommitmentOpen}
+                onClose={() => setAddCommitmentOpen(false)}
+                onSaved={() => {
+                    setAddCommitmentOpen(false);
+                    loadCommitments();
+                }}
+                users={users}
+                consultants={consultants}
+            />
 
-                {/* Team Detail Dialog */}
-                <TeamDetailDialog
-                    open={teamDetailOpen}
-                    onClose={() => {
-                        setTeamDetailOpen(false);
-                        setSelectedTeam(null);
-                        setTeamCommitments([]);
-                    }}
-                    team={selectedTeam}
-                    commitments={teamCommitments}
-                    onConsultantClick={handleConsultantClick}
-                    onEditCommitment={handleOpenAdminComment}
-                    onOpenAdminComment={handleOpenAdminComment}
-                />
+            <UserManagementDialog
+                open={userDialogOpen}
+                onClose={() => {
+                    setUserDialogOpen(false);
+                    setSelectedUser(null);
+                }}
+                onSave={handleSaveUser}
+                user={selectedUser}
+            />
 
-                {/* Consultant Detail Dialog */}
-                <ConsultantDetailDialog
-                    open={consultantDetailOpen}
-                    onClose={() => {
-                        setConsultantDetailOpen(false);
-                        setSelectedConsultant(null);
-                        setConsultantPerformance(null);
-                    }}
-                    consultant={selectedConsultant}
-                    performanceData={consultantPerformance}
-                    loading={performanceLoading}
-                    onEditCommitment={handleOpenAdminComment}
-                    onOpenTLComment={(commitment) => {
-                        // Admin can view TL comments but opens admin comment dialog
-                        handleOpenAdminComment(commitment);
-                    }}
-                    userRole="admin"
-                />
-
-                {/* Admin Comment Dialog */}
-                <AdminCommitmentDialog
-                    open={adminCommentDialogOpen}
-                    onClose={() => {
-                        setAdminCommentDialogOpen(false);
-                        setSelectedCommitment(null);
-                    }}
-                    commitment={selectedCommitment}
-                    onSave={handleSaveAdminComment}
-                />
-
-                {/* Add Commitment Dialog — admin can create a commitment for
-                    any org / team lead / consultant. Users come from the
-                    parent's already-loaded list. */}
-                <AdminAddCommitmentDialog
-                    open={addCommitmentOpen}
-                    onClose={() => setAddCommitmentOpen(false)}
-                    onSaved={() => {
-                        setAddCommitmentOpen(false);
-                        loadCommitments();
-                    }}
-                    users={users}
-                    consultants={consultants}
-                />
-
-                {/* User Management Dialog */}
-                <UserManagementDialog
-                    open={userDialogOpen}
-                    onClose={() => {
-                        setUserDialogOpen(false);
-                        setSelectedUser(null);
-                    }}
-                    onSave={handleSaveUser}
-                    user={selectedUser}
-                />
-
-                {/* Consultant Management Dialog */}
-                <ConsultantManagementDialog
-                    open={consultantDialogOpen}
-                    onClose={() => {
-                        setConsultantDialogOpen(false);
-                        setSelectedConsultant(null);
-                    }}
-                    onSave={handleSaveConsultant}
-                    consultant={selectedConsultant}
-                    teamLeads={users.filter(u => u.role === 'team_lead')}
-                    currentUserRole={user?.role}
-                    currentUserTeamName={user?.teamName}
-                />
-
-            </Box>
-        </Box >
+            <ConsultantManagementDialog
+                open={consultantDialogOpen}
+                onClose={() => {
+                    setConsultantDialogOpen(false);
+                    setSelectedConsultant(null);
+                }}
+                onSave={handleSaveConsultant}
+                consultant={selectedConsultant}
+                teamLeads={users.filter(u => u.role === 'team_lead')}
+                currentUserRole={user?.role}
+                currentUserTeamName={user?.teamName}
+            />
+        </DashboardShell>
     );
 };
 

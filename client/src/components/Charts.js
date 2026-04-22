@@ -17,8 +17,22 @@ export const LeadStageChart = ({ commitments }) => {
         color: getLeadStageColor(name),
     }));
 
-    // Grayscale color palette
-    const grayscaleColors = ['#2C3E50', '#546E7A', '#78909C', '#B0BEC5'];
+    // Read the active dashboardTheme tokens so chart colors follow light/dark.
+    // Fallback to literal hex when tokens aren't in scope (legacy callers).
+    const readToken = (name, fallback) => {
+        if (typeof window === 'undefined') return fallback;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        return v || fallback;
+    };
+    const accent = readToken('--d-accent', '#2383E2');
+    const accentText = readToken('--d-accent-text', '#1F6FBF');
+    const warm = readToken('--d-warm', '#D97706');
+    const success = readToken('--d-success', '#16A34A');
+    const text2 = readToken('--d-text-2', '#2A2927');
+    const textMuted = readToken('--d-text-muted', '#8A887E');
+    const surface = readToken('--d-surface', '#FFFFFF');
+    const border = readToken('--d-border', '#E6E3DC');
+    const palette = [accent, warm, success, accentText, textMuted];
 
     const RADIAN = Math.PI / 180;
     const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
@@ -27,59 +41,78 @@ export const LeadStageChart = ({ commitments }) => {
         const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
         return (
-            <text x={x} y={y} fill="#2C3E50" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight={500}>
+            <text x={x} y={y} fill={text2} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight={500}>
                 {`${name} (${(percent * 100).toFixed(0)}%)`}
             </text>
         );
     };
 
     return (
-        <Card elevation={0} sx={{ height: '100%', backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-            <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2, color: '#2C3E50' }}>
-                    Lead Stage Distribution
-                </Typography>
-                <ResponsiveContainer width="100%" height={320}>
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={true}
-                            label={renderCustomizedLabel}
-                            outerRadius={100}
-                            innerRadius={50}
-                            fill="#8884d8"
-                            dataKey="value"
-                            paddingAngle={2}
-                        >
-                            {data.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={grayscaleColors[index % grayscaleColors.length]} stroke="white" strokeWidth={2} />
-                            ))}
-                        </Pie>
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                borderRadius: 8,
-                                border: 'none',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                            }}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
-                {/* Legend */}
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2, justifyContent: 'center' }}>
-                    {data.map((entry, index) => (
-                        <Box key={entry.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: grayscaleColors[index % grayscaleColors.length] }} />
-                            <Typography variant="caption" color="text.secondary">
-                                {entry.name}: {entry.value}
-                            </Typography>
-                        </Box>
-                    ))}
-                </Box>
-            </CardContent>
-        </Card>
+        <Box
+            sx={{
+                height: '100%',
+                backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                border: '1px solid var(--d-border-soft, #ECE9E2)',
+                borderRadius: '12px',
+                p: 2.5,
+            }}
+        >
+            <Typography
+                sx={{
+                    fontSize: 13,
+                    color: 'var(--d-text-muted, #8A887E)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    fontWeight: 600,
+                    mb: 1.5,
+                }}
+            >
+                Lead Stage Distribution
+            </Typography>
+            <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
+                    <Pie
+                        data={data}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={true}
+                        label={renderCustomizedLabel}
+                        outerRadius={100}
+                        innerRadius={55}
+                        dataKey="value"
+                        paddingAngle={2}
+                    >
+                        {data.map((entry, index) => (
+                            <Cell
+                                key={`cell-${index}`}
+                                fill={palette[index % palette.length]}
+                                stroke={surface}
+                                strokeWidth={2}
+                            />
+                        ))}
+                    </Pie>
+                    <Tooltip
+                        contentStyle={{
+                            backgroundColor: surface,
+                            borderRadius: 8,
+                            border: `1px solid ${border}`,
+                            color: text2,
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                        }}
+                    />
+                </PieChart>
+            </ResponsiveContainer>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, mt: 1.5, justifyContent: 'center' }}>
+                {data.map((entry, index) => (
+                    <Box key={entry.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: palette[index % palette.length] }} />
+                        <Typography sx={{ fontSize: 11.5, color: 'var(--d-text-3, #57564E)', fontVariantNumeric: 'tabular-nums' }}>
+                            {entry.name}: {entry.value}
+                        </Typography>
+                    </Box>
+                ))}
+            </Box>
+        </Box>
     );
 };
 

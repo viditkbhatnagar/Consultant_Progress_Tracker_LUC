@@ -1,13 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box,
-    Paper,
-    Tabs,
-    Tab,
     Typography,
-    Grid,
-    Card,
-    CardContent,
     CircularProgress,
     Alert,
     Table,
@@ -29,6 +23,9 @@ import consultantService from '../../services/consultantService';
 import commitmentService from '../../services/commitmentService';
 import SkillhubStudentTable from './SkillhubStudentTable';
 import DateRangeSelector from '../DateRangeSelector';
+import SectionCard from '../dashboard/SectionCard';
+import KPIStrip from '../dashboard/KPIStrip';
+import DashboardTabs, { AnimatedTabPanel } from '../dashboard/DashboardTabs';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 const BRANCHES = [
@@ -36,17 +33,72 @@ const BRANCHES = [
     { key: ORGANIZATIONS.SKILLHUB_INSTITUTE, label: 'Institute' },
 ];
 
-const KpiMini = ({ label, value, color }) => (
-    <Card sx={{ height: '100%' }}>
-        <CardContent sx={{ py: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-                {label}
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color }}>
-                {value}
-            </Typography>
-        </CardContent>
-    </Card>
+// Pill switcher identical in feel to the LUC/Skillhub switch in the hero.
+const BranchSwitcher = ({ value, onChange, branchTotals }) => (
+    <Box
+        role="tablist"
+        sx={{
+            display: 'inline-flex',
+            backgroundColor: 'var(--d-surface-muted)',
+            border: '1px solid var(--d-border)',
+            borderRadius: '10px',
+            padding: '3px',
+            gap: '2px',
+        }}
+    >
+        {BRANCHES.map((b, idx) => {
+            const active = value === idx;
+            const t = branchTotals[b.key];
+            return (
+                <Box
+                    key={b.key}
+                    component="button"
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => onChange(idx)}
+                    sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        border: 0,
+                        background: active ? 'var(--d-surface)' : 'transparent',
+                        color: active ? 'var(--d-text)' : 'var(--d-text-muted)',
+                        fontWeight: 600,
+                        fontSize: 13,
+                        px: 2,
+                        py: '6px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        boxShadow: active ? 'var(--d-shadow-card-sm)' : 'none',
+                        transition:
+                            'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter)',
+                        '&:focus-visible': {
+                            outline: '2px solid var(--d-accent)',
+                            outlineOffset: 2,
+                        },
+                    }}
+                >
+                    {ORGANIZATION_LABELS[b.key]}
+                    {t && (
+                        <Box
+                            component="span"
+                            sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 0.5,
+                                fontSize: 11,
+                                color: 'var(--d-text-muted)',
+                                fontWeight: 500,
+                            }}
+                        >
+                            · {t.commitments || 0}C · {t.students || 0}S
+                        </Box>
+                    )}
+                </Box>
+            );
+        })}
+    </Box>
 );
 
 const AdminSkillhubView = () => {
@@ -67,10 +119,6 @@ const AdminSkillhubView = () => {
 
     const activeBranch = BRANCHES[branchTab].key;
 
-    // Fetch per-branch commitment + student counts once so the tab labels and
-    // KPIs make it obvious where the data is. Admin used to default to the
-    // Training tab and wrongly conclude "no Skillhub data" when the
-    // records were under Institute.
     const loadBranchTotals = useCallback(async () => {
         try {
             const results = await Promise.all(
@@ -87,8 +135,6 @@ const AdminSkillhubView = () => {
             });
             setBranchTotals(totals);
 
-            // Auto-pick the first branch with data on first render only, so
-            // admin lands on the branch that actually has records.
             if (!autoPickDone) {
                 setAutoPickDone(true);
                 const firstWithData = BRANCHES.findIndex(
@@ -97,7 +143,7 @@ const AdminSkillhubView = () => {
                 if (firstWithData > 0) setBranchTab(firstWithData);
             }
         } catch {
-            // non-fatal — branch data below still loads
+            /* non-fatal */
         }
     }, [autoPickDone]);
 
@@ -107,21 +153,18 @@ const AdminSkillhubView = () => {
         try {
             const [consultantsRes, commitmentsRes, newRes, activeRes] = await Promise.all([
                 consultantService.getConsultants({ organization: activeBranch }),
-                // Date-range scoped commitments for this branch
                 commitmentService.getCommitmentsByDateRange(
                     dateRange.startDate,
                     dateRange.endDate,
                     null,
                     activeBranch
                 ),
-                // New admissions added during the selected period
                 studentService.getStudents({
                     organization: activeBranch,
                     studentStatus: 'new_admission',
                     startDate: dateRange.startDate,
                     endDate: dateRange.endDate,
                 }),
-                // Active students — cumulative
                 studentService.getStudents({ organization: activeBranch, studentStatus: 'active' }),
             ]);
             const commitList = commitmentsRes.data || [];
@@ -139,172 +182,287 @@ const AdminSkillhubView = () => {
         }
     }, [activeBranch, dateRange.startDate, dateRange.endDate]);
 
-    useEffect(() => { loadBranchTotals(); }, [loadBranchTotals]);
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        loadBranchTotals();
+    }, [loadBranchTotals]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const kpiItems = [
+        {
+            label: 'New Admissions',
+            value: stats.newAdmissionsPeriod,
+            sub: 'In selected period',
+            accent: 'warm',
+        },
+        {
+            label: 'Active Students',
+            value: stats.activeStudents,
+            sub: 'Lifetime total',
+            accent: 'success',
+        },
+        {
+            label: 'Counselors',
+            value: counselors.length,
+            sub: 'On this branch',
+            accent: 'accent',
+        },
+        {
+            label: 'Commitments',
+            value: stats.commitmentsPeriod,
+            sub: 'In selected period',
+            accent: 'accent',
+        },
+    ];
 
     return (
         <Box>
-            <Box sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                    Skillhub
-                </Typography>
-                <Paper>
-                    <Tabs value={branchTab} onChange={(_, v) => setBranchTab(v)}>
-                        {BRANCHES.map((b) => {
-                            const t = branchTotals[b.key];
-                            const badge =
-                                t
-                                    ? ` · ${t.commitments || 0}C · ${t.students || 0}S`
-                                    : '';
-                            return (
-                                <Tab
-                                    key={b.key}
-                                    label={`${ORGANIZATION_LABELS[b.key]}${badge}`}
-                                />
-                            );
-                        })}
-                    </Tabs>
-                </Paper>
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: { xs: 'flex-start', md: 'center' },
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    mb: 2.5,
+                    flexDirection: { xs: 'column', md: 'row' },
+                }}
+            >
+                <Box>
+                    <Typography
+                        sx={{
+                            fontSize: 11,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.08em',
+                            color: 'var(--d-text-muted)',
+                            fontWeight: 600,
+                            mb: 0.5,
+                        }}
+                    >
+                        Skillhub Branch
+                    </Typography>
+                    <Typography
+                        sx={{
+                            fontSize: 18,
+                            fontWeight: 700,
+                            color: 'var(--d-text)',
+                            letterSpacing: '-0.01em',
+                        }}
+                    >
+                        {ORGANIZATION_LABELS[activeBranch]}
+                    </Typography>
+                </Box>
+                <BranchSwitcher
+                    value={branchTab}
+                    onChange={setBranchTab}
+                    branchTotals={branchTotals}
+                />
             </Box>
 
-            {/* Date range filter — drives commitments + "this period" KPIs
-                for the currently selected Skillhub branch. Active Students
-                stays cumulative (lifetime total). */}
-            <Card elevation={1} sx={{ mb: 2, borderRadius: 2 }}>
-                <CardContent sx={{ py: 2 }}>
-                    <DateRangeSelector value={dateRange} onChange={setDateRange} />
-                </CardContent>
-            </Card>
+            <SectionCard eyebrow="Date range" padding={18}>
+                <DateRangeSelector value={dateRange} onChange={setDateRange} />
+            </SectionCard>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && (
+                <Alert
+                    severity="error"
+                    onClose={() => setError('')}
+                    sx={{ mb: 3 }}
+                >
+                    {error}
+                </Alert>
+            )}
 
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
-                    <CircularProgress />
+                    <CircularProgress sx={{ color: 'var(--d-accent)' }} />
                 </Box>
             ) : (
                 <>
-                    <Grid container spacing={2} sx={{ mb: 3 }}>
-                        <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="New Admissions (period)" value={stats.newAdmissionsPeriod} color="#FF9800" />
-                        </Grid>
-                        <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="Active Students (total)" value={stats.activeStudents} color="#4CAF50" />
-                        </Grid>
-                        <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="Counselors" value={counselors.length} color="#2196F3" />
-                        </Grid>
-                        <Grid size={{ xs: 6, md: 3 }}>
-                            <KpiMini label="Commitments (period)" value={stats.commitmentsPeriod} color="#9C27B0" />
-                        </Grid>
-                    </Grid>
+                    <KPIStrip items={kpiItems} />
 
-                    <Paper sx={{ mb: 2 }}>
-                        <Tabs value={subTab} onChange={(_, v) => setSubTab(v)}>
-                            <Tab label="Student Database" />
-                            <Tab label="Commitments" />
-                        </Tabs>
-                    </Paper>
+                    <DashboardTabs
+                        value={subTab}
+                        onChange={setSubTab}
+                        tabs={[
+                            { value: 0, label: 'Student Database' },
+                            { value: 1, label: 'Commitments' },
+                        ]}
+                    />
 
-                    {subTab === 0 ? (
-                        <SkillhubStudentTable
-                            key={activeBranch}
-                            counselors={counselors}
-                            organization={activeBranch}
-                            onChange={load}
-                        />
-                    ) : (
-                        <Paper sx={{ p: 2 }}>
-                            {commitments.length === 0 ? (
-                                <Typography sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                                    No commitments for this branch.
-                                </Typography>
-                            ) : (
-                                <TableContainer>
-                                    <Table size="small">
-                                        <TableHead>
-                                            <TableRow>
-                                                <TableCell>Week</TableCell>
-                                                <TableCell>Counselor</TableCell>
-                                                <TableCell>Student</TableCell>
-                                                <TableCell>Commitment</TableCell>
-                                                <TableCell>Stage</TableCell>
-                                                <TableCell>Status</TableCell>
-                                                <TableCell align="center">Demos</TableCell>
-                                                <TableCell align="right">%</TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {commitments.map((c) => {
-                                                const demos = c.demos || [];
-                                                const scheduled = demos.filter((d) => d.scheduledAt).length;
-                                                const done = demos.filter((d) => d.done).length;
-                                                return (
-                                                <TableRow hover key={c._id}>
-                                                    <TableCell>W{c.weekNumber}/{c.year}</TableCell>
-                                                    <TableCell>{c.consultantName}</TableCell>
-                                                    <TableCell>{c.studentName || '-'}</TableCell>
-                                                    <TableCell sx={{ maxWidth: 280 }}>
-                                                        <Typography variant="body2" noWrap>
-                                                            {c.commitmentMade}
-                                                        </Typography>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Chip
-                                                            label={c.leadStage}
-                                                            size="small"
-                                                            sx={{ bgcolor: getLeadStageColor(c.leadStage), color: 'white' }}
-                                                        />
-                                                    </TableCell>
-                                                    <TableCell>{c.status}</TableCell>
-                                                    <TableCell align="center">
-                                                        <Tooltip
-                                                            arrow
-                                                            title={
-                                                                demos.length === 0 ? (
-                                                                    'No demos'
-                                                                ) : (
-                                                                    <Box sx={{ p: 0.5, minWidth: 220 }}>
-                                                                        {['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].map((slot) => {
-                                                                            const d = demos.find((x) => x.slot === slot);
-                                                                            return (
-                                                                                <Box key={slot} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, fontSize: 12, py: 0.2 }}>
-                                                                                    <span style={{ fontWeight: 700 }}>{slot}</span>
-                                                                                    <span>
-                                                                                        {d?.scheduledAt
-                                                                                            ? new Date(d.scheduledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                                                                            : '—'}
-                                                                                        {d?.done && ' ✓'}
-                                                                                    </span>
-                                                                                </Box>
-                                                                            );
-                                                                        })}
-                                                                    </Box>
-                                                                )
-                                                            }
+                    <AnimatedTabPanel panelKey={`${activeBranch}-${subTab}`}>
+                        {subTab === 0 ? (
+                            <SectionCard padding={16}>
+                                <SkillhubStudentTable
+                                    key={activeBranch}
+                                    counselors={counselors}
+                                    organization={activeBranch}
+                                    onChange={load}
+                                />
+                            </SectionCard>
+                        ) : (
+                            <SectionCard padding={0}>
+                                {commitments.length === 0 ? (
+                                    <Typography
+                                        sx={{
+                                            p: 5,
+                                            textAlign: 'center',
+                                            color: 'var(--d-text-muted)',
+                                            fontSize: 14,
+                                        }}
+                                    >
+                                        No commitments for this branch.
+                                    </Typography>
+                                ) : (
+                                    <TableContainer>
+                                        <Table
+                                            size="small"
+                                            sx={{
+                                                '& .MuiTableCell-root': {
+                                                    borderColor: 'var(--d-border-soft)',
+                                                    color: 'var(--d-text-2)',
+                                                },
+                                            }}
+                                        >
+                                            <TableHead>
+                                                <TableRow>
+                                                    {['Week', 'Counselor', 'Student', 'Commitment', 'Stage', 'Status', 'Demos', '%'].map((h, i) => (
+                                                        <TableCell
+                                                            key={h}
+                                                            align={h === 'Demos' ? 'center' : h === '%' ? 'right' : 'left'}
+                                                            sx={{
+                                                                color: 'var(--d-text-muted)',
+                                                                fontWeight: 600,
+                                                                fontSize: 12,
+                                                                textTransform: 'uppercase',
+                                                                letterSpacing: '0.05em',
+                                                            }}
                                                         >
-                                                            <Chip
-                                                                label={`${scheduled}/4 · ${done} done`}
-                                                                size="small"
-                                                                sx={{
-                                                                    bgcolor: done > 0 ? '#dcfce7' : scheduled > 0 ? '#dbeafe' : 'rgba(0,0,0,0.05)',
-                                                                    color: done > 0 ? '#14532d' : scheduled > 0 ? '#1e3a8a' : '#64748b',
-                                                                    fontWeight: 600,
-                                                                    cursor: 'help',
-                                                                }}
-                                                            />
-                                                        </Tooltip>
-                                                    </TableCell>
-                                                    <TableCell align="right">{c.achievementPercentage || 0}%</TableCell>
+                                                            {h}
+                                                        </TableCell>
+                                                    ))}
                                                 </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            )}
-                        </Paper>
-                    )}
+                                            </TableHead>
+                                            <TableBody>
+                                                {commitments.map((c) => {
+                                                    const demos = c.demos || [];
+                                                    const scheduled = demos.filter((d) => d.scheduledAt).length;
+                                                    const done = demos.filter((d) => d.done).length;
+                                                    return (
+                                                        <TableRow
+                                                            key={c._id}
+                                                            sx={{
+                                                                transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                                                '&:hover': { backgroundColor: 'var(--d-surface-hover)' },
+                                                            }}
+                                                        >
+                                                            <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                                                W{c.weekNumber}/{c.year}
+                                                            </TableCell>
+                                                            <TableCell>{c.consultantName}</TableCell>
+                                                            <TableCell>{c.studentName || '-'}</TableCell>
+                                                            <TableCell sx={{ maxWidth: 280 }}>
+                                                                <Typography
+                                                                    variant="body2"
+                                                                    noWrap
+                                                                    sx={{ color: 'var(--d-text-2)' }}
+                                                                >
+                                                                    {c.commitmentMade}
+                                                                </Typography>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Chip
+                                                                    label={c.leadStage}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        bgcolor: getLeadStageColor(c.leadStage),
+                                                                        color: 'white',
+                                                                        fontWeight: 600,
+                                                                        fontSize: 11,
+                                                                        height: 22,
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                            <TableCell>{c.status}</TableCell>
+                                                            <TableCell align="center">
+                                                                <Tooltip
+                                                                    arrow
+                                                                    title={
+                                                                        demos.length === 0 ? (
+                                                                            'No demos'
+                                                                        ) : (
+                                                                            <Box sx={{ p: 0.5, minWidth: 220 }}>
+                                                                                {['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'].map((slot) => {
+                                                                                    const d = demos.find((x) => x.slot === slot);
+                                                                                    return (
+                                                                                        <Box
+                                                                                            key={slot}
+                                                                                            sx={{
+                                                                                                display: 'flex',
+                                                                                                justifyContent: 'space-between',
+                                                                                                gap: 2,
+                                                                                                fontSize: 12,
+                                                                                                py: 0.2,
+                                                                                            }}
+                                                                                        >
+                                                                                            <span style={{ fontWeight: 700 }}>{slot}</span>
+                                                                                            <span>
+                                                                                                {d?.scheduledAt
+                                                                                                    ? new Date(d.scheduledAt).toLocaleString([], {
+                                                                                                          month: 'short',
+                                                                                                          day: 'numeric',
+                                                                                                          hour: '2-digit',
+                                                                                                          minute: '2-digit',
+                                                                                                      })
+                                                                                                    : '—'}
+                                                                                                {d?.done && ' ✓'}
+                                                                                            </span>
+                                                                                        </Box>
+                                                                                    );
+                                                                                })}
+                                                                            </Box>
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Chip
+                                                                        label={`${scheduled}/4 · ${done} done`}
+                                                                        size="small"
+                                                                        sx={{
+                                                                            bgcolor: done > 0
+                                                                                ? 'var(--d-success-bg)'
+                                                                                : scheduled > 0
+                                                                                    ? 'var(--d-accent-bg)'
+                                                                                    : 'var(--d-surface-muted)',
+                                                                            color: done > 0
+                                                                                ? 'var(--d-success-text)'
+                                                                                : scheduled > 0
+                                                                                    ? 'var(--d-accent-text)'
+                                                                                    : 'var(--d-text-muted)',
+                                                                            fontWeight: 600,
+                                                                            fontSize: 11,
+                                                                            height: 22,
+                                                                            cursor: 'help',
+                                                                        }}
+                                                                    />
+                                                                </Tooltip>
+                                                            </TableCell>
+                                                            <TableCell
+                                                                align="right"
+                                                                sx={{ fontVariantNumeric: 'tabular-nums' }}
+                                                            >
+                                                                {c.achievementPercentage || 0}%
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                )}
+                            </SectionCard>
+                        )}
+                    </AnimatedTabPanel>
                 </>
             )}
         </Box>
