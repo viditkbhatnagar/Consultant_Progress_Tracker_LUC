@@ -44,6 +44,7 @@ import {
     Visibility as VisibilityIcon,
     Comment as CommentIcon,
     AutoAwesome as AutoAwesomeIcon,
+    FactCheck as CommitmentsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -586,10 +587,24 @@ const TeamLeadDashboard = () => {
 
                     {/* Tabs */}
                     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-                            <Tab label="Team Overview" />
-                            <Tab label="All Commitments" />
-                            <Tab label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
+                        <Tabs
+                            value={tabValue}
+                            onChange={(e, newValue) => {
+                                if (newValue === 'commitments') {
+                                    navigate('/commitments');
+                                    return;
+                                }
+                                setTabValue(newValue);
+                            }}
+                        >
+                            <Tab value={0} label="Team Overview" />
+                            <Tab
+                                value="commitments"
+                                label="Commitments"
+                                icon={<CommitmentsIcon sx={{ fontSize: 18 }} />}
+                                iconPosition="start"
+                            />
+                            <Tab value={2} label="AI Analysis" icon={<AutoAwesomeIcon sx={{ fontSize: 18 }} />} iconPosition="start" />
                         </Tabs>
                     </Box>
 
@@ -750,279 +765,6 @@ const TeamLeadDashboard = () => {
                         </Box>
                     )}
 
-                    {tabValue === 1 && (
-                        // All Commitments Tab
-                        <Card elevation={0} sx={{ backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
-                            <CardContent>
-                                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                                    All Team Commitments
-                                </Typography>
-
-                                <CommitmentFilters
-                                    onFilterChange={handleFilterChange}
-                                    leadStages={LEAD_STAGES_LIST}
-                                    statuses={STATUS_LIST}
-                                    consultants={consultants}
-                                />
-
-                                {loading ? (
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                                        <CircularProgress />
-                                    </Box>
-                                ) : displayCommitments.length === 0 ? (
-                                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                                        <Typography color="text.secondary">
-                                            {commitments.length === 0
-                                                ? 'No commitments for this period.'
-                                                : 'No commitments match your filters.'}
-                                        </Typography>
-                                    </Box>
-                                ) : (
-                                    <TableContainer sx={{ mt: 2 }}>
-                                        <Table>
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Week</TableCell>
-                                                    <TableCell>Date</TableCell>
-                                                    <TableCell>Day</TableCell>
-                                                    <TableCell>Time</TableCell>
-                                                    <TableCell>Consultant</TableCell>
-                                                    <TableCell>Student</TableCell>
-                                                    <TableCell>Description</TableCell>
-                                                    <TableCell>Lead Stage</TableCell>
-                                                    <TableCell align="center">Probability</TableCell>
-                                                    <TableCell align="center">Achievement</TableCell>
-                                                    <TableCell align="center">Meetings</TableCell>
-                                                    <TableCell align="center">Follow-up Date</TableCell>
-                                                    <TableCell>Status</TableCell>
-                                                    <TableCell align="center">Closed Date</TableCell>
-                                                    <TableCell align="center">TL Comments</TableCell>
-                                                    <TableCell align="center">Admin Comments</TableCell>
-                                                    <TableCell align="center">Actions</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {displayCommitments
-                                                    .slice(
-                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE,
-                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE + COMMITMENTS_PAGE_SIZE
-                                                    )
-                                                    .map((commitment) => {
-                                                    // Calculate achievement: 100% if achieved or admission closed, else 0%
-                                                    const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
-                                                    // Date/Day from commitmentDate (the day the user picked for
-                                                    // this commitment). Time stays on createdAt.
-                                                    const dateSource = commitment.commitmentDate
-                                                        || commitment.createdAt
-                                                        || commitment.weekStartDate;
-                                                    const commitmentDateObj = new Date(dateSource);
-                                                    const timeSource = commitment.createdAt
-                                                        ? new Date(commitment.createdAt)
-                                                        : commitmentDateObj;
-                                                    const dayOfWeek = format(commitmentDateObj, 'EEEE');
-                                                    const dateFormatted = format(commitmentDateObj, 'MMM dd, yyyy');
-                                                    const timeFormatted = format(timeSource, 'hh:mm a');
-
-                                                    return (
-                                                        <TableRow key={commitment._id} hover>
-                                                            {/* Week */}
-                                                            <TableCell>{formatWeekOfMonth(commitment.commitmentDate, commitment.weekStartDate)}</TableCell>
-
-                                                            {/* Date */}
-                                                            <TableCell>{dateFormatted}</TableCell>
-
-                                                            {/* Day */}
-                                                            <TableCell>{dayOfWeek}</TableCell>
-
-                                                            {/* Time */}
-                                                            <TableCell>{timeFormatted}</TableCell>
-
-                                                            {/* Consultant */}
-                                                            <TableCell>{commitment.consultantName}</TableCell>
-
-                                                            {/* Student */}
-                                                            <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-
-                                                            {/* Description (renamed from Commitment) */}
-                                                            <TableCell>
-                                                                <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                                                    {commitment.commitmentMade}
-                                                                </Typography>
-                                                            </TableCell>
-
-                                                            {/* Lead Stage */}
-                                                            <TableCell>
-                                                                <Chip
-                                                                    label={commitment.leadStage}
-                                                                    size="small"
-                                                                    sx={{
-                                                                        backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                                        color: 'white',
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-
-                                                            {/* Conversion Probability */}
-                                                            <TableCell align="center">
-                                                                <Typography
-                                                                    sx={{
-                                                                        color:
-                                                                            (commitment.conversionProbability || 0) >= 70 ? 'success.main' :
-                                                                                (commitment.conversionProbability || 0) >= 40 ? 'warning.main' : 'error.main',
-                                                                        fontWeight: 600
-                                                                    }}
-                                                                >
-                                                                    {commitment.conversionProbability || 0}%
-                                                                </Typography>
-                                                            </TableCell>
-
-                                                            {/* Achievement - Simplified: 100% if closed, 0% otherwise */}
-                                                            <TableCell align="center">
-                                                                <Typography
-                                                                    sx={{
-                                                                        color: achievement === 100 ? 'success.main' : 'text.secondary',
-                                                                        fontWeight: 600
-                                                                    }}
-                                                                >
-                                                                    {achievement}%
-                                                                </Typography>
-                                                            </TableCell>
-
-                                                            {/* Meetings */}
-                                                            <TableCell align="center">
-                                                                {commitment.meetingsDone || 0}
-                                                            </TableCell>
-
-                                                            {/* Follow-up Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.followUpDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
-                                                                        {format(new Date(commitment.followUpDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Status */}
-                                                            <TableCell>
-                                                                {commitment.admissionClosed ? (
-                                                                    <Chip
-                                                                        label="Admitted & Closed"
-                                                                        color="success"
-                                                                        size="small"
-                                                                        icon={<CheckCircleIcon />}
-                                                                    />
-                                                                ) : (
-                                                                    <Chip
-                                                                        label={commitment.status}
-                                                                        size="small"
-                                                                        variant="outlined"
-                                                                    />
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Admission Closed Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.admissionClosedDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                                                                        {format(new Date(commitment.admissionClosedDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        -
-                                                                    </Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* TL Comments - Action button: Eye if exists, Comment icon if not */}
-                                                            <TableCell align="center">
-                                                                {commitment.correctiveActionByTL ? (
-                                                                    <Tooltip
-                                                                        title={
-                                                                            <Box sx={{ p: 1 }}>
-                                                                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                                                                    Team Lead Comment:
-                                                                                </Typography>
-                                                                                <Typography variant="body2">
-                                                                                    {commitment.correctiveActionByTL}
-                                                                                </Typography>
-                                                                            </Box>
-                                                                        }
-                                                                        arrow
-                                                                        placement="left"
-                                                                    >
-                                                                        <IconButton
-                                                                            size="small"
-                                                                            color="primary"
-                                                                            onClick={() => {
-                                                                                setSelectedCommitment(commitment);
-                                                                                setCorrectiveAction(commitment.correctiveActionByTL || '');
-
-                                                                                setCorrectiveDialogOpen(true);
-                                                                            }}
-                                                                            title="View/Edit TL comment"
-                                                                        >
-                                                                            <VisibilityIcon fontSize="small" />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                ) : (
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="action"
-                                                                        onClick={() => {
-                                                                            setSelectedCommitment(commitment);
-                                                                            setCorrectiveAction('');
-
-                                                                            setCorrectiveDialogOpen(true);
-                                                                        }}
-                                                                        title="Add TL comment"
-                                                                    >
-                                                                        <CommentIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Admin Comments - Display only */}
-                                                            <TableCell align="center">
-                                                                {commitment.adminComment ? (
-                                                                    <Typography variant="body2" sx={{ maxWidth: 150 }} noWrap title={commitment.adminComment}>
-                                                                        {commitment.adminComment}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Actions - Edit for both consultants and TLs */}
-                                                            <TableCell align="center">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    color="primary"
-                                                                    onClick={() => handleEditCommitment(commitment)}
-                                                                    title="Edit commitment"
-                                                                >
-                                                                    <EditIcon fontSize="small" />
-                                                                </IconButton>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    );
-                                                })}
-                                            </TableBody>
-                                        </Table>
-                                        <TablePagination
-                                            component="div"
-                                            count={displayCommitments.length}
-                                            page={commitmentsPage}
-                                            onPageChange={(_e, next) => setCommitmentsPage(next)}
-                                            rowsPerPage={COMMITMENTS_PAGE_SIZE}
-                                            rowsPerPageOptions={[COMMITMENTS_PAGE_SIZE]}
-                                        />
-                                    </TableContainer>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {/* AI Analysis Tab */}
                     {tabValue === 2 && (

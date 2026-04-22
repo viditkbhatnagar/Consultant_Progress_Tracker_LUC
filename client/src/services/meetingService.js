@@ -44,12 +44,21 @@ const deleteMeeting = async (id) => {
     return response.data;
 };
 
+// AI analysis of the current filter window. Re-uses the same filter shape
+// the list endpoint uses so callers can just forward their UI filters.
+const getAIAnalysis = async (filters = {}) => {
+    const params = buildParams(filters);
+    const response = await axios.get(`${API_URL}/ai-analysis?${params.toString()}`);
+    return response.data;
+};
+
 const meetingService = {
     getMeetings,
     getMeeting,
     createMeeting,
     updateMeeting,
     deleteMeeting,
+    getAIAnalysis,
 };
 
 export default meetingService;

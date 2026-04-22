@@ -40,6 +40,7 @@ import {
     Add as AddIcon,
     VideoCall as VideoCallIcon,
     AccessTime as AccessTimeIcon,
+    FactCheck as CommitmentsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -796,6 +797,10 @@ const AdminDashboard = () => {
                                 // "meetings" and "hourly" are shortcuts that
                                 // route to the dedicated pages rather than
                                 // rendering inline — don't mutate tabValue.
+                                if (newValue === 'commitments') {
+                                    navigate('/commitments');
+                                    return;
+                                }
                                 if (newValue === 'meetings') {
                                     navigate('/meetings');
                                     return;
@@ -811,7 +816,12 @@ const AdminDashboard = () => {
                             }}
                         >
                             <Tab value={0} label="Teams Overview" />
-                            <Tab value={1} label="All Commitments" />
+                            <Tab
+                                value="commitments"
+                                label="Commitments"
+                                icon={<CommitmentsIcon sx={{ fontSize: 18 }} />}
+                                iconPosition="start"
+                            />
                             <Tab
                                 value="meetings"
                                 label="Meetings"
@@ -919,288 +929,6 @@ const AdminDashboard = () => {
                         </Box>
                     )}
 
-                    {tabValue === 1 && (
-                        // All Commitments Tab
-                        <Card elevation={2}>
-                            <CardContent>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                                        All Organization Commitments
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', gap: 1 }}>
-                                        <Button
-                                            variant="outlined"
-                                            color="primary"
-                                            onClick={() => navigate('/meetings')}
-                                        >
-                                            View Meetings
-                                        </Button>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<AddIcon />}
-                                            onClick={() => setAddCommitmentOpen(true)}
-                                        >
-                                            Add Commitment
-                                        </Button>
-                                    </Box>
-                                </Box>
-
-                                <CommitmentFilters
-                                    onFilterChange={handleFilterChange}
-                                    leadStages={LEAD_STAGES_LIST}
-                                    statuses={STATUS_LIST}
-                                    teamLeads={teamLeads}
-                                    consultants={consultants}
-                                />
-
-                                {loading ? (
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                                        <CircularProgress />
-                                    </Box>
-                                ) : displayCommitments.length === 0 ? (
-                                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                                        <Typography color="text.secondary">
-                                            {commitments.length === 0
-                                                ? 'No commitments for this period.'
-                                                : 'No commitments match your filters.'}
-                                        </Typography>
-                                    </Box>
-                                ) : (
-                                    <TableContainer sx={{ mt: 2 }}>
-                                        <Table>
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell align="center">Actions</TableCell>
-                                                    <TableCell>Week</TableCell>
-                                                    <TableCell>Date</TableCell>
-                                                    <TableCell>Day</TableCell>
-                                                    <TableCell>Time</TableCell>
-                                                    <TableCell>Team</TableCell>
-                                                    <TableCell>Consultant</TableCell>
-                                                    <TableCell>Student</TableCell>
-                                                    <TableCell>Description</TableCell>
-                                                    <TableCell>Lead Stage</TableCell>
-                                                    <TableCell align="center">Probability</TableCell>
-                                                    <TableCell align="center">Achievement</TableCell>
-                                                    <TableCell align="center">Meetings</TableCell>
-                                                    <TableCell align="center">Follow-up Date</TableCell>
-                                                    <TableCell>Status</TableCell>
-                                                    <TableCell align="center">Closed Date</TableCell>
-                                                    <TableCell align="center">TL Comments</TableCell>
-                                                    <TableCell align="center">Admin Comments</TableCell>
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {displayCommitments
-                                                    .slice(
-                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE,
-                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE + COMMITMENTS_PAGE_SIZE
-                                                    )
-                                                    .map((commitment) => {
-                                                    // Date/Day come from commitmentDate (the day the user picked
-                                                    // this commitment is for). Time stays on createdAt since
-                                                    // commitmentDate has no time-of-day component.
-                                                    const dateSource = commitment.commitmentDate
-                                                        || commitment.createdAt
-                                                        || commitment.weekStartDate;
-                                                    const commitmentDateObj = new Date(dateSource);
-                                                    const dayOfWeek = commitmentDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-                                                    const dateFormatted = commitmentDateObj.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-                                                    const timeFormatted = commitment.createdAt
-                                                        ? new Date(commitment.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-                                                        : '--:--';
-                                                    // Calculate achievement: 100% if achieved or admission closed, else 0%
-                                                    const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
-
-                                                    return (
-                                                        <TableRow key={commitment._id} hover>
-                                                            {/* Actions (moved to first column) */}
-                                                            <TableCell align="center">
-                                                                <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="primary"
-                                                                        onClick={() => handleOpenAdminComment(commitment)}
-                                                                        title="Edit/Add Admin Comment"
-                                                                    >
-                                                                        <EditIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="error"
-                                                                        onClick={() => handleDeleteCommitment(commitment._id)}
-                                                                        title="Delete Commitment"
-                                                                    >
-                                                                        <DeleteIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </Box>
-                                                            </TableCell>
-                                                            <TableCell>{formatWeekOfMonth(commitment.commitmentDate, commitment.weekStartDate)}</TableCell>
-                                                            <TableCell>{dateFormatted}</TableCell>
-                                                            <TableCell>{dayOfWeek}</TableCell>
-                                                            <TableCell>{timeFormatted}</TableCell>
-                                                            <TableCell>
-                                                                <Chip label={commitment.teamName} size="small" variant="outlined" />
-                                                            </TableCell>
-                                                            <TableCell>{commitment.consultantName}</TableCell>
-                                                            <TableCell>{commitment.studentName || 'N/A'}</TableCell>
-                                                            <TableCell>
-                                                                <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                                                    {commitment.commitmentMade}
-                                                                </Typography>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Chip
-                                                                    label={commitment.leadStage}
-                                                                    size="small"
-                                                                    sx={{
-                                                                        backgroundColor: getLeadStageColor(commitment.leadStage),
-                                                                        color: 'white',
-                                                                    }}
-                                                                />
-                                                            </TableCell>
-                                                            <TableCell align="center">
-                                                                <Typography
-                                                                    variant="body2"
-                                                                    sx={{
-                                                                        color:
-                                                                            (commitment.conversionProbability || 0) >= 70 ? '#4caf50' :
-                                                                                (commitment.conversionProbability || 0) >= 40 ? '#ff9800' : '#f44336',
-                                                                        fontWeight: 600
-                                                                    }}
-                                                                >
-                                                                    {commitment.conversionProbability || 0}%
-                                                                </Typography>
-                                                            </TableCell>
-                                                            <TableCell align="center">
-                                                                <Typography
-                                                                    sx={{
-                                                                        color: achievement === 100 ? '#4caf50' : 'text.secondary',
-                                                                        fontWeight: 600
-                                                                    }}
-                                                                >
-                                                                    {achievement}%
-                                                                </Typography>
-                                                            </TableCell>
-                                                            <TableCell align="center">
-                                                                {commitment.meetingsDone || 0}
-                                                            </TableCell>
-
-                                                            {/* Follow-up Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.followUpDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'info.main' }}>
-                                                                        {format(new Date(commitment.followUpDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Status */}
-                                                            <TableCell>
-                                                                {commitment.admissionClosed ? (
-                                                                    <Chip label="Admitted & Closed" color="success" size="small" />
-                                                                ) : (
-                                                                    <Chip label={commitment.status} size="small" variant="outlined" />
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Admission Closed Date */}
-                                                            <TableCell align="center">
-                                                                {commitment.admissionClosedDate ? (
-                                                                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'success.main' }}>
-                                                                        {format(new Date(commitment.admissionClosedDate), 'MMM d, yyyy')}
-                                                                    </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        -
-                                                                    </Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* TL Comments - Read Only for Admin */}
-                                                            <TableCell align="center">
-                                                                {commitment.correctiveActionByTL ? (
-                                                                    <MuiTooltip
-                                                                        title={
-                                                                            <Box sx={{ p: 1 }}>
-                                                                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                                                                    Team Lead Comment:
-                                                                                </Typography>
-                                                                                <Typography variant="body2">
-                                                                                    {commitment.correctiveActionByTL}
-                                                                                </Typography>
-                                                                            </Box>
-                                                                        }
-                                                                        arrow
-                                                                        placement="left"
-                                                                    >
-                                                                        <IconButton size="small" color="primary" disabled>
-                                                                            <VisibilityIcon fontSize="small" />
-                                                                        </IconButton>
-                                                                    </MuiTooltip>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="text.secondary">--</Typography>
-                                                                )}
-                                                            </TableCell>
-
-                                                            {/* Admin Comments - Editable */}
-                                                            <TableCell align="center">
-                                                                {commitment.adminComment ? (
-                                                                    <MuiTooltip
-                                                                        title={
-                                                                            <Box sx={{ p: 1 }}>
-                                                                                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                                                                    Admin Comment:
-                                                                                </Typography>
-                                                                                <Typography variant="body2">
-                                                                                    {commitment.adminComment}
-                                                                                </Typography>
-                                                                            </Box>
-                                                                        }
-                                                                        arrow
-                                                                        placement="left"
-                                                                    >
-                                                                        <IconButton
-                                                                            size="small"
-                                                                            color="primary"
-                                                                            onClick={() => handleOpenAdminComment(commitment)}
-                                                                            title="View/Edit Admin Comment"
-                                                                        >
-                                                                            <VisibilityIcon fontSize="small" />
-                                                                        </IconButton>
-                                                                    </MuiTooltip>
-                                                                ) : (
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        color="action"
-                                                                        onClick={() => handleOpenAdminComment(commitment)}
-                                                                        title="Add Admin Comment"
-                                                                    >
-                                                                        <CommentIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    );
-                                                })}
-                                            </TableBody>
-                                        </Table>
-                                        <TablePagination
-                                            component="div"
-                                            count={displayCommitments.length}
-                                            page={commitmentsPage}
-                                            onPageChange={(_e, next) => setCommitmentsPage(next)}
-                                            rowsPerPage={COMMITMENTS_PAGE_SIZE}
-                                            rowsPerPageOptions={[COMMITMENTS_PAGE_SIZE]}
-                                        />
-                                    </TableContainer>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {tabValue === 2 && (
                         // Organization Hierarchy Tab

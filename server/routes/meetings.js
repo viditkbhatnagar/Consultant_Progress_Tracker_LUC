@@ -5,6 +5,7 @@ const {
     createMeeting,
     updateMeeting,
     deleteMeeting,
+    getAIAnalysis,
 } = require('../controllers/meetingController');
 
 const router = express.Router();
@@ -17,6 +18,9 @@ router
     .route('/')
     .get(authorize('admin', 'team_lead'), getMeetings)
     .post(authorize('admin', 'team_lead'), createMeeting);
+
+// Specific route BEFORE /:id so Express matches it correctly.
+router.get('/ai-analysis', authorize('admin', 'team_lead'), getAIAnalysis);
 
 router
     .route('/:id')

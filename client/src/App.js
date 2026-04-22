@@ -10,6 +10,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import StudentDatabasePage from './pages/StudentDatabasePage';
 import HourlyTrackerPage from './pages/HourlyTrackerPage';
 import MeetingTrackerPage from './pages/MeetingTrackerPage';
+import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
 import theme from './theme';
 
@@ -91,6 +92,16 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <MeetingTrackerPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Commitment Tracker - LUC admin + team_lead */}
+            <Route
+              path="/commitments"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <CommitmentsPage />
                 </PrivateRoute>
               }
             />

@@ -24,6 +24,7 @@ import {
     AutoAwesome as AutoAwesomeIcon,
     AccessTime as AccessTimeIcon,
     VideoCall as VideoCallIcon,
+    FactCheck as CommitmentsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -249,7 +250,7 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboar
 
                 <ListItem disablePadding sx={{ mb: 1 }}>
                     <ListItemButton
-                        onClick={onAddCommitment}
+                        onClick={() => navigate('/commitments')}
                         sx={{
                             borderRadius: 2,
                             '&:hover': {
@@ -258,10 +259,10 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboar
                         }}
                     >
                         <ListItemIcon sx={{ color: '#2C3E50', minWidth: 40 }}>
-                            <AddIcon />
+                            <CommitmentsIcon />
                         </ListItemIcon>
                         <ListItemText
-                            primary="Add Commitment"
+                            primary="Commitments"
                             primaryTypographyProps={{
                                 fontSize: '0.95rem',
                                 fontWeight: 500,

@@ -7,30 +7,26 @@ import {
     Snackbar,
     Alert,
 } from '@mui/material';
-import {
-    ArrowBack as ArrowBackIcon,
-    Logout as LogoutIcon,
-} from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Logout as LogoutIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import meetingService from '../services/meetingService';
+import commitmentService from '../services/commitmentService';
 import userService from '../services/userService';
 import consultantService from '../services/consultantService';
-import MeetingFormDialog from '../components/MeetingFormDialog';
-import MeetingsKPIStrip from '../components/meetings/MeetingsKPIStrip';
-import MeetingsToolbar from '../components/meetings/MeetingsToolbar';
-import MeetingsTableView from '../components/meetings/MeetingsTableView';
-import MeetingsBoardView from '../components/meetings/MeetingsBoardView';
-import MeetingsCardsView from '../components/meetings/MeetingsCardsView';
-import MeetingDetailDrawer from '../components/meetings/MeetingDetailDrawer';
-import MeetingsAIAnalysisDialog from '../components/meetings/MeetingsAIAnalysisDialog';
+import CommitmentsKPIStrip from '../components/commitments/CommitmentsKPIStrip';
+import CommitmentsToolbar from '../components/commitments/CommitmentsToolbar';
+import CommitmentsTableView from '../components/commitments/CommitmentsTableView';
+import CommitmentsBoardView from '../components/commitments/CommitmentsBoardView';
+import CommitmentsCardsView from '../components/commitments/CommitmentsCardsView';
+import CommitmentDetailDrawer from '../components/commitments/CommitmentDetailDrawer';
+import CommitmentsAIAnalysisDialog from '../components/commitments/CommitmentsAIAnalysisDialog';
+import CommitmentFormDialog from '../components/commitments/CommitmentFormDialog';
 import { TrackerThemeProvider, useThemeState } from '../utils/trackerTheme';
 
 const PAGE_SIZE = 20;
-const NON_TABLE_LIMIT = 500; // Board/Cards fetch everything in current filter
-const STORAGE_KEY = 'meetings-ui-prefs';
+const STORAGE_KEY = 'commitments-ui-prefs';
 
 const loadPrefs = () => {
     try {
@@ -45,11 +41,11 @@ const savePrefs = (prefs) => {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     } catch {
-        /* ignore quota */
+        /* ignore */
     }
 };
 
-const MeetingTrackerPage = () => {
+const CommitmentsPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'admin';
@@ -58,30 +54,27 @@ const MeetingTrackerPage = () => {
     const [view, setView] = useState(prefs.view || 'table');
     const [density, setDensity] = useState(prefs.density || 'compact');
 
-    // Theme (light/dark) for this page only — persisted separately.
     const { mode, toggle: toggleTheme, tokensSx, contextValue } = useThemeState(
-        'meetings-theme-mode'
+        'commitments-theme-mode'
     );
 
     useEffect(() => {
         savePrefs({ view, density });
     }, [view, density]);
 
-    // Data state — Table view uses paginated rows; Board/Cards use allRows.
-    const [rows, setRows] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(0);
+    // Fetched data. Commitments API doesn't do server-side pagination —
+    // we fetch once per filter change and then paginate client-side.
+    const [allRows, setAllRows] = useState([]);
     const [loading, setLoading] = useState(false);
     const [fetchError, setFetchError] = useState('');
-
-    const [allRows, setAllRows] = useState([]);
-    const [allLoading, setAllLoading] = useState(false);
+    const [page, setPage] = useState(0);
 
     const [filters, setFilters] = useState({
+        leadStage: '',
         status: '',
-        mode: '',
         teamLead: '',
-        consultant: '',
+        consultantName: '',
+        // No default date window — show everything until the user picks one.
         startDate: null,
         endDate: null,
     });
@@ -96,13 +89,11 @@ const MeetingTrackerPage = () => {
 
     const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
 
-    // AI analysis dialog
     const [aiOpen, setAiOpen] = useState(false);
     const [aiLoading, setAiLoading] = useState(false);
     const [aiText, setAiText] = useState('');
     const [aiError, setAiError] = useState('');
 
-    // Load TLs (admin only)
     useEffect(() => {
         if (!isAdmin) return;
         let cancelled = false;
@@ -122,8 +113,6 @@ const MeetingTrackerPage = () => {
         return () => { cancelled = true; };
     }, [isAdmin]);
 
-    // Load consultants (for filter chip). For admin, pull all LUC consultants;
-    // for TL, the backend auto-scopes to their team.
     useEffect(() => {
         let cancelled = false;
         consultantService
@@ -136,63 +125,64 @@ const MeetingTrackerPage = () => {
         return () => { cancelled = true; };
     }, [isAdmin]);
 
-    const commonFilterParams = useMemo(
+    const fetchParams = useMemo(
         () => ({
-            organization: 'luc',
             startDate: filters.startDate ? filters.startDate.toISOString() : undefined,
             endDate: filters.endDate ? filters.endDate.toISOString() : undefined,
             teamLead: filters.teamLead || undefined,
-            consultant: filters.consultant || undefined,
+            consultantName: filters.consultantName || undefined,
+            leadStage: filters.leadStage || undefined,
             status: filters.status || undefined,
-            mode: filters.mode || undefined,
         }),
         [filters]
     );
 
-    // Table fetcher — paginated
-    const loadTable = useCallback(async () => {
+    const loadCommitments = useCallback(async () => {
         setLoading(true);
         setFetchError('');
         try {
-            const res = await meetingService.getMeetings({
-                ...commonFilterParams,
-                page: page + 1,
-                limit: PAGE_SIZE,
-            });
-            setRows(res.data || []);
-            setTotal(res.pagination?.total || 0);
+            // With a date range → use /commitments/date-range (server-side
+            // range filter). Without → fall back to /commitments so we get
+            // everything in the user's scope. All other filters (stage,
+            // status, TL, consultant) apply client-side below.
+            const res = fetchParams.startDate && fetchParams.endDate
+                ? await commitmentService.getCommitmentsByDateRange(
+                      fetchParams.startDate,
+                      fetchParams.endDate,
+                      null,
+                      'luc'
+                  )
+                : await commitmentService.getCommitments({ organization: 'luc' });
+            setAllRows(res.data || []);
+            setPage(0);
         } catch (err) {
-            setFetchError(err?.response?.data?.message || err?.message || 'Failed to load meetings');
-            setRows([]);
-            setTotal(0);
+            setFetchError(err?.response?.data?.message || err?.message || 'Failed to load commitments');
+            setAllRows([]);
         } finally {
             setLoading(false);
         }
-    }, [commonFilterParams, page]);
-
-    // Board/Cards fetcher — single page with high limit
-    const loadAll = useCallback(async () => {
-        setAllLoading(true);
-        setFetchError('');
-        try {
-            const res = await meetingService.getMeetings({
-                ...commonFilterParams,
-                page: 1,
-                limit: NON_TABLE_LIMIT,
-            });
-            setAllRows(res.data || []);
-        } catch (err) {
-            setFetchError(err?.response?.data?.message || err?.message || 'Failed to load meetings');
-            setAllRows([]);
-        } finally {
-            setAllLoading(false);
-        }
-    }, [commonFilterParams]);
+    }, [fetchParams.startDate, fetchParams.endDate]);
 
     useEffect(() => {
-        if (view === 'table') loadTable();
-        else loadAll();
-    }, [view, loadTable, loadAll]);
+        loadCommitments();
+    }, [loadCommitments]);
+
+    // Apply the non-date filters client-side.
+    const filteredRows = useMemo(() => {
+        let list = allRows;
+        if (filters.leadStage) list = list.filter((r) => r.leadStage === filters.leadStage);
+        if (filters.status) list = list.filter((r) => r.status === filters.status);
+        if (filters.teamLead) {
+            list = list.filter((r) => {
+                const tl = r.teamLead?._id || r.teamLead;
+                return tl && tl.toString() === filters.teamLead.toString();
+            });
+        }
+        if (filters.consultantName) {
+            list = list.filter((r) => r.consultantName === filters.consultantName);
+        }
+        return list;
+    }, [allRows, filters]);
 
     const handleFilterChange = (field, value) => {
         setPage(0);
@@ -200,64 +190,85 @@ const MeetingTrackerPage = () => {
     };
     const clearFilters = () => {
         setPage(0);
-        setFilters({ status: '', mode: '', teamLead: '', consultant: '', startDate: null, endDate: null });
+        setFilters({
+            leadStage: '',
+            status: '',
+            teamLead: '',
+            consultantName: '',
+            startDate: null,
+            endDate: null,
+        });
     };
 
-    const refreshCurrent = () => {
-        if (view === 'table') loadTable();
-        else loadAll();
-    };
+    const tableRows = useMemo(
+        () => filteredRows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+        [filteredRows, page]
+    );
 
     const openCreate = () => { setEditing(null); setDialogOpen(true); };
     const openEdit = (row) => { setEditing(row); setDialogOpen(true); };
     const openDrawer = (row) => { setDrawerRow(row); setDrawerOpen(true); };
-    const closeDrawer = () => { setDrawerOpen(false); };
+    const closeDrawer = () => setDrawerOpen(false);
 
     const handleFormSubmit = async (data) => {
         if (editing) {
-            await meetingService.updateMeeting(editing._id, data);
-            setSnack({ open: true, message: 'Meeting updated', severity: 'success' });
+            await commitmentService.updateCommitment(editing._id, data);
+            setSnack({ open: true, message: 'Commitment updated', severity: 'success' });
         } else {
-            await meetingService.createMeeting(data);
-            setSnack({ open: true, message: 'Meeting created', severity: 'success' });
+            await commitmentService.createCommitment(data);
+            setSnack({ open: true, message: 'Commitment created', severity: 'success' });
         }
-        refreshCurrent();
+        loadCommitments();
     };
 
-    const handleStatusChange = async (row, nextStatus) => {
+    const handleStageChange = async (row, nextStage) => {
         try {
-            await meetingService.updateMeeting(row._id, { status: nextStatus });
-            setSnack({ open: true, message: `Status → ${nextStatus}`, severity: 'success' });
-            refreshCurrent();
+            await commitmentService.updateCommitment(row._id, { leadStage: nextStage });
+            setSnack({ open: true, message: `Lead stage → ${nextStage}`, severity: 'success' });
+            loadCommitments();
         } catch (err) {
             setSnack({
                 open: true,
-                message: err?.response?.data?.message || 'Failed to update status',
+                message: err?.response?.data?.message || 'Failed to update lead stage',
                 severity: 'error',
             });
         }
     };
 
     const handleDrawerSave = async (row, patch) => {
-        await meetingService.updateMeeting(row._id, patch);
-        refreshCurrent();
+        await commitmentService.updateCommitment(row._id, patch);
+        loadCommitments();
     };
 
     const handleDelete = async (row) => {
-        if (!window.confirm(`Delete meeting for ${row.studentName}?`)) return;
+        if (!window.confirm(`Delete commitment for ${row.studentName || 'this row'}?`)) return;
         try {
-            await meetingService.deleteMeeting(row._id);
-            setSnack({ open: true, message: 'Meeting deleted', severity: 'success' });
-            if (view === 'table' && rows.length === 1 && page > 0) {
-                setPage(page - 1);
-            } else {
-                refreshCurrent();
-            }
+            await commitmentService.deleteCommitment(row._id);
+            setSnack({ open: true, message: 'Commitment deleted', severity: 'success' });
             if (drawerOpen) closeDrawer();
+            loadCommitments();
         } catch (err) {
             setSnack({
                 open: true,
                 message: err?.response?.data?.message || 'Delete failed',
+                severity: 'error',
+            });
+        }
+    };
+
+    const handleCloseAdmission = async (row) => {
+        const amountStr = window.prompt('Closed amount (leave blank for 0):', '');
+        if (amountStr === null) return;
+        const closedAmount = Number(amountStr) || 0;
+        try {
+            await commitmentService.closeAdmission(row._id, new Date().toISOString(), closedAmount);
+            setSnack({ open: true, message: 'Admission closed', severity: 'success' });
+            closeDrawer();
+            loadCommitments();
+        } catch (err) {
+            setSnack({
+                open: true,
+                message: err?.response?.data?.message || 'Failed to close admission',
                 severity: 'error',
             });
         }
@@ -268,18 +279,14 @@ const MeetingTrackerPage = () => {
         setAiText('');
         setAiError('');
         try {
-            const res = await meetingService.getAIAnalysis(commonFilterParams);
+            const res = await commitmentService.getAIAnalysis(fetchParams);
             setAiText(res.analysis || 'No analysis was generated.');
         } catch (err) {
-            setAiError(
-                err?.response?.data?.message ||
-                    err?.message ||
-                    'Failed to generate analysis'
-            );
+            setAiError(err?.response?.data?.message || err?.message || 'Failed to generate analysis');
         } finally {
             setAiLoading(false);
         }
-    }, [commonFilterParams]);
+    }, [fetchParams]);
 
     const openAI = () => {
         setAiOpen(true);
@@ -296,13 +303,8 @@ const MeetingTrackerPage = () => {
         navigate('/login');
     };
 
-    // Dataset shown in KPIs: for Board/Cards use allRows (whole filter window);
-    // for Table use the current page rows (reasonable approximation, since
-    // pulling all rows just for KPIs would double the request cost).
-    const kpiRows = view === 'table' ? rows : allRows;
-
-    const currentViewRows = view === 'table' ? rows : allRows;
-    const currentViewLoading = view === 'table' ? loading : allLoading;
+    const viewRows = view === 'table' ? tableRows : filteredRows;
+    const viewLoading = loading;
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -316,7 +318,6 @@ const MeetingTrackerPage = () => {
                     transition: 'background-color 180ms ease, color 180ms ease',
                 }}
             >
-                {/* Existing app header — unchanged chrome */}
                 <Box
                     sx={{
                         backgroundColor: '#1976d2',
@@ -333,7 +334,7 @@ const MeetingTrackerPage = () => {
                             <ArrowBackIcon />
                         </IconButton>
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            Meeting Tracker
+                            Commitment Tracker
                         </Typography>
                     </Box>
                     <IconButton onClick={handleLogout} sx={{ color: 'white' }} aria-label="Logout">
@@ -342,7 +343,6 @@ const MeetingTrackerPage = () => {
                 </Box>
 
                 <Container maxWidth="xl" sx={{ py: 3, px: { xs: 2, md: 3.5 } }}>
-                    {/* Count line */}
                     <Box
                         sx={{
                             display: 'flex',
@@ -363,9 +363,10 @@ const MeetingTrackerPage = () => {
                             }}
                         />
                         <span>
+                            {filteredRows.length} of {allRows.length} commitments
                             {view === 'table'
-                                ? `${rows.length} of ${total} meetings · page ${page + 1}`
-                                : `${allRows.length} meetings in view`}
+                                ? ` · page ${page + 1} of ${Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))}`
+                                : ''}
                         </span>
                     </Box>
 
@@ -375,9 +376,9 @@ const MeetingTrackerPage = () => {
                         </Alert>
                     )}
 
-                    <MeetingsKPIStrip rows={kpiRows} />
+                    <CommitmentsKPIStrip rows={filteredRows} />
 
-                    <MeetingsToolbar
+                    <CommitmentsToolbar
                         view={view}
                         onViewChange={setView}
                         density={density}
@@ -395,57 +396,58 @@ const MeetingTrackerPage = () => {
                     />
 
                     {view === 'table' && (
-                        <MeetingsTableView
-                            rows={rows}
-                            total={total}
+                        <CommitmentsTableView
+                            rows={tableRows}
+                            total={filteredRows.length}
                             page={page}
                             pageSize={PAGE_SIZE}
                             onPageChange={setPage}
-                            loading={loading}
+                            loading={viewLoading}
                             density={density}
                             isAdmin={isAdmin}
                             onOpenDetail={openDrawer}
                             onEdit={openEdit}
                             onDelete={handleDelete}
-                            onStatusChange={handleStatusChange}
+                            onStageChange={handleStageChange}
                         />
                     )}
 
                     {view === 'board' && (
-                        <MeetingsBoardView
-                            rows={currentViewRows}
-                            loading={currentViewLoading}
+                        <CommitmentsBoardView
+                            rows={viewRows}
+                            loading={viewLoading}
                             onOpen={openDrawer}
                         />
                     )}
 
                     {view === 'cards' && (
-                        <MeetingsCardsView
-                            rows={currentViewRows}
-                            loading={currentViewLoading}
+                        <CommitmentsCardsView
+                            rows={viewRows}
+                            loading={viewLoading}
                             onOpen={openDrawer}
                         />
                     )}
                 </Container>
 
-                <MeetingFormDialog
+                <CommitmentFormDialog
                     open={dialogOpen}
                     onClose={() => setDialogOpen(false)}
                     onSubmit={handleFormSubmit}
                     initialData={editing}
                 />
 
-                <MeetingDetailDrawer
+                <CommitmentDetailDrawer
                     open={drawerOpen}
                     row={drawerRow}
                     onClose={closeDrawer}
                     onSave={handleDrawerSave}
                     onEdit={(row) => { closeDrawer(); openEdit(row); }}
                     onDelete={handleDelete}
+                    onCloseAdmission={handleCloseAdmission}
                     isAdmin={isAdmin}
                 />
 
-                <MeetingsAIAnalysisDialog
+                <CommitmentsAIAnalysisDialog
                     open={aiOpen}
                     onClose={() => setAiOpen(false)}
                     loading={aiLoading}
@@ -470,4 +472,4 @@ const MeetingTrackerPage = () => {
     );
 };
 
-export default MeetingTrackerPage;
+export default CommitmentsPage;
