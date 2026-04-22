@@ -38,15 +38,18 @@ const MeetingSchema = new mongoose.Schema(
             required: [true, 'Meeting mode is required'],
         },
 
-        // Ownership
+        // Ownership. `consultant` is optional — the Team Lead may also log a
+        // meeting as the person who conducted it, in which case we store the
+        // TL's name in `consultantName` and leave the consultant ref null
+        // (TLs live in the User collection, not the Consultant collection).
         consultant: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Consultant',
-            required: [true, 'Consultant is required'],
+            default: null,
         },
         consultantName: {
             type: String,
-            required: true,
+            required: [true, 'Consultant name is required'],
             trim: true,
         },
         teamLead: {

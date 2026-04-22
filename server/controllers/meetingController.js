@@ -6,6 +6,10 @@ const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../midd
 // Resolve consultant + team lead display names so the Meeting doc carries
 // a stable historical label even if the referenced entities are later
 // deleted. Mirrors the denormalization pattern used by Commitment.
+//
+// `consultant` may be null when the TL themselves conducted the meeting;
+// in that case we trust the consultantName the client sent, and the form
+// sets it to the TL's name.
 async function denormalizeNames(body) {
     if (body.consultant) {
         const consultant = await Consultant.findById(body.consultant);
@@ -20,6 +24,12 @@ async function denormalizeNames(body) {
             return { ok: false, error: 'Team lead not found' };
         }
         body.teamLeadName = tl.name;
+        // If the TL is also the one who conducted the meeting (no consultant
+        // ref), default consultantName to the TL's name when the client
+        // didn't supply one.
+        if (!body.consultant && !body.consultantName) {
+            body.consultantName = tl.name;
+        }
     }
     return { ok: true };
 }
