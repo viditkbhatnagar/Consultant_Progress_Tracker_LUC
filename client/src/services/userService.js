@@ -3,9 +3,10 @@ import { API_BASE_URL } from '../utils/constants';
 
 const API_URL = `${API_BASE_URL}/users`;
 
-// Keep axios.defaults.baseURL set for any other modules that still make
-// relative-URL calls. Safe to re-assign here.
-axios.defaults.baseURL = API_BASE_URL;
+// NOTE: do NOT set axios.defaults.baseURL here. Every service in this app
+// builds full URLs from API_BASE_URL (e.g. `${API_BASE_URL}/auth/login`).
+// In production API_BASE_URL === '/api', so setting a baseURL of '/api'
+// would cause axios to double-prefix every request to '/api/api/...'.
 
 // Add auth token to requests
 axios.interceptors.request.use(
