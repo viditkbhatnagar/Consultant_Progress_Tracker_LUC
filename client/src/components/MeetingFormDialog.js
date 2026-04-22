@@ -62,13 +62,23 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     useEffect(() => {
         if (!open) return;
         if (initialData) {
+            const tlId = initialData.teamLead?._id || initialData.teamLead || '';
+            // If the stored consultant ref is null, the TL themselves was the
+            // person who conducted the meeting — represent that in the
+            // dropdown with the `tl:<id>` sentinel value.
+            const consultantId = initialData.consultant?._id || initialData.consultant;
+            const consultantValue = consultantId
+                ? consultantId
+                : tlId
+                    ? `tl:${tlId}`
+                    : '';
             setFormData({
                 meetingDate: initialData.meetingDate ? new Date(initialData.meetingDate) : new Date(),
                 studentName: initialData.studentName || '',
                 program: initialData.program || '',
                 mode: initialData.mode || '',
-                consultant: initialData.consultant?._id || initialData.consultant || '',
-                teamLead: initialData.teamLead?._id || initialData.teamLead || '',
+                consultant: consultantValue,
+                teamLead: tlId,
                 status: initialData.status || '',
                 remarks: initialData.remarks || '',
             });
@@ -163,6 +173,37 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         return user?.name || '';
     }, [isAdmin, user]);
 
+    // Resolve the Team Lead object for the currently-selected teamLead id —
+    // used to prepend the TL into the consultant dropdown (they may have
+    // conducted the meeting themselves).
+    const activeTeamLead = useMemo(() => {
+        if (!formData.teamLead) return null;
+        if (isAdmin) {
+            return teamLeads.find((t) => t._id === formData.teamLead) || null;
+        }
+        return {
+            _id: user?.id || user?._id,
+            name: user?.name || 'Team Lead',
+        };
+    }, [isAdmin, teamLeads, formData.teamLead, user]);
+
+    // Options shown in the Consultant dropdown: the TL (as `tl:<id>`) first,
+    // then the team's consultants.
+    const consultantOptions = useMemo(() => {
+        const list = [];
+        if (activeTeamLead) {
+            list.push({
+                value: `tl:${activeTeamLead._id}`,
+                label: `${activeTeamLead.name} (Team Lead)`,
+                isTL: true,
+            });
+        }
+        for (const c of consultants) {
+            list.push({ value: c._id, label: c.name, isTL: false });
+        }
+        return list;
+    }, [activeTeamLead, consultants]);
+
     const handleChange = (field) => (event) => {
         const value = event.target.value;
         setFormData((prev) => {
@@ -203,8 +244,26 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         setSubmitError('');
         setSubmitting(true);
         try {
+            // Translate the consultant dropdown value. If the TL themselves
+            // was selected (value = `tl:<id>`), send consultant: null and set
+            // consultantName to the TL's name — the server stores that on
+            // the Meeting doc.
+            const selected = formData.consultant;
+            let consultantId = null;
+            let consultantName;
+            if (typeof selected === 'string' && selected.startsWith('tl:')) {
+                consultantId = null;
+                consultantName = activeTeamLead?.name || currentTeamLeadName || '';
+            } else {
+                consultantId = selected || null;
+                const opt = consultantOptions.find((o) => o.value === selected);
+                consultantName = opt?.label || undefined;
+            }
+
             await onSubmit({
                 ...formData,
+                consultant: consultantId,
+                consultantName,
                 meetingDate: formData.meetingDate.toISOString(),
             });
             onClose();
@@ -352,13 +411,15 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 error={!!errors.consultant}
                                 helperText={
                                     errors.consultant ||
-                                    (isAdmin && !formData.teamLead ? 'Pick a team lead first' : '')
+                                    (isAdmin && !formData.teamLead
+                                        ? 'Pick a team lead first'
+                                        : 'Team Lead can log their own meetings too')
                                 }
                                 disabled={isAdmin && !formData.teamLead}
                             >
-                                {consultants.map((c) => (
-                                    <MenuItem key={c._id} value={c._id}>
-                                        {c.name}
+                                {consultantOptions.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value}>
+                                        {opt.label}
                                     </MenuItem>
                                 ))}
                             </TextField>
