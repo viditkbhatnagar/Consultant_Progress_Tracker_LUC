@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 const { LEAD_STAGES } = require('./Commitment');
 
-const MEETING_MODES = ['Zoom', 'Out Meeting', 'Office Meeting'];
+const MEETING_MODES = ['Zoom', 'Out Meeting', 'Office Meeting', 'Student Meeting'];
 
 const MeetingSchema = new mongoose.Schema(
     {

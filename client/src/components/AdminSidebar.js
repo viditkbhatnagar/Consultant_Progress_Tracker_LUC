@@ -26,6 +26,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import { setAdminOrgScope } from '../utils/adminOrgScope';
 
 export const DRAWER_WIDTH = 280;
 
@@ -298,7 +299,13 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
 
                 <ListItem disablePadding sx={{ mb: 1 }}>
                     <ListItemButton
-                        onClick={() => navigate('/hourly-tracker')}
+                        onClick={() => {
+                            // Admin entry point: reset org scope so the
+                            // tracker opens on LUC by default. Admin can
+                            // still toggle to Skillhub from the in-page tab.
+                            setAdminOrgScope('luc');
+                            navigate('/hourly-tracker');
+                        }}
                         sx={{
                             borderRadius: 2,
                             '&:hover': {

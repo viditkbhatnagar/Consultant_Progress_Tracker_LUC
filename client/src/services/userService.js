@@ -1,19 +1,16 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/constants';
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = `${API_BASE_URL}/users`;
 
-// Get auth token from localStorage
-const getAuthToken = () => {
-    return localStorage.getItem('token');
-};
-
-// Set up axios defaults
-axios.defaults.baseURL = API_URL;
+// Keep axios.defaults.baseURL set for any other modules that still make
+// relative-URL calls. Safe to re-assign here.
+axios.defaults.baseURL = API_BASE_URL;
 
 // Add auth token to requests
 axios.interceptors.request.use(
     (config) => {
-        const token = getAuthToken();
+        const token = localStorage.getItem('token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -30,31 +27,30 @@ axios.interceptors.request.use(
 const getUsers = async (filters = {}) => {
     const params = {};
     if (filters.organization) params.organization = filters.organization;
-    const response = await axios.get('/users', { params });
+    const response = await axios.get(API_URL, { params });
     return response.data;
 };
 
-// Get single user
 const getUser = async (id) => {
-    const response = await axios.get(`/users/${id}`);
+    const response = await axios.get(`${API_URL}/${id}`);
     return response.data;
 };
 
-// Update user
 const updateUser = async (id, userData) => {
-    const response = await axios.put(`/users/${id}`, userData);
+    const response = await axios.put(`${API_URL}/${id}`, userData);
     return response.data;
 };
 
-// Delete user
 const deleteUser = async (id) => {
-    const response = await axios.delete(`/users/${id}`);
+    const response = await axios.delete(`${API_URL}/${id}`);
     return response.data;
 };
 
-// Get consultants by team lead
+// Server route is /api/users/team/:teamLeadId — the old client path
+// (/users/teamlead/:id/consultants) never matched, so this used to return
+// a 404 silently. Matches CLAUDE.md "Known Issues" note.
 const getConsultantsByTeamLead = async (teamLeadId) => {
-    const response = await axios.get(`/users/teamlead/${teamLeadId}/consultants`);
+    const response = await axios.get(`${API_URL}/team/${teamLeadId}`);
     return response.data;
 };
 

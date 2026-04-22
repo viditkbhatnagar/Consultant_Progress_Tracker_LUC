@@ -18,6 +18,7 @@ import {
     Videocam as VideocamIcon,
     DirectionsCar as DirectionsCarIcon,
     Business as BusinessIcon,
+    School as SchoolIcon,
 } from '@mui/icons-material';
 import { LEAD_STAGES, MEETING_MODES } from '../utils/constants';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +30,7 @@ const MODE_ICONS = {
     Zoom: { Icon: VideocamIcon, color: '#4f46e5' },
     'Out Meeting': { Icon: DirectionsCarIcon, color: '#7c3aed' },
     'Office Meeting': { Icon: BusinessIcon, color: '#16a34a' },
+    'Student Meeting': { Icon: SchoolIcon, color: '#ea580c' },
 };
 
 const blankForm = {
@@ -120,26 +122,31 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     }, [open, isAdmin]);
 
     // Load the consultant list: TL gets their own team's consultants; admin
-    // cascades from the selected team lead.
+    // cascades from the selected team lead. Consultants live in the
+    // Consultant collection (not the User collection) so we always fetch via
+    // consultantService and, for admin, filter by teamLead client-side.
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
 
         const load = async () => {
             try {
-                if (isAdmin) {
-                    if (!formData.teamLead) {
-                        if (!cancelled) setConsultants([]);
-                        return;
-                    }
-                    const res = await userService.getConsultantsByTeamLead(formData.teamLead);
-                    const list = res.data || res || [];
-                    if (!cancelled) setConsultants(list.filter((c) => c.isActive !== false));
-                } else {
-                    const res = await consultantService.getConsultants();
-                    const list = res.data || res || [];
-                    if (!cancelled) setConsultants(list.filter((c) => c.isActive !== false));
+                if (isAdmin && !formData.teamLead) {
+                    if (!cancelled) setConsultants([]);
+                    return;
                 }
+                const res = await consultantService.getConsultants(
+                    isAdmin ? { organization: 'luc' } : {}
+                );
+                const list = res.data || res || [];
+                const active = list.filter((c) => c.isActive !== false);
+                const scoped = isAdmin
+                    ? active.filter((c) => {
+                          const tl = c.teamLead?._id || c.teamLead;
+                          return tl && tl.toString() === formData.teamLead.toString();
+                      })
+                    : active;
+                if (!cancelled) setConsultants(scoped);
             } catch (_e) {
                 if (!cancelled) setConsultants([]);
             }

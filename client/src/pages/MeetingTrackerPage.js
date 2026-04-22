@@ -30,6 +30,7 @@ import {
     Videocam as VideocamIcon,
     DirectionsCar as DirectionsCarIcon,
     Business as BusinessIcon,
+    School as SchoolIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -46,6 +47,7 @@ const MODE_ICONS = {
     Zoom: { Icon: VideocamIcon, color: '#4f46e5' },
     'Out Meeting': { Icon: DirectionsCarIcon, color: '#7c3aed' },
     'Office Meeting': { Icon: BusinessIcon, color: '#16a34a' },
+    'Student Meeting': { Icon: SchoolIcon, color: '#ea580c' },
 };
 
 const PAGE_SIZE = 20;
