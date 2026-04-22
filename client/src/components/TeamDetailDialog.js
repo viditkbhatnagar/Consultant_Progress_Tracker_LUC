@@ -33,6 +33,7 @@ import {
 import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { getLeadStageColor, getAchievementColor } from '../utils/constants';
+import { formatWeekOfMonth } from '../utils/weekUtils';
 
 const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick, onEditCommitment, onOpenAdminComment }) => {
     if (!team) return null;
@@ -131,7 +132,7 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick,
 
                                 return (
                                     <TableRow key={commitment._id} hover>
-                                        <TableCell>W{commitment.weekNumber}</TableCell>
+                                        <TableCell>{formatWeekOfMonth(commitment.commitmentDate, commitment.weekStartDate)}</TableCell>
                                         <TableCell>{dateFormatted}</TableCell>
                                         <TableCell>{dayOfWeek}</TableCell>
                                         <TableCell>{timeFormatted}</TableCell>

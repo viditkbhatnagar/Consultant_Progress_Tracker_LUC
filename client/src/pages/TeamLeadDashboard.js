@@ -8,6 +8,7 @@ import {
     CardContent,
     Table,
     TableBody,
+    TablePagination,
     TableCell,
     TableContainer,
     TableHead,
@@ -58,7 +59,7 @@ import ConsultantManagementDialog from '../components/ConsultantManagementDialog
 import Sidebar, { DRAWER_WIDTH } from '../components/Sidebar';
 import AISummaryCard from '../components/AISummaryCard';
 import { ConsultantPerformanceChart, LeadStageChart } from '../components/Charts';
-import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
+import { getWeekInfo, formatWeekDisplay, formatWeekOfMonth } from '../utils/weekUtils';
 import { getLeadStageColor, getAchievementColor, LEAD_STAGES_LIST, STATUS_LIST } from '../utils/constants';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 
@@ -82,6 +83,9 @@ const TeamLeadDashboard = () => {
     const [consultantDialogOpen, setConsultantDialogOpen] = useState(false);
     const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
     const [filters, setFilters] = useState({ search: '', stage: '', status: '', consultant: '' });
+    // Pagination for the All Team Commitments table. 20 rows per page.
+    const COMMITMENTS_PAGE_SIZE = 20;
+    const [commitmentsPage, setCommitmentsPage] = useState(0);
 
     // Date range state
     const [dateRange, setDateRange] = useState({
@@ -199,10 +203,12 @@ const TeamLeadDashboard = () => {
 
     const handleFilterChange = (newFilters) => {
         setFilters(newFilters);
+        setCommitmentsPage(0);
     };
 
     const handleDateRangeChange = (newRange) => {
         setDateRange(newRange);
+        setCommitmentsPage(0);
     };
 
     const handleConsultantClick = async (consultant) => {
@@ -796,7 +802,12 @@ const TeamLeadDashboard = () => {
                                                 </TableRow>
                                             </TableHead>
                                             <TableBody>
-                                                {displayCommitments.map((commitment) => {
+                                                {displayCommitments
+                                                    .slice(
+                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE,
+                                                        commitmentsPage * COMMITMENTS_PAGE_SIZE + COMMITMENTS_PAGE_SIZE
+                                                    )
+                                                    .map((commitment) => {
                                                     // Calculate achievement: 100% if achieved or admission closed, else 0%
                                                     const achievement = (commitment.status === 'achieved' || commitment.admissionClosed) ? 100 : 0;
                                                     // Date/Day from commitmentDate (the day the user picked for
@@ -815,7 +826,7 @@ const TeamLeadDashboard = () => {
                                                     return (
                                                         <TableRow key={commitment._id} hover>
                                                             {/* Week */}
-                                                            <TableCell>W{commitment.weekNumber}</TableCell>
+                                                            <TableCell>{formatWeekOfMonth(commitment.commitmentDate, commitment.weekStartDate)}</TableCell>
 
                                                             {/* Date */}
                                                             <TableCell>{dateFormatted}</TableCell>
@@ -999,6 +1010,14 @@ const TeamLeadDashboard = () => {
                                                 })}
                                             </TableBody>
                                         </Table>
+                                        <TablePagination
+                                            component="div"
+                                            count={displayCommitments.length}
+                                            page={commitmentsPage}
+                                            onPageChange={(_e, next) => setCommitmentsPage(next)}
+                                            rowsPerPage={COMMITMENTS_PAGE_SIZE}
+                                            rowsPerPageOptions={[COMMITMENTS_PAGE_SIZE]}
+                                        />
                                     </TableContainer>
                                 )}
                             </CardContent>

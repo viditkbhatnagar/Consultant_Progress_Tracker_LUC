@@ -62,6 +62,21 @@ export const isPastWeek = (weekNumber, year) => {
 };
 
 /**
+ * Format a date as "<Month> W<n>" where n is the 1-indexed week of the month
+ * (Apr 1-7 → W1, 8-14 → W2, etc.). Falls back to weekStartDate when the
+ * primary date is missing.
+ */
+export const formatWeekOfMonth = (primary, fallback) => {
+    const source = primary || fallback;
+    if (!source) return '';
+    const d = new Date(source);
+    if (Number.isNaN(d.getTime())) return '';
+    const monthName = format(d, 'MMMM');
+    const weekOfMonth = Math.ceil(d.getDate() / 7);
+    return `${monthName} W${weekOfMonth}`;
+};
+
+/**
  * Get week info for a date
  */
 export const getWeekInfo = (date = new Date()) => {

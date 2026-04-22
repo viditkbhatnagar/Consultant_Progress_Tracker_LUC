@@ -20,6 +20,18 @@ function hourlyScopeFilter(req) {
     return rest;
 }
 
+// Consultant-scoping for the cross-team views (leaderboard, weekly leaderboard,
+// AI analysis). LUC team_leads see the whole LUC tenant here — they can
+// benchmark their team against the rest of the org. Admins already see
+// everything. Skillhub branch logins and any other role keep the default
+// ownership-scoped filter.
+function leaderboardConsultantScope(req) {
+    if (req.user.role === 'team_lead' && req.user.organization === 'luc') {
+        return hourlyScopeFilter(req);
+    }
+    return buildScopeFilter(req);
+}
+
 let openai;
 const getOpenAIClient = () => {
     if (!openai) {
@@ -88,6 +100,100 @@ function getActivityItems(doc) {
             duration: doc.duration,
         },
     ];
+}
+
+// Roll up per-consultant leaderboard stats into per-team stats. Input shape
+// matches the `consultantStats` objects built inside getLeaderboard /
+// getWeeklyLeaderboard (LUC path). Returns an array of teams with summed
+// counters and headcount.
+function aggregateConsultantsByTeam(activeConsultants) {
+    const teamMap = {};
+    for (const c of activeConsultants) {
+        const key = c.team || 'Unknown';
+        if (!teamMap[key]) {
+            teamMap[key] = {
+                team: key,
+                consultants: 0,
+                activeConsultants: 0,
+                calls: 0,
+                followups: 0,
+                operations: 0,
+                drips: 0,
+                offlineMtgs: 0,
+                zoomMtgs: 0,
+                outMtgs: 0,
+                teamMtgs: 0,
+                meetingMinutes: 0,
+                admissions: 0,
+                activeSlots: 0,
+            };
+        }
+        const t = teamMap[key];
+        t.consultants++;
+        t.activeConsultants += (c.activeSlots > 0 || c.admissions > 0) ? 1 : 0;
+        t.calls += c.calls || 0;
+        t.followups += c.followups || 0;
+        t.operations += c.operations || 0;
+        t.drips += c.drips || 0;
+        t.offlineMtgs += c.meetings?.offline || 0;
+        t.zoomMtgs += c.meetings?.zoom || 0;
+        t.outMtgs += c.meetings?.out || 0;
+        t.teamMtgs += c.meetings?.team || 0;
+        t.meetingMinutes += c.meetingMinutes || 0;
+        t.admissions += c.admissions || 0;
+        t.activeSlots += c.activeSlots || 0;
+    }
+    return Object.values(teamMap);
+}
+
+// Team-level leaderboard prompt. Same weighting spirit as the consultant
+// prompt but ranks teams and asks for a per-team takeaway.
+function buildTeamLeaderboardPrompt(teams, dateOrRangeLabel, isWeekly = false) {
+    const header = isWeekly ? 'weekly leaderboard' : 'daily leaderboard';
+    const sectionTitle = isWeekly ? '## 🏆 Weekly Team Leaderboard' : '## 🏆 Daily Team Leaderboard';
+    return `You are ranking teams for a ${header} covering ${dateOrRangeLabel}.
+
+Here is each team's aggregated activity data:
+${teams.map(t => {
+        const totalMtgs = t.offlineMtgs + t.zoomMtgs + t.outMtgs + t.teamMtgs;
+        return `- Team ${t.team} (${t.activeConsultants}/${t.consultants} active consultants): ${t.calls} calls, ${t.followups} follow-ups, ${t.drips} drips, ${totalMtgs} meetings (${(t.meetingMinutes / 60).toFixed(1)}h), ${t.operations} operations, ${t.admissions} admissions, ${t.activeSlots} active slots`;
+    }).join('\n')}
+
+RANKING CRITERIA (use your judgement with these weights):
+- Admissions are the most valuable (actual conversions) — highest weight
+- Meetings indicate direct client engagement — high weight
+- Follow-ups show persistence and pipeline nurturing — medium weight
+- Calls are important for volume but quality matters more — medium weight
+- Drips show marketing effort — lower weight
+- Operations are non-productive time — should lower rank
+- Consider team size: compare per-consultant averages, not just totals
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+${sectionTitle}
+
+### 🥇 1st Place — Team [Name]
+**Score: [X]/100** | Active consultants: [N]
+- [Key stats summary in 1 line]
+- [Why this team earned 1st place]
+
+### 🥈 2nd Place — Team [Name]
+**Score: [X]/100** | Active consultants: [N]
+- [Key stats summary]
+- [Why they earned 2nd]
+
+### 🥉 3rd Place — Team [Name]
+**Score: [X]/100** | Active consultants: [N]
+- [Key stats summary]
+- [Why they earned 3rd]
+
+## Full Rankings
+4. **Team [Name]** — Score: [X]/100 — [brief reason]
+5. **Team [Name]** — Score: [X]/100 — [brief reason]
+(continue for all active teams)
+
+## Key Takeaway
+One sentence about what the top team did differently.`;
 }
 
 // Helper: check if date is exactly today (for strict validation)
@@ -960,7 +1066,7 @@ exports.getAIAnalysis = async (req, res, next) => {
 
         const dateObj = parseDate(date);
         const scope = hourlyScopeFilter(req);
-        const consultantScope = buildScopeFilter(req);
+        const consultantScope = leaderboardConsultantScope(req);
         const viewOrg = resolveViewOrg(req);
 
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
@@ -1176,14 +1282,15 @@ Numbered list of the most impactful things the team should focus on.`;
 // @access  Private
 exports.getLeaderboard = async (req, res, next) => {
     try {
-        const { date } = req.query;
+        const { date, groupBy } = req.query;
         if (!date) {
             return res.status(400).json({ success: false, message: 'Date is required' });
         }
+        const groupByTeam = groupBy === 'team';
 
         const dateObj = parseDate(date);
         const scope = hourlyScopeFilter(req);
-        const consultantScope = buildScopeFilter(req);
+        const consultantScope = leaderboardConsultantScope(req);
         const viewOrg = resolveViewOrg(req);
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
         const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
@@ -1227,10 +1334,49 @@ exports.getLeaderboard = async (req, res, next) => {
             if (consultantStats[cid]) consultantStats[cid].admissions += adm.count || 0;
         }
 
-        const activeConsultants = Object.values(consultantStats).filter(s => s.activeSlots > 0 || s.admissions > 0);
+        const allConsultants = Object.values(consultantStats);
+        const activeConsultants = allConsultants.filter(s => s.activeSlots > 0 || s.admissions > 0);
 
         if (activeConsultants.length === 0) {
             return res.status(200).json({ success: true, data: 'No activity data found for this date.' });
+        }
+
+        // Team-level leaderboard branches off here. The per-team prompt uses
+        // allConsultants (including zero-activity ones) so headcount is
+        // accurate, while "active consultants" tracks engagement.
+        if (groupByTeam) {
+            const teamStats = aggregateConsultantsByTeam(allConsultants)
+                .filter(t => t.activeSlots > 0 || t.admissions > 0);
+            if (teamStats.length === 0) {
+                return res.status(200).json({ success: true, data: 'No activity data found for this date.' });
+            }
+            const teamPrompt = buildTeamLeaderboardPrompt(teamStats, date, false);
+            const client = getOpenAIClient();
+            const teamCompletion = await client.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'You are a fair and data-driven performance ranker for an education consultancy. Rank teams based on aggregated activity data. Be concise. Use markdown.' },
+                    { role: 'user', content: teamPrompt },
+                ],
+                temperature: 0.5,
+                max_tokens: 2000,
+            });
+            const teamLeaderboard = teamCompletion.choices[0]?.message?.content || 'No leaderboard generated';
+            const tUsage = teamCompletion.usage || {};
+            const tPromptTokens = tUsage.prompt_tokens || 0;
+            const tCompletionTokens = tUsage.completion_tokens || 0;
+            const tCost = (tPromptTokens * 0.00000015) + (tCompletionTokens * 0.0000006);
+            await AIUsage.create({
+                user: req.user.id,
+                role: req.user.role,
+                model: 'gpt-4o-mini',
+                promptTokens: tPromptTokens,
+                completionTokens: tCompletionTokens,
+                totalTokens: tPromptTokens + tCompletionTokens,
+                cost: tCost,
+                dateRangeQueried: { startDate: date, endDate: date },
+            });
+            return res.status(200).json({ success: true, data: teamLeaderboard });
         }
 
         const prompt = `You are ranking consultants for a daily leaderboard on ${date}.
@@ -1435,15 +1581,16 @@ One sentence about what the top performers did differently this week.`;
 // @access  Private
 exports.getWeeklyLeaderboard = async (req, res, next) => {
     try {
-        const { date } = req.query;
+        const { date, groupBy } = req.query;
         if (!date) {
             return res.status(400).json({ success: false, message: 'Date is required' });
         }
+        const groupByTeam = groupBy === 'team';
 
         const { start, end } = getWeekRange(date);
         const weekLabel = `${fmtDayShort(start)} – ${fmtDayShort(end)} ${end.getUTCFullYear()}`;
         const scope = hourlyScopeFilter(req);
-        const consultantScope = buildScopeFilter(req);
+        const consultantScope = leaderboardConsultantScope(req);
         const viewOrg = resolveViewOrg(req);
 
         const activities = await HourlyActivity.find({
@@ -1496,9 +1643,44 @@ exports.getWeeklyLeaderboard = async (req, res, next) => {
             if (s) s.admissions += adm.count || 0;
         }
 
-        const active = Object.values(stats).filter(s => s.activeSlots > 0 || s.admissions > 0);
+        const allStats = Object.values(stats);
+        const active = allStats.filter(s => s.activeSlots > 0 || s.admissions > 0);
         if (active.length === 0) {
             return res.status(200).json({ success: true, data: 'No activity data found for this week.' });
+        }
+
+        // Team-level weekly leaderboard branch.
+        if (groupByTeam) {
+            const teamStats = aggregateConsultantsByTeam(allStats)
+                .filter(t => t.activeSlots > 0 || t.admissions > 0);
+            if (teamStats.length === 0) {
+                return res.status(200).json({ success: true, data: 'No activity data found for this week.' });
+            }
+            const teamPrompt = buildTeamLeaderboardPrompt(teamStats, weekLabel, true);
+            const client = getOpenAIClient();
+            const completion = await client.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'You are a fair and data-driven weekly team performance ranker for an education consultancy. Rank teams across a 7-day window using weighted scoring. Be concise. Use markdown.' },
+                    { role: 'user', content: teamPrompt },
+                ],
+                temperature: 0.5,
+                max_tokens: 2200,
+            });
+            const teamLeaderboard = completion.choices[0]?.message?.content || 'No leaderboard generated';
+            const usage = completion.usage || {};
+            const cost = ((usage.prompt_tokens || 0) * 0.00000015) + ((usage.completion_tokens || 0) * 0.0000006);
+            await AIUsage.create({
+                user: req.user.id,
+                role: req.user.role,
+                model: 'gpt-4o-mini',
+                promptTokens: usage.prompt_tokens || 0,
+                completionTokens: usage.completion_tokens || 0,
+                totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+                cost,
+                dateRangeQueried: { startDate: weekLabel, endDate: weekLabel },
+            });
+            return res.status(200).json({ success: true, data: teamLeaderboard });
         }
 
         const prompt = `You are ranking consultants for a weekly leaderboard covering ${weekLabel}.

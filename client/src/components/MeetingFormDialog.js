@@ -434,7 +434,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 error={!!errors.status}
                                 helperText={errors.status}
                             >
-                                {LEAD_STAGES.map((stage) => (
+                                {LEAD_STAGES.filter((s) => s.value !== 'Meeting Scheduled').map((stage) => (
                                     <MenuItem key={stage.value} value={stage.value}>
                                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                             <Box
