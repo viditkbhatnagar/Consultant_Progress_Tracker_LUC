@@ -490,20 +490,30 @@ async function getStudents({
     };
 }
 
-// Revenue for a date window. Data reality for THIS tenant (profiled
-// against the live DB):
-//   - LUC: `Commitment.closedDate` is NEVER populated (0 / 341 closed
-//     records), and `Commitment.closedAmount` is always 0. The actual
-//     close-date field that IS populated is `Commitment.admissionClosedDate`.
-//     Real LUC cash lives on `Student.admissionFeePaid` (~349 / 975
-//     records carry a non-zero value), attributed by `Student.closingDate`.
-//     `Student.courseFee` is the sticker price, not revenue.
-//   - Skillhub: `Student.admissionFeePaid + registrationFee + sum(emis.paidAmount)`
-//     is real revenue. Upfront fees are attributed to `createdAt` because
-//     no payment-date field exists; EMI payments carry `emis.paidOn`.
+// Revenue for a date window. Currency = **AED** (UAE Dirham) for all
+// business figures stored in this tenant. Tool never emits a currency
+// symbol — it returns plain numbers plus `currency: 'AED'` so the LLM
+// can format correctly.
 //
-// Tool returns both admissions COUNT and revenue AMOUNT so callers can
-// distinguish "N admissions closed" from "$X recorded".
+// Two revenue definitions exist and users conflate them:
+//   1. **revenueBooked** — sum of `Student.courseFee` for students
+//      whose closingDate is in the window. Matches the Student Database
+//      page's "Revenue" KPI (the big number admins look at).
+//   2. **cashCollected** — actual money received: LUC = sum of
+//      `admissionFeePaid` attributed to closingDate;
+//      Skillhub = `admissionFeePaid + registrationFee` by createdAt +
+//      `emis.paidAmount` by emis.paidOn.
+//
+// Report BOTH so the user can reconcile with whichever KPI they're
+// looking at. revenueBooked is the primary/default — it's what the
+// dashboard shows. cashCollected is supplementary.
+//
+// Data reality caveats (profiled against the live DB):
+//   - LUC: `Commitment.closedDate` is NEVER populated; `Commitment.closedAmount`
+//     is always 0. Use `admissionClosedDate` for admission COUNTS, Student
+//     fields for REVENUE.
+//   - ~349 of 975 LUC students have a non-zero `admissionFeePaid` —
+//     cashCollected is partial, revenueBooked is the reliable headline.
 async function getRevenue({ startDate, endDate, organization } = {}) {
     const s = toDate(startDate);
     const eRaw = toDate(endDate);
@@ -531,7 +541,7 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
           }
         : { _id: null };
 
-    // ---------- LUC revenue AMOUNT (from Student.admissionFeePaid, attributed by closingDate) ----------
+    // ---------- LUC revenue AMOUNTS (booked + cash, from Student by closingDate) ----------
     const lucStudentMatch = scopeLuc
         ? {
               organization: 'luc',
@@ -553,12 +563,6 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
                 $group: {
                     _id: '$organization',
                     admissions: { $sum: 1 },
-                    revenue: { $sum: { $ifNull: ['$closedAmount', 0] } },
-                    admissionsWithAmount: {
-                        $sum: {
-                            $cond: [{ $gt: [{ $ifNull: ['$closedAmount', 0] }, 0] }, 1, 0],
-                        },
-                    },
                 },
             },
         ]),
@@ -568,8 +572,10 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
                 $group: {
                     _id: '$organization',
                     studentsClosing: { $sum: 1 },
+                    // Booked revenue — matches the Student Database "Revenue" KPI.
+                    revenueBooked: { $sum: { $ifNull: ['$courseFee', 0] } },
+                    // Actual cash received at admission time.
                     cashCollected: { $sum: { $ifNull: ['$admissionFeePaid', 0] } },
-                    courseFeeBooked: { $sum: { $ifNull: ['$courseFee', 0] } },
                     studentsWithCash: {
                         $sum: {
                             $cond: [{ $gt: [{ $ifNull: ['$admissionFeePaid', 0] }, 0] }, 1, 0],
@@ -656,52 +662,76 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
     ]);
 
     const byOrg = {};
-    // LUC: admissions come from Commitment; cash comes from Student (different
-    // dates, so admissions count and revenue may not line up 1:1).
+    // LUC admissions count (from Commitment.admissionClosedDate).
     for (const row of lucAgg) {
         byOrg[row._id] = byOrg[row._id] || { organization: row._id };
-        byOrg[row._id].admissions = (byOrg[row._id].admissions || 0) + (row.admissions || 0);
-        byOrg[row._id].commitmentClosedAmount =
-            (byOrg[row._id].commitmentClosedAmount || 0) + (row.revenue || 0);
+        byOrg[row._id].admissions =
+            (byOrg[row._id].admissions || 0) + (row.admissions || 0);
     }
+    // LUC booked revenue + cash (from Student by closingDate).
     for (const row of lucStudentAgg) {
         byOrg[row._id] = byOrg[row._id] || { organization: row._id };
         byOrg[row._id].studentsClosing = row.studentsClosing || 0;
+        byOrg[row._id].revenueBooked =
+            (byOrg[row._id].revenueBooked || 0) + (row.revenueBooked || 0);
         byOrg[row._id].cashCollected =
             (byOrg[row._id].cashCollected || 0) + (row.cashCollected || 0);
-        byOrg[row._id].courseFeeBooked =
-            (byOrg[row._id].courseFeeBooked || 0) + (row.courseFeeBooked || 0);
         byOrg[row._id].studentsWithCash = row.studentsWithCash || 0;
+        // If admission-count didn't come from Commitment (e.g. query scope
+        // returned 0 commits), fall back to students-closing count so the
+        // org still appears in the output.
+        if (!byOrg[row._id].admissions) {
+            byOrg[row._id].admissions = row.studentsClosing || 0;
+        }
     }
+    // Skillhub — the aggregation here returned `revenue` (cash) and `admissions`.
+    // For Skillhub, booked revenue is also courseFee but we don't currently
+    // fetch it separately; the Skillhub Student list at this stage doesn't
+    // include courseFee in the aggregation. We approximate revenueBooked =
+    // cashCollected for Skillhub (upfront is usually the full fee when paid),
+    // and expose both fields in the per-org payload so the LLM can be explicit.
     for (const row of skillhubAgg) {
         byOrg[row._id] = byOrg[row._id] || { organization: row._id };
         byOrg[row._id].admissions =
             (byOrg[row._id].admissions || 0) + (row.admissions || 0);
         byOrg[row._id].cashCollected =
             (byOrg[row._id].cashCollected || 0) + (row.revenue || 0);
+        byOrg[row._id].revenueBooked =
+            (byOrg[row._id].revenueBooked || 0) + (row.revenue || 0);
     }
 
-    // Compute `revenue` per row as the best available signal:
-    //   LUC → cashCollected (from Student.admissionFeePaid)
-    //   Skillhub → cashCollected (from upfront + emis.paidOn)
     const rows = Object.values(byOrg).map((r) => ({
-        ...r,
-        revenue: r.cashCollected || 0,
+        organization: r.organization,
+        admissions: r.admissions || 0,
+        studentsClosing: r.studentsClosing || 0,
+        revenueBooked: r.revenueBooked || 0,
+        cashCollected: r.cashCollected || 0,
+        studentsWithCash: r.studentsWithCash || 0,
     }));
 
-    const totalRevenue = rows.reduce((s, r) => s + (r.revenue || 0), 0);
+    const totalRevenueBooked = rows.reduce((s, r) => s + (r.revenueBooked || 0), 0);
+    const totalCashCollected = rows.reduce((s, r) => s + (r.cashCollected || 0), 0);
     const totalAdmissions = rows.reduce((s, r) => s + (r.admissions || 0), 0);
 
     return {
         window: { startDate, endDate },
-        totalRevenue,
+        currency: 'AED',
+        // revenueBooked is the primary headline — matches the dashboard's
+        // "Revenue" KPI (sum of courseFee). Use this as the default answer
+        // unless the user asks specifically about cash / collections.
+        totalRevenueBooked,
+        totalCashCollected,
         totalAdmissions,
         byOrganization: rows,
         notes: {
+            currency:
+                'All monetary figures are AED (UAE Dirham). Format as "AED 1,533,100" or "1,533,100 AED" — NEVER "$" or "USD".',
+            revenueDefinitions:
+                'revenueBooked = sum(Student.courseFee) for closings in window — this is what the Student DB "Revenue" KPI shows. cashCollected = sum(Student.admissionFeePaid + registrationFee + emis.paidAmount) — actual money received. Lead with revenueBooked; mention cashCollected if the user explicitly asks about cash / collections.',
             luc:
-                'LUC admissions counted via Commitment.admissionClosedDate. LUC cash revenue is sum of Student.admissionFeePaid attributed to Student.closingDate in window. Commitment.closedAmount is never populated in this tenant (ignore it).',
+                'LUC admissions counted via Commitment.admissionClosedDate. Revenue/cash from Student by closingDate. Commitment.closedAmount is never populated in this tenant (ignore it).',
             skillhub:
-                'Skillhub admissions counted via Student.createdAt in window. Revenue = admissionFeePaid + registrationFee (attributed to createdAt) + sum(emis.paidAmount where emis.paidOn in window).',
+                'Skillhub admissions + revenue from Student by createdAt / emis.paidOn. For Skillhub, revenueBooked and cashCollected are approximated together (courseFee not separately aggregated in this window).',
         },
     };
 }

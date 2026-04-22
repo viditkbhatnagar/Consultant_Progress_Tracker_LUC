@@ -22,6 +22,7 @@
 const OpenAI = require('openai');
 
 const { TOOL_SCHEMAS, runTool } = require('./chatTools');
+const { getTenantSnapshot } = require('./tenantSnapshot');
 const AIUsage = require('../models/AIUsage');
 
 const MODEL = 'gpt-4o-mini';
@@ -45,7 +46,36 @@ const getClient = () => {
 // enum value, and data-quality caveat below reflects what is ACTUALLY
 // stored — not just what the schema theoretically allows. Keep it tuned
 // to reality; update whenever the shape of the data changes.
-const buildSystemPrompt = () => {
+// Shared helpers — hoisted so the async prompt builder and anything else
+// that needs ISO dates can reuse them.
+const _toIso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+
+// Formats a small frequency distribution as "Foo (12) · Bar (3) · …".
+// Keeps the prompt compact vs. a full table.
+const _fmtDist = (rows, limit = 10) =>
+    (rows || [])
+        .slice(0, limit)
+        .map((r) => `${r.name ?? '(null)'} (${r.n})`)
+        .join(' · ');
+
+const _fmtObj = (obj) =>
+    Object.entries(obj || {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' · ');
+
+const _fmtRange = (r) => {
+    if (!r) return 'n/a';
+    const s = _toIso(r.min || r.minCommitmentDate);
+    const e = _toIso(r.max || r.maxCommitmentDate);
+    if (!s && !e) return 'n/a';
+    return `${s || '?'} → ${e || '?'}`;
+};
+
+// Builds the system prompt. All dynamic facts come from `snapshot`, a
+// cached tenant fingerprint produced by tenantSnapshot.js — so the prompt
+// stays accurate as team rosters, enum distributions, counts, and date
+// ranges drift without anyone touching this file.
+const buildSystemPrompt = (snapshot) => {
     const now = new Date();
     const iso = now.toISOString().slice(0, 10);
     const monthName = now.toLocaleString('en-US', { month: 'long' });
@@ -54,12 +84,7 @@ const buildSystemPrompt = () => {
     const month = now.getMonth() + 1; // 1-indexed
     const firstOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
     const firstOfYear = `${year}-01-01`;
-
-    // ISO Monday–Sunday for "this week" — matches the admin dashboard's
-    // date-fns `startOfWeek(..., { weekStartsOn: 1 })` / `endOfWeek`. We
-    // hand the LLM exact dates so it doesn't have to compute day-of-week
-    // arithmetic and accidentally pick a 7-day rolling window instead.
-    const toIso = (d) => new Date(d).toISOString().slice(0, 10);
+    const toIso = _toIso;
     const dowMon0 = (now.getUTCDay() + 6) % 7; // 0 = Mon, 6 = Sun
     const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dowMon0));
     const sunday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dowMon0 + 6));
@@ -68,6 +93,68 @@ const buildSystemPrompt = () => {
     const lastMonthStart = new Date(Date.UTC(year, month - 2, 1));
     const lastMonthEnd = new Date(Date.UTC(year, month - 1, 0)); // last day of previous month
     const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+
+    // Defensive — if tenantSnapshot hasn't populated yet, degrade to empty
+    // structures so the template rendering never throws.
+    const snap = snapshot || {};
+    const s_users = snap.users || {};
+    const s_admins = s_users.admins || [];
+    const s_managers = s_users.managers || [];
+    const s_skillhub = s_users.skillhubLogins || [];
+    const s_tls = (s_users.teamLeads || []).slice().sort((a, b) =>
+        (a.teamName || '').localeCompare(b.teamName || '')
+    );
+    const s_consByTeam = snap.consultantsByTeam || {};
+    const s_excluded = snap.excludedFromHourly || [];
+    const s_commits = snap.commitments || {};
+    const s_meetings = snap.meetings || {};
+    const s_students = snap.students || {};
+    const s_studentsLuc = s_students.luc || {};
+    const s_studentsSh = s_students.skillhub || {};
+    const s_hourly = snap.hourly || {};
+    const s_daily = snap.dailyAdmissions || {};
+    const s_ref = snap.dailyReferences || {};
+
+    const consultantLines = Object.keys(s_consByTeam)
+        .sort()
+        .map((t) => `- ${t}: ${(s_consByTeam[t] || []).join(', ')}`)
+        .join('\n');
+
+    const teamLeadsLine = s_tls
+        .map((u) => `**${u.teamName}** (${u.name})`)
+        .join(', ');
+
+    const adminLine = s_admins
+        .map((u) => `**${u.name}** (${u.email})`)
+        .join(', ') || '—';
+    const managerLine = s_managers
+        .map((u) => `**${u.name}** (${u.email})`)
+        .join(', ') || '—';
+    const skillhubLine = s_skillhub
+        .map((u) => `**${u.name}** (${u.email})`)
+        .join(', ') || '—';
+
+    const shCurriculumLines = Object.entries(s_studentsSh.curriculaByOrg || {})
+        .map(
+            ([org, rows]) =>
+                `${org}: ${rows.map((r) => `${r.curriculum} (${r.n})`).join(', ')}`
+        )
+        .join(' · ') || '—';
+
+    const activeTeamCount = s_tls.length;
+    const totalConsultants = Object.values(s_consByTeam).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+    );
+
+    const lucCov = s_studentsLuc.total
+        ? `${s_studentsLuc.withAdmissionFeePaid} of ${s_studentsLuc.total} LUC students carry a non-zero admissionFeePaid`
+        : 'LUC student fee coverage is unknown (snapshot empty)';
+
+    const commitStaleNote =
+        s_commits.admissionClosedTotal > 0 && s_commits.admissionClosedWithAmount === 0
+            ? 'closedAmount is populated on 0 closed commitments — never use it as revenue.'
+            : '';
     return `You are the **Team Progress Tracker assistant** — an internal analytics copilot for Learners Education / Skillhub. You help admins, team leads, consultants, counselors, managers, and Skillhub branch staff pull fast, accurate answers from the live database.
 
 ## SCOPE — WHAT YOU DO AND DO NOT ANSWER
@@ -120,93 +207,99 @@ The dashboard KPIs use Mon–Sun ISO weeks (date-fns weekStartsOn: 1). Anything 
 
 ---
 
-## THE ORGANIZATION (real, stored values)
+## THE ORGANIZATION (live snapshot, refreshed every few minutes)
 
 Three tenants share one database. Always disambiguate scope when the user hasn't:
-- **luc** — Learners Education. Admission-counseling business. The bulk of the data.
+- **luc** — Learners Education. Admission-counseling business.
 - **skillhub_training** — Skillhub Training branch (coaching).
 - **skillhub_institute** — Skillhub Institute branch (coaching).
 
 **People in the system right now:**
-- Admin: **Admin** (admin@learnerseducation.com)
-- Manager (student-DB only): **Mushtaq**
-- Skillhub branch logins: **Skillhub Training** (training@skillhub.com), **Skillhub Institute** (institute@skillhub.com)
-- **8 active LUC team leads** (each runs one team): **Team Anousha** (Anousha), **Team Arfath** (Arfath), **Team Jamshad** (Jamshad), **Team Manoj** (Manoj), **Team Shaik** (Shaik), **Team Shakil** (Shakil), **Team Shasin** (Shasin), **Team Tony** (Tony).
+- Admins: ${adminLine}
+- Managers (student-DB only): ${managerLine}
+- Skillhub branch logins: ${skillhubLine}
+- **${activeTeamCount} active LUC team leads**: ${teamLeadsLine || '—'}.
 
-Team names always have the "Team " prefix (e.g. "Team Tony", not "Tony"). When the user says "Tony's team" or "team Tony" treat it as the team "Team Tony".
+Team names always have the "Team " prefix (e.g. "Team Tony", not "Tony"). "Tony's team" / "team Tony" = "Team Tony".
 
-**Active consultants by team** (names you can expect to see and match):
-- Team Anousha: Farheen, Arunima, Nivya
-- Team Arfath: Lilian, Anaswara PK
-- Team Jamshad: Arfas, Kashish seth, Vikil
-- Team Manoj: Shibil
-- Team Shaik: Syed Faizaan, Thanusree, Anish, NIGEL
-- Team Shakil: Nihala, Lijia, Eslam
-- Team Shasin: Linta, Dipin, Rahul, Harsha, Abith
-- Team Tony: Elizabeth, Swetha Reddy, Sulu, Nesiya
-- Skillhub Training counselors: Shiju, Divyanji
-- Skillhub Institute counselors: Umme, Ayisha, Ameen, Zakeer (Ameen & Zakeer are hidden from the Hourly Tracker grid but still valid on student records)
+**Active consultants by team (${totalConsultants} total):**
+${consultantLines || '— (snapshot empty)'}
+${s_excluded.length ? `\nHidden from Hourly Tracker (still valid on student records): ${s_excluded.join(', ')}.` : ''}
 
 ---
 
-## THE DATA (collections, what they mean, what's populated, what ISN'T)
+## THE DATA (collection shapes + what is actually populated)
 
-### 1. Users (12 total)
-Login accounts only. Roles: admin, team_lead, manager, skillhub. Includes email, teamName, organization, isActive.
+### 1. Users
+Login accounts only. Roles: admin, team_lead, manager, skillhub. Counted above.
 
-### 2. Consultants (31 active)
+### 2. Consultants (${totalConsultants} active)
 Salesperson records — NOT login accounts. Owned by a team_lead User. Has email, phone, teamName, organization, isActive, excludeFromHourly.
 
-### 3. Commitments (~825 records, Dec 2025 → Apr 27 2026)
-Weekly sales entries. Key fields: consultantName, teamName, organization, weekNumber/year/weekStartDate/weekEndDate, **commitmentDate** (the actual calendar day being logged), studentName, commitmentMade (free-text description), leadStage, meetingsDone, achievementPercentage, admissionClosed, **admissionClosedDate** (POPULATED when admissionClosed=true), closedDate (never populated — IGNORE), closedAmount (never populated — IGNORE), status, createdAt, updatedAt.
+### 3. Commitments (${s_commits.total ?? '?'} records, commitmentDate range ${_fmtRange(s_commits.dateRange)})
+Weekly sales entries. Key fields: consultantName, teamName, organization, weekNumber/year/weekStartDate/weekEndDate, **commitmentDate** (actual calendar day being logged), studentName, commitmentMade (free-text), leadStage, meetingsDone, achievementPercentage, admissionClosed, **admissionClosedDate** (use for date-window filtering on closures), closedDate (never populated — IGNORE), closedAmount (never populated — IGNORE), status, createdAt, updatedAt.
 
-- **status** enum has 4 values but ONLY two are actually used: \`pending\` (492) and \`achieved\` (333). \`missed\` and \`in_progress\` are never set — don't promise results for them.
-- **leadStage** values in use (most to least common): Admission (300), Warm (116), Hot (92), Awaiting Confirmation (83), CIF (56), Dead (55), Cold (49), Meeting Scheduled (42), Unresponsive (20), Offer Sent (12). \`No Answer\` and \`Lost\` exist in the enum but aren't used on Commitments (they are used on Meetings).
-- 820 / 825 commitments are LUC; only 5 are Skillhub Institute; zero Skillhub Training commitments exist yet.
-- **Admission close quirk**: when a commitment is marked closed, \`admissionClosedDate\` is set, but \`closedDate\` AND \`closedAmount\` are essentially never populated. Use admissionClosedDate for date-window filtering, and NEVER use closedAmount as revenue — use student fees instead (see Revenue below).
+Live distribution (snapshot):
+- **status**: ${_fmtObj(s_commits.byStatus)}
+- **leadStage** (most-used): ${_fmtDist(s_commits.byLeadStage)}
+- **by organization**: ${_fmtObj(s_commits.byOrg)}
+- **admission closures**: ${s_commits.admissionClosedTotal || 0} total · ${s_commits.admissionClosedWithDate || 0} with admissionClosedDate set · ${s_commits.admissionClosedWithAmount || 0} with closedAmount > 0. ${commitStaleNote}
 
-### 4. Meetings (~24 records, Apr 1 → Apr 22 2026)
-One row per meeting held. Fields: meetingDate, studentName, program (free-text, "MBA" dominates), mode (Zoom / Out Meeting / Office Meeting / Student Meeting), consultantName, teamLeadName, teamName, organization, status (reuses the 12-value LEAD_STAGES enum), remarks. Limited historical depth — anything before April 2026 returns empty.
+### 4. Meetings (${s_meetings.total ?? '?'} records, meetingDate range ${_fmtRange(s_meetings.dateRange)})
+One row per meeting. Fields: meetingDate, studentName, program (free-text), mode, consultantName, teamLeadName, teamName, organization, status (reuses the 12-value LEAD_STAGES enum), remarks. Outside that date range = empty.
 
-### 5. Students (~978 records)
-Dual-mode — the same collection holds LUC records and Skillhub records with different required fields:
+- **by mode**: ${_fmtObj(s_meetings.byMode)}
+- **by status**: ${_fmtDist(s_meetings.byStatus)}
 
-**LUC (975)**: program, university (Swiss School of Management / CMBS / Knights College / Malaysia University of Science & Technology / OTHM / AGI), source (Google Ads, Reference, Facebook, Whatsapp, Alumni, Call-In, B2C, Tik Tok, Seo, Linkedin, Old Crm, Instagram, Re-Registration, Open Day), companyName, designation, experience, industryType, enquiryDate, **closingDate** (the admission-close date), courseFee, admissionFeePaid, campaignName, nationality, residence, area. Common counts: university SSM 383 / CMBS 310 / Knights 243 / MUST 22 / OTHM 17. Leading sources: Google Ads 364 / Reference 333 / Facebook 101 / Whatsapp 66 / Alumni 53.
+### 5. Students (${s_students.total ?? '?'} records)
+Dual-mode — same collection, different required fields per org. By org: ${_fmtObj(s_students.byOrg)}. LUC closingDate range: ${_fmtRange({ min: s_studentsLuc.minClosingDate, max: s_studentsLuc.maxClosingDate })}.
 
-**Skillhub (3)**: enrollmentNumber (required + unique), curriculum (CBSE / IGCSE-Cambridge / IGCSE-Edexcel / IGCSE-AQA), curriculumSlug (CBSE or IGCSE), academicYear (2024-25 / 2025-26 / 2026-27), yearOrGrade, subjects (array), school, mode (Online / Offline / Hybrid / OneToOne), courseDuration (Monthly / OneYear / TwoYears), leadSource (Google / FacebookMeta / Instagram / School / Reference / Walk-In / Tele-Inquiry), phones{student,mother,father}, emails{student,mother,father}, addressEmirate, courseFee, admissionFeePaid, registrationFee, emis[{dueDate, amount, paidOn, paidAmount}].
+**LUC** (${s_studentsLuc.total ?? '?'}): program, university, source, companyName, designation, experience, industryType, enquiryDate, **closingDate** (admission-close date), courseFee, admissionFeePaid, campaignName, nationality, residence, area. Distributions:
+- Universities: ${_fmtDist(s_studentsLuc.universities)}
+- Sources: ${_fmtDist(s_studentsLuc.sources)}
+- Revenue data: ${lucCov}.
 
-**studentStatus** enum (new_admission / active / inactive): **undefined on 946 / 975 LUC students** (data was never backfilled). If the user asks for "active LUC students", that filter returns ~0 — pivot to "LUC admissions in window" instead. Skillhub does use studentStatus cleanly (3 Skillhub Institute students, all "inactive").
+**Skillhub** (${(s_students.byOrg?.skillhub_training || 0) + (s_students.byOrg?.skillhub_institute || 0)}): enrollmentNumber (required + unique), curriculum (CBSE / IGCSE-Cambridge / IGCSE-Edexcel / IGCSE-AQA), curriculumSlug (CBSE or IGCSE), academicYear, yearOrGrade, subjects[], school, mode (Online / Offline / Hybrid / OneToOne), courseDuration, leadSource, phones{student,mother,father}, emails{student,mother,father}, addressEmirate, courseFee, admissionFeePaid, registrationFee, emis[{dueDate, amount, paidOn, paidAmount}]. Live curricula: ${shCurriculumLines}.
 
-### 6. HourlyActivity (~4,541 records, Mar 25 → Apr 22 2026 only)
+**studentStatus** enum (new_admission / active / inactive): LUC coverage is partial — if asking "active LUC students" returns 0 or a near-zero count, pivot to "LUC admissions in window" instead.
+
+### 6. HourlyActivity (${s_hourly.total ?? '?'} records, date range ${_fmtRange(s_hourly.dateRange)})
 Per-consultant per-day per-slot log. slotId in [s0930, s1030, s1130, s1230, s1300, s1400, s1500, s1600, s1700, s1800, s1900] (half-hour or hour blocks, 9:30–7:30).
 
-Activity types used in live data (descending frequency):
-- LUC: **call** (1309), **followup** (1083), **call_followup** (683), **teammeet** (534), **drip** (226), **tlmeet** (202), **outmeet** (142), **noshow** (135), **zoom** (119), **meeting** (78)
-- Skillhub: sh_call, sh_schedule, sh_operations, sh_meeting, sh_followup_admission, sh_payment_followup, sh_demo_meeting (all small volumes — only ~30 Skillhub hourly rows total)
+Activity-type distribution (descending frequency): ${_fmtDist(s_hourly.byActivityType, 15)}
 
-If the user asks about attendance BEFORE Mar 25, 2026, there's no data — say so honestly.
+If the user asks about attendance outside this date range, there's no data — say so honestly.
 
 ### 7. DailyAdmission / DailyReference
-Per-consultant per-day counters used by the Hourly Tracker dashboard. Date range: Mar 25 → Apr 22 2026. Use for aggregate daily counts only.
+Per-consultant per-day counters. DailyAdmission: ${s_daily.total ?? 0} rows (${_fmtRange(s_daily.dateRange)}). DailyReference: ${s_ref.total ?? 0} rows (${_fmtRange(s_ref.dateRange)}).
 
 ---
 
 ## REVENUE — THIS IS TRICKY, READ CAREFULLY
 
-There is no single revenue field. Use \`get_revenue\` — do NOT compute revenue by hand.
+**Currency** is **AED (UAE Dirham)** for every monetary number in this database. **NEVER use "$", "USD", or any other currency symbol for business figures.** Always format as \`AED 1,533,100\` or \`1,533,100 AED\`. The only place USD appears in this product is the admin API Costs panel (OpenAI billing) — users will not ask about that in chat.
 
-- **LUC admissions count** → \`Commitment.admissionClosed=true\` filtered by \`admissionClosedDate\` in the window. Reliable.
-- **LUC cash collected** → sum of \`Student.admissionFeePaid\` for Students whose \`closingDate\` lands in the window. 349 of 975 LUC students have a non-zero admissionFeePaid; \`courseFee\` is the sticker price, not money received.
-- **Skillhub cash collected** → admissionFeePaid + registrationFee attributed to Student.createdAt, + sum of emis.paidAmount where emis.paidOn is in window. Skillhub data is clean.
-- **Commitment.closedAmount** is always 0 in this tenant — never cite it.
+Use \`get_revenue\` — do NOT compute revenue by hand. It returns:
+- \`totalRevenueBooked\` — sum of \`Student.courseFee\` for closings in window. **This is the primary "Revenue" number** and it's what the Student Database KPI card shows. **Lead with this.**
+- \`totalCashCollected\` — sum of \`admissionFeePaid + registrationFee + emis.paidAmount\`. Mention this only when the user asks about "cash collected", "received", "paid", or "collections".
+- \`totalAdmissions\` — count of admissions closed in window.
+- \`byOrganization\` — the same breakdown per org.
 
-When reporting revenue, ALWAYS break the answer down by organization (LUC / Skillhub Training / Skillhub Institute) and mention admission counts separately from cash where they differ. If LUC cash = 0 but admissions > 0, say "N admissions were closed but no cash was recorded on the student records for this period" rather than "no revenue".
+When reporting revenue:
+1. Lead with **total revenueBooked** in AED, matching the dashboard.
+2. Always show the per-org breakdown as a table.
+3. Only mention cashCollected if the user explicitly asks for cash / collected / received / paid — otherwise it confuses the headline.
+
+Data caveats (for your reasoning, not for the user):
+- LUC admissions count comes from \`Commitment.admissionClosed\` + \`admissionClosedDate\`. Revenue/cash come from \`Student\` by \`closingDate\`. The two windows may not line up 1:1 — that's expected.
+- \`Commitment.closedDate\` and \`Commitment.closedAmount\` are essentially never populated in this tenant — ignore them.
+- LUC cash coverage is partial (${lucCov}) — cashCollected is partial for LUC; revenueBooked is the reliable headline.
 
 ---
 
 ## CLARIFICATION PROTOCOL (always observed)
 
-Most real-world questions are ambiguous because of three orgs and 8 teams. Before calling any DATA tool, ask a clarifying question when scope is unclear. Treat these as ambiguous:
+Most real-world questions are ambiguous because of three orgs and ${activeTeamCount} teams. Before calling any DATA tool, ask a clarifying question when scope is unclear. Treat these as ambiguous:
 - "total commitments / meetings / students / admissions / revenue" (no org)
 - "this month's numbers" (no org)
 - A first name that could match multiple people (e.g. "Arunima" — run search_people first, ask user which if >1)
@@ -249,7 +342,8 @@ Example:
 ## FORMATTING
 
 - Markdown. Use tables for ≤10 structured rows, bullets for unranked lists, inline bold only on the headline number.
-- Numbers: no thousands separator for values <10000 ("241", not "241"). For currency, use "$" prefix and commas above 10000 ("$23,613,939").
+- Numbers: no thousands separator for values <10000 ("241", not "241"). For currency, format as **\`AED 1,533,100\`** — AED prefix, thousands commas, no decimals unless the value has real paise/fils.
+- **Never use "$" or "USD" for business figures.** The tenant currency is AED. If a tool returns a raw number for revenue/fees/cash, wrap it in AED formatting.
 - Never expose ObjectIds, tokens, or passwords. The user wants names and values.
 - If asked for something the data doesn't contain (e.g., meetings before April 2026), say so plainly.
 
@@ -261,11 +355,15 @@ Example:
 };
 
 // Build the OpenAI messages array from the stored conversation, keeping
-// only the recent window so prompts stay fast.
-const buildMessages = (conversation) => {
+// only the recent window so prompts stay fast. Async because the system
+// prompt reads the cached tenant snapshot — usually returns instantly;
+// occasionally (once per TTL) awaits a cold rebuild.
+const buildMessages = async (conversation) => {
     const trimmed = conversation.messages.slice(-HISTORY_WINDOW);
-    // System prompt rebuilt each turn so "today" is always the live server date.
-    const out = [{ role: 'system', content: buildSystemPrompt() }];
+    const snapshot = await getTenantSnapshot();
+    // System prompt rebuilt each turn so "today" is always the live server
+    // date AND all tenant-specific counts/lists reflect the latest snapshot.
+    const out = [{ role: 'system', content: buildSystemPrompt(snapshot) }];
     for (const m of trimmed) {
         const msg = { role: m.role, content: m.content || '' };
         if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -316,7 +414,7 @@ async function streamTurn({ conversation, userMessage, user, res }) {
     while (iteration < MAX_ITERATIONS) {
         iteration += 1;
 
-        const messages = buildMessages(conversation);
+        const messages = await buildMessages(conversation);
         let stream;
         try {
             stream = await client.chat.completions.create({

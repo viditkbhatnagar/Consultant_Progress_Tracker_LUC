@@ -1257,12 +1257,15 @@ Numbered list of the most impactful things the team should focus on.`;
         const usage = completion.usage || {};
         const promptTokens = usage.prompt_tokens || 0;
         const completionTokens = usage.completion_tokens || 0;
-        // gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
+        // gpt-4o-mini pricing (2026): $0.15 / 1M input, $0.60 / 1M output.
         const cost = (promptTokens * 0.00000015) + (completionTokens * 0.0000006);
 
         await AIUsage.create({
             user: req.user.id,
             role: req.user.role,
+            type: 'analysis',
+            teamName: req.user.teamName || '',
+            organization: req.user.organization || '',
             model: 'gpt-4o-mini',
             promptTokens,
             completionTokens,
