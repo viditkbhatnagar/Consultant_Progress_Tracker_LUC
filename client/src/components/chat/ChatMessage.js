@@ -190,16 +190,15 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
                         },
                         // Tables: wrap in a horizontally-scrollable surface so
                         // wide tables don't force text to break character-by-
-                        // character. The surrounding .md-table-wrap div is
-                        // injected by the `table` renderer below.
+                        // character. The bubble already provides the rounded
+                        // container, so the wrap itself is invisible — no
+                        // border, radius, or background — which avoids the
+                        // rounded-corner clipping the first/last cell's text.
                         '& .md-table-wrap': {
                             width: '100%',
                             maxWidth: '100%',
                             overflowX: 'auto',
                             margin: '8px 0',
-                            border: '1px solid var(--d-border-soft, #ECE9E2)',
-                            borderRadius: 10,
-                            backgroundColor: 'var(--d-surface, #FFFFFF)',
                         },
                         '& table': {
                             borderCollapse: 'collapse',
@@ -210,10 +209,18 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
                         },
                         '& th, & td': {
                             borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
-                            padding: '8px 12px',
+                            padding: '8px 14px',
                             textAlign: 'left',
                             whiteSpace: 'nowrap',
                             verticalAlign: 'top',
+                        },
+                        // Extra padding on the first/last cell so content
+                        // doesn't crowd the rounded bubble edge.
+                        '& th:first-of-type, & td:first-of-type': {
+                            paddingLeft: '4px',
+                        },
+                        '& th:last-of-type, & td:last-of-type': {
+                            paddingRight: '4px',
                         },
                         '& tr:last-child td': { borderBottom: 'none' },
                         '& th': {
@@ -226,6 +233,12 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
                             fontSize: 11,
                             fontWeight: 600,
                             borderBottom: '1px solid var(--d-border, #E6E3DC)',
+                        },
+                        '& thead tr:first-of-type th:first-of-type': {
+                            borderTopLeftRadius: 8,
+                        },
+                        '& thead tr:first-of-type th:last-of-type': {
+                            borderTopRightRadius: 8,
                         },
                         '& tbody tr:hover td': {
                             backgroundColor: 'var(--d-surface-hover, #EFEDE8)',
