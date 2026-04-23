@@ -15,6 +15,8 @@ import {
     History as HistoryIcon,
     DeleteOutline as DeleteIcon,
     ArrowBack as BackIcon,
+    Mic as MicIcon,
+    Stop as StopIcon,
 } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import ChatMessage from './ChatMessage';
@@ -24,7 +26,23 @@ import {
     listConversations,
     fetchConversation,
     deleteConversation,
+    transcribeAudio,
 } from '../../services/chatService';
+
+// Prefer opus-in-webm (widest support) but fall back on platforms that
+// don't allow it (Safari historically — iOS 14.3+ supports it now but
+// older Mac Safari doesn't always). MediaRecorder.isTypeSupported does
+// the detection at call time.
+const pickMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+    ];
+    return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
+};
 
 // Responsive drawer width. Keeps chats readable on narrow tablets but
 // gives markdown tables with 5-8 columns (counselor / student / date /
@@ -40,9 +58,17 @@ const ChatPanel = ({ open, onClose }) => {
     const [activeToolName, setActiveToolName] = useState('');
     const [history, setHistory] = useState([]);
     const [view, setView] = useState('chat'); // 'chat' | 'history'
+    const [recording, setRecording] = useState(false);
+    const [transcribing, setTranscribing] = useState(false);
+    const [voiceError, setVoiceError] = useState('');
+    const [recordSeconds, setRecordSeconds] = useState(0);
     const abortRef = useRef(null);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    const mediaRecorderRef = useRef(null);
+    const mediaStreamRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const recordTimerRef = useRef(null);
 
     // Auto-scroll to bottom on any message update.
     useEffect(() => {
@@ -222,6 +248,107 @@ const ChatPanel = ({ open, onClose }) => {
             send(input);
         }
     };
+
+    // Voice input — record with MediaRecorder, upload to /api/chat/transcribe
+    // (server-side OpenAI Whisper), populate the chat input, and auto-send.
+    // Whisper handles language auto-detection, so users can speak in any
+    // of its 99+ supported languages without configuring anything.
+    const stopStream = () => {
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+            mediaStreamRef.current = null;
+        }
+        if (recordTimerRef.current) {
+            clearInterval(recordTimerRef.current);
+            recordTimerRef.current = null;
+        }
+    };
+
+    const startRecording = useCallback(async () => {
+        setVoiceError('');
+        if (recording || sending || transcribing) return;
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setVoiceError('Voice input not supported in this browser.');
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStreamRef.current = stream;
+            const mimeType = pickMimeType();
+            const mr = mimeType
+                ? new MediaRecorder(stream, { mimeType })
+                : new MediaRecorder(stream);
+            mediaRecorderRef.current = mr;
+            audioChunksRef.current = [];
+
+            mr.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+            };
+            mr.onstop = async () => {
+                const type = mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const blob = new Blob(audioChunksRef.current, { type });
+                stopStream();
+                setRecording(false);
+                setRecordSeconds(0);
+                if (blob.size < 500) {
+                    setVoiceError('Too short — try again.');
+                    return;
+                }
+                setTranscribing(true);
+                try {
+                    const text = await transcribeAudio(blob);
+                    if (text) {
+                        setInput(text);
+                        // Auto-send transcribed text. The clarification
+                        // flow lives server-side, so any ambiguity still
+                        // triggers the same chip-based follow-up.
+                        send(text);
+                    } else {
+                        setVoiceError('Couldn\'t hear anything — try again.');
+                    }
+                } catch (err) {
+                    setVoiceError(err.message || 'Transcription failed.');
+                } finally {
+                    setTranscribing(false);
+                }
+            };
+
+            mr.start();
+            setRecording(true);
+            setRecordSeconds(0);
+            recordTimerRef.current = setInterval(() => {
+                setRecordSeconds((s) => {
+                    // Hard cap at 120s — Whisper handles longer but UX
+                    // gets painful past ~2 minutes.
+                    if (s >= 120) {
+                        try { mr.stop(); } catch {}
+                        return s;
+                    }
+                    return s + 1;
+                });
+            }, 1000);
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                setVoiceError('Microphone permission denied.');
+            } else if (err.name === 'NotFoundError') {
+                setVoiceError('No microphone detected.');
+            } else {
+                setVoiceError(err.message || 'Could not start recording.');
+            }
+            stopStream();
+            setRecording(false);
+        }
+    }, [recording, sending, transcribing, send]);
+
+    const stopRecording = useCallback(() => {
+        const mr = mediaRecorderRef.current;
+        if (mr && mr.state !== 'inactive') {
+            try { mr.stop(); } catch {}
+        }
+    }, []);
+
+    // Clean up any live mic stream if the component unmounts mid-record.
+    useEffect(() => () => stopStream(), []);
 
     const toolChip = useMemo(() => {
         if (!activeToolName) return null;
@@ -457,6 +584,81 @@ const ChatPanel = ({ open, onClose }) => {
                                 </Typography>
                             </Box>
                         )}
+
+                        {/* Voice input status — shown above the input when
+                            recording or transcribing so users know what's
+                            happening. Also surfaces permission errors. */}
+                        {(recording || transcribing || voiceError) && (
+                            <Box sx={{ px: 2, pb: 1 }}>
+                                {recording && (
+                                    <Box
+                                        sx={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 1,
+                                            fontSize: 12,
+                                            color: 'var(--d-danger, #B91C1C)',
+                                            backgroundColor: 'var(--d-danger-bg, rgba(220,38,38,0.1))',
+                                            border: '1px solid var(--d-danger, #B91C1C)',
+                                            borderRadius: 999,
+                                            px: 1.25,
+                                            py: 0.35,
+                                            fontWeight: 600,
+                                            fontVariantNumeric: 'tabular-nums',
+                                        }}
+                                    >
+                                        <Box
+                                            component="span"
+                                            sx={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: '50%',
+                                                backgroundColor: 'var(--d-danger, #B91C1C)',
+                                                animation: 'voicePulse 1s ease-in-out infinite',
+                                                '@keyframes voicePulse': {
+                                                    '0%, 100%': { opacity: 1 },
+                                                    '50%': { opacity: 0.35 },
+                                                },
+                                            }}
+                                        />
+                                        Recording · {String(Math.floor(recordSeconds / 60)).padStart(1, '0')}:{String(recordSeconds % 60).padStart(2, '0')} · tap stop when done
+                                    </Box>
+                                )}
+                                {!recording && transcribing && (
+                                    <Typography
+                                        sx={{
+                                            display: 'inline-flex',
+                                            fontSize: 12,
+                                            fontStyle: 'italic',
+                                            color: 'var(--d-text-muted)',
+                                            backgroundColor: 'var(--d-surface-muted)',
+                                            border: '1px solid var(--d-border-soft)',
+                                            borderRadius: 999,
+                                            px: 1.25,
+                                            py: 0.35,
+                                        }}
+                                    >
+                                        Transcribing…
+                                    </Typography>
+                                )}
+                                {!recording && !transcribing && voiceError && (
+                                    <Typography
+                                        sx={{
+                                            display: 'inline-flex',
+                                            fontSize: 12,
+                                            color: 'var(--d-danger-text)',
+                                            backgroundColor: 'var(--d-danger-bg)',
+                                            border: '1px solid var(--d-danger, #B91C1C)',
+                                            borderRadius: 999,
+                                            px: 1.25,
+                                            py: 0.35,
+                                        }}
+                                    >
+                                        {voiceError}
+                                    </Typography>
+                                )}
+                            </Box>
+                        )}
                     </Box>
 
                     {/* Input */}
@@ -476,12 +678,12 @@ const ChatPanel = ({ open, onClose }) => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onKeyDown}
-                            placeholder="Ask about revenue, team performance, attendance…"
+                            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about revenue, team performance, attendance… or tap the mic'}
                             fullWidth
                             multiline
                             maxRows={4}
                             size="small"
-                            disabled={sending}
+                            disabled={sending || recording || transcribing}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     backgroundColor: 'var(--d-surface, #FFFFFF)',
@@ -496,11 +698,56 @@ const ChatPanel = ({ open, onClose }) => {
                                 },
                             }}
                         />
+
+                        {/* Mic / Stop toggle — voice input. Recording state
+                            swaps to a red stop button. Disabled while a
+                            previous transcription is in-flight or while
+                            the assistant is streaming. */}
+                        <Tooltip title={recording ? 'Stop recording' : 'Voice input'}>
+                            <span>
+                                <IconButton
+                                    onClick={recording ? stopRecording : startRecording}
+                                    disabled={sending || transcribing}
+                                    sx={{
+                                        backgroundColor: recording
+                                            ? 'var(--d-danger, #B91C1C)'
+                                            : 'var(--d-surface-muted, #F1EFEA)',
+                                        color: recording
+                                            ? '#FFFFFF'
+                                            : 'var(--d-text-2, #2A2927)',
+                                        border: '1px solid',
+                                        borderColor: recording
+                                            ? 'var(--d-danger, #B91C1C)'
+                                            : 'var(--d-border, #E6E3DC)',
+                                        borderRadius: '10px',
+                                        width: 40,
+                                        height: 40,
+                                        transition:
+                                            'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter), border-color var(--d-dur-sm) var(--d-ease-enter)',
+                                        '&:hover': {
+                                            backgroundColor: recording
+                                                ? 'var(--d-danger-text, #B91C1C)'
+                                                : 'var(--d-surface-hover, #EFEDE8)',
+                                            borderColor: recording
+                                                ? 'var(--d-danger, #B91C1C)'
+                                                : 'var(--d-accent, #2383E2)',
+                                        },
+                                        '&.Mui-disabled': {
+                                            backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                                            color: 'var(--d-text-muted, #8A887E)',
+                                        },
+                                    }}
+                                >
+                                    {recording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
+
                         <Tooltip title="Send">
                             <span>
                                 <IconButton
                                     onClick={() => send(input)}
-                                    disabled={sending || !input.trim()}
+                                    disabled={sending || recording || transcribing || !input.trim()}
                                     sx={{
                                         backgroundColor: 'var(--d-accent, #2383E2)',
                                         color: '#FFFFFF',
