@@ -74,8 +74,11 @@ const _fmtRange = (r) => {
 // Builds the system prompt. All dynamic facts come from `snapshot`, a
 // cached tenant fingerprint produced by tenantSnapshot.js — so the prompt
 // stays accurate as team rosters, enum distributions, counts, and date
-// ranges drift without anyone touching this file.
-const buildSystemPrompt = (snapshot) => {
+// ranges drift without anyone touching this file. `user` is the currently
+// authenticated requester — injected so the LLM can personalize
+// clarifying questions ("My team" chip for team leads, etc.) and so every
+// answer respects the caller's identity.
+const buildSystemPrompt = (snapshot, user) => {
     const now = new Date();
     const iso = now.toISOString().slice(0, 10);
     const monthName = now.toLocaleString('en-US', { month: 'long' });
@@ -155,7 +158,40 @@ const buildSystemPrompt = (snapshot) => {
         s_commits.admissionClosedTotal > 0 && s_commits.admissionClosedWithAmount === 0
             ? 'closedAmount is populated on 0 closed commitments — never use it as revenue.'
             : '';
+
+    // Current authenticated caller. Used by the CURRENT USER section and
+    // the role-aware clarification chips below. Defensive defaults cover
+    // the rare case where `user` is undefined (e.g. background snapshot
+    // warm-up fires buildSystemPrompt before a request lands).
+    const u = user || {};
+    const uName = u.name || 'a user';
+    const uRole = u.role || 'unknown';
+    const uTeam = u.teamName || null;
+    const uOrg = u.organization || null;
+    const roleLabel = {
+        admin: 'Administrator',
+        team_lead: 'Team Lead',
+        manager: 'Manager',
+        skillhub: 'Skillhub Branch',
+    }[uRole] || uRole;
+
+    // Build a role-appropriate chip suggestion for team clarification.
+    // Team leads get "My team (Team X)" first, admins get "All teams" +
+    // named teams, skillhub users get their branch + the other branches.
+    let myScopeChip = null;
+    if (uRole === 'team_lead' && uTeam) myScopeChip = `My team (${uTeam})`;
+    else if (uRole === 'skillhub' && uOrg)
+        myScopeChip = uOrg === 'skillhub_training' ? 'My branch (Skillhub Training)' : 'My branch (Skillhub Institute)';
     return `You are the **Team Progress Tracker assistant** — an internal analytics copilot for Learners Education / Skillhub. You help admins, team leads, consultants, counselors, managers, and Skillhub branch staff pull fast, accurate answers from the live database.
+
+## CURRENT USER (the person asking this turn)
+
+- Name: **${uName}**
+- Role: **${roleLabel}** (\`${uRole}\`)
+- Team: ${uTeam ? `**${uTeam}**` : 'n/a'}
+- Organization: ${uOrg ? `\`${uOrg}\`` : 'n/a'}
+
+Use this identity to personalize clarifying questions and greetings — e.g., say "Hi ${uName.split(' ')[0]}" on greetings, and when asking team scope, offer **${myScopeChip || 'scope-appropriate'}** as the first chip. Do NOT implicitly scope queries to this user's team/org without asking — always confirm first (see Clarification Protocol).
 
 ## SCOPE — WHAT YOU DO AND DO NOT ANSWER
 
@@ -297,30 +333,73 @@ Data caveats (for your reasoning, not for the user):
 
 ---
 
-## CLARIFICATION PROTOCOL (always observed)
+## CLARIFICATION PROTOCOL (always observed — enterprise correctness)
 
-Most real-world questions are ambiguous because of three orgs and ${activeTeamCount} teams. Before calling any DATA tool, ask a clarifying question when scope is unclear. Treat these as ambiguous:
-- "total commitments / meetings / students / admissions / revenue" (no org)
-- "this month's numbers" (no org)
-- A first name that could match multiple people (e.g. "Arunima" — run search_people first, ask user which if >1)
-- "the team" or "my team" from admin contexts
-- "how many admissions" (LUC admissions = Commitment closures; Skillhub admissions = Student rows in window — different semantics)
+Three orgs × ${activeTeamCount} teams means most questions are ambiguous. **Always ask before calling any DATA tool** when scope is unclear. Never auto-scope based on who's asking. Never assume. Confirm first.
 
-Treat as unambiguous (answer directly):
-- Explicit org/team named (e.g. "Team Shaik's numbers", "Skillhub Institute revenue")
+### Ambiguity triggers (ALWAYS clarify)
+
+1. **Org scope** — "total commitments / meetings / students / admissions / revenue" with no org
+2. **Team scope** (team-scoped concepts without a named team):
+   - "meetings this week", "commitments today", "achievement rate"
+   - "attendance", "absent", "who is present"
+   - "top consultants" (could be org-wide or within one team)
+3. **Person name** — a first name that could match multiple people (e.g. "Arunima")
+4. **"the team" / "my team"** — literal phrase without a named team
+5. **"how many admissions"** — LUC admissions = Commitment closures; Skillhub admissions = Student rows. Different semantics — ask which.
+
+### Skip clarification (answer directly)
+
+- Explicit org/team named: "Team Shaik's meetings", "Skillhub Institute revenue"
+- **Cross-team phrasing** (inherently org-wide): "which team has the most…", "compare teams", "top teams", "team leaderboard", "rank teams by X", "team rankings"
 - Full name of a person where search_people returns exactly one hit
-- "today / yesterday / this week" global questions about presence or activity
+- Inherently org-wide numbers: "total revenue across all orgs", "how many teams exist"
+- Presence / attendance for the whole org where team isn't the axis: *"who is absent today"* (across everyone) — but if user says *"in my team"* or a team is named, treat as team-scoped
 
-**How to ask**: one short sentence, then 2–5 hyphen-bulleted options on their own lines. The UI converts trailing bullet lists ending in "?" into clickable chips. Keep each option ≤4 words.
+### How to ask — role-aware chips
 
-Example:
+One short sentence + 2–5 hyphen-bulleted options on their own lines, ending with "?". The UI converts trailing bullet lists into clickable chips. Each option ≤5 words.
 
-> Which organization do you want?
+**Team-scope question, asking a team lead (${uRole === 'team_lead' ? 'that\'s you' : 'e.g. Tony of Team Tony'}):**
+
+> For which team?
+>
+> - ${myScopeChip || 'My team'}
+> - All teams
+> - Another team…
+
+**Team-scope question, asking an admin (${uRole === 'admin' ? 'that\'s you' : 'e.g. the Admin user'}):**
+
+> For which team?
+>
+> - All teams
+> - Team Anousha
+> - Team Shaik
+> - Another team…
+
+(When "Another team…" is chosen, a follow-up clarifier lists the remaining teams. Offer the 3-4 most relevant first — don't dump all 8 unless asked.)
+
+**Skillhub user (${uRole === 'skillhub' ? 'that\'s you' : 'e.g. a Skillhub branch login'}):**
+
+> Which branch?
+>
+> - ${myScopeChip || 'My branch'}
+> - Other Skillhub branch
+> - LUC
+> - Combined
+
+**Org scope (for any role):**
+
+> Which organization?
 >
 > - LUC
 > - Skillhub Training
 > - Skillhub Institute
 > - Combined
+
+### Sequencing
+
+If BOTH org and team are ambiguous (rare — e.g. "meetings this week" where the user hasn't named either), ask **team first** (more specific), and once the team is LUC-only vs Skillhub-only, org is implied. If the user picks "All teams", fall back to an org prompt if needed.
 
 ---
 
@@ -358,12 +437,15 @@ Example:
 // only the recent window so prompts stay fast. Async because the system
 // prompt reads the cached tenant snapshot — usually returns instantly;
 // occasionally (once per TTL) awaits a cold rebuild.
-const buildMessages = async (conversation) => {
+const buildMessages = async (conversation, user) => {
     const trimmed = conversation.messages.slice(-HISTORY_WINDOW);
     const snapshot = await getTenantSnapshot();
-    // System prompt rebuilt each turn so "today" is always the live server
-    // date AND all tenant-specific counts/lists reflect the latest snapshot.
-    const out = [{ role: 'system', content: buildSystemPrompt(snapshot) }];
+    // System prompt rebuilt each turn so (a) "today" is always the live
+    // server date, (b) tenant-specific counts/lists reflect the latest
+    // snapshot, and (c) the "CURRENT USER" section reflects whoever is
+    // authenticated on this turn — so clarification chips and greetings
+    // can be role- and team-aware.
+    const out = [{ role: 'system', content: buildSystemPrompt(snapshot, user) }];
     for (const m of trimmed) {
         const msg = { role: m.role, content: m.content || '' };
         if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -414,7 +496,7 @@ async function streamTurn({ conversation, userMessage, user, res }) {
     while (iteration < MAX_ITERATIONS) {
         iteration += 1;
 
-        const messages = await buildMessages(conversation);
+        const messages = await buildMessages(conversation, user);
         let stream;
         try {
             stream = await client.chat.completions.create({
