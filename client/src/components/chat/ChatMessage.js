@@ -111,11 +111,26 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
                 gap: isUser ? 0 : 1,
                 mb: 1.5,
                 px: 2,
+                // Without these, a wide table inside the bubble forces
+                // this row to grow past the drawer width.
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
+                boxSizing: 'border-box',
             }}
         >
             {!isUser && <VBAvatar />}
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: isUser ? 'unset' : 1 }}>
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minWidth: 0,
+                    flex: isUser ? 'unset' : 1,
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                }}
+            >
                 {!isUser && (
                     <Typography
                         sx={{
