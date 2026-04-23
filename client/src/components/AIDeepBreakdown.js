@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+    Autocomplete,
     Box,
     Button,
     Chip,
@@ -8,6 +9,7 @@ import {
     LinearProgress,
     Tab,
     Tabs,
+    TextField,
     Tooltip,
     Typography,
 } from '@mui/material';
@@ -353,32 +355,188 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
     const [teams, setTeams] = useState([]);
     const [consultants, setConsultants] = useState([]);
 
+    // Full target catalogue (separate from what's in the grid). Pre-fetched
+    // on date-range change so the "Run one team" / "Run one consultant"
+    // Autocompletes are populated the moment the panel is visible —
+    // no need to hit "Run all" first.
+    const [targets, setTargets] = useState({ teams: [], consultants: [] });
+    const [targetsLoading, setTargetsLoading] = useState(false);
+    const [teamPick, setTeamPick] = useState(null);
+    const [consultantPick, setConsultantPick] = useState(null);
+
+    useEffect(() => {
+        if (!startDate || !endDate) return;
+        let cancelled = false;
+        setTargetsLoading(true);
+        (async () => {
+            try {
+                const res = await aiService.getAnalysisTargets(startDate, endDate);
+                if (!cancelled && res?.success) {
+                    setTargets({
+                        teams: res.data?.teams || [],
+                        consultants: res.data?.consultants || [],
+                    });
+                }
+            } catch {
+                /* swallow — "Run all" will surface a clearer error later */
+            } finally {
+                if (!cancelled) setTargetsLoading(false);
+            }
+        })();
+        // Window changed → stale picks.
+        setTeamPick(null);
+        setConsultantPick(null);
+        return () => {
+            cancelled = true;
+        };
+    }, [startDate, endDate]);
+
     const totalTargets = teams.length + consultants.length;
     const doneCount =
         teams.filter((t) => t.status === 'done' || t.status === 'error').length +
         consultants.filter((c) => c.status === 'done' || c.status === 'error').length;
 
-    // Kick off: pull the target list, then fire per-target analyses in
-    // small parallel batches. Results land on the individual cards as
-    // each request resolves (setTeams / setConsultants).
-    const run = useCallback(async () => {
+    // Upsert one team card into the grid and fire its analysis. New entries
+    // land at the top of the list so the user sees targeted runs appear
+    // without scrolling. Existing entries are replaced in place.
+    const runOneTeam = useCallback(
+        async (target) => {
+            if (!target?.teamLeadId || !startDate || !endDate) return;
+            setTeams((prev) => {
+                const entry = {
+                    ...target,
+                    status: 'pending',
+                    analysis: '',
+                    error: '',
+                };
+                const idx = prev.findIndex(
+                    (p) => p.teamLeadId === target.teamLeadId
+                );
+                if (idx >= 0) {
+                    const cp = [...prev];
+                    cp[idx] = entry;
+                    return cp;
+                }
+                return [entry, ...prev];
+            });
+            try {
+                const r = await aiService.generateTeamAnalysis({
+                    startDate,
+                    endDate,
+                    teamLeadId: target.teamLeadId,
+                });
+                setTeams((prev) =>
+                    prev.map((p) =>
+                        p.teamLeadId === target.teamLeadId
+                            ? { ...p, status: 'done', analysis: r.analysis || '' }
+                            : p
+                    )
+                );
+            } catch (err) {
+                setTeams((prev) =>
+                    prev.map((p) =>
+                        p.teamLeadId === target.teamLeadId
+                            ? {
+                                  ...p,
+                                  status: 'error',
+                                  error:
+                                      err?.response?.data?.message ||
+                                      err?.message ||
+                                      'Analysis failed',
+                              }
+                            : p
+                    )
+                );
+            }
+        },
+        [startDate, endDate]
+    );
+
+    const runOneConsultant = useCallback(
+        async (target) => {
+            if (!target?.consultantName || !startDate || !endDate) return;
+            const match = (p) =>
+                p.consultantName === target.consultantName &&
+                p.organization === target.organization;
+            setConsultants((prev) => {
+                const entry = {
+                    ...target,
+                    status: 'pending',
+                    analysis: '',
+                    error: '',
+                };
+                const idx = prev.findIndex(match);
+                if (idx >= 0) {
+                    const cp = [...prev];
+                    cp[idx] = entry;
+                    return cp;
+                }
+                return [entry, ...prev];
+            });
+            try {
+                const r = await aiService.generateConsultantAnalysis({
+                    startDate,
+                    endDate,
+                    consultantName: target.consultantName,
+                    organization: target.organization,
+                });
+                setConsultants((prev) =>
+                    prev.map((p) =>
+                        match(p)
+                            ? { ...p, status: 'done', analysis: r.analysis || '' }
+                            : p
+                    )
+                );
+            } catch (err) {
+                setConsultants((prev) =>
+                    prev.map((p) =>
+                        match(p)
+                            ? {
+                                  ...p,
+                                  status: 'error',
+                                  error:
+                                      err?.response?.data?.message ||
+                                      err?.message ||
+                                      'Analysis failed',
+                              }
+                            : p
+                    )
+                );
+            }
+        },
+        [startDate, endDate]
+    );
+
+    // Kick off the full breakdown: every team + every consultant in the
+    // window, fired in small parallel batches. Uses the already-fetched
+    // target catalogue when available; falls back to re-fetching.
+    const runAll = useCallback(async () => {
         if (!startDate || !endDate) return;
         setLoading(true);
         setLoadError('');
         try {
-            const res = await aiService.getAnalysisTargets(startDate, endDate);
-            if (!res.success) {
-                setLoadError(res.message || 'Failed to load analysis targets.');
-                setLoading(false);
-                return;
+            let tgt = targets;
+            if (!tgt.teams.length && !tgt.consultants.length) {
+                const res = await aiService.getAnalysisTargets(startDate, endDate);
+                if (!res?.success) {
+                    setLoadError(res?.message || 'Failed to load analysis targets.');
+                    setLoading(false);
+                    return;
+                }
+                tgt = {
+                    teams: res.data?.teams || [],
+                    consultants: res.data?.consultants || [],
+                };
+                setTargets(tgt);
             }
-            const nextTeams = (res.data.teams || []).map((t) => ({
+
+            const nextTeams = tgt.teams.map((t) => ({
                 ...t,
                 status: 'pending',
                 analysis: '',
                 error: '',
             }));
-            const nextConsultants = (res.data.consultants || []).map((c) => ({
+            const nextConsultants = tgt.consultants.map((c) => ({
                 ...c,
                 status: 'pending',
                 analysis: '',
@@ -443,8 +601,8 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
                 }
             });
 
-            // Teams are small (~11); consultants can be many (~40+). Interleave
-            // so the user sees both lists filling in progress.
+            // Interleave so both lists fill in parallel instead of teams-
+            // first-then-consultants.
             const interleaved = [];
             const max = Math.max(teamTasks.length, consultantTasks.length);
             for (let i = 0; i < max; i++) {
@@ -459,91 +617,15 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
         } finally {
             setLoading(false);
         }
-    }, [startDate, endDate]);
+    }, [startDate, endDate, targets]);
 
     const retryOne = useCallback(
-        async (item) => {
-            if (item.consultantName) {
-                setConsultants((prev) =>
-                    prev.map((c) =>
-                        c.consultantName === item.consultantName &&
-                        c.organization === item.organization
-                            ? { ...c, status: 'pending', error: '' }
-                            : c
-                    )
-                );
-                try {
-                    const r = await aiService.generateConsultantAnalysis({
-                        startDate,
-                        endDate,
-                        consultantName: item.consultantName,
-                        organization: item.organization,
-                    });
-                    setConsultants((prev) =>
-                        prev.map((c) =>
-                            c.consultantName === item.consultantName &&
-                            c.organization === item.organization
-                                ? { ...c, status: 'done', analysis: r.analysis || '' }
-                                : c
-                        )
-                    );
-                } catch (err) {
-                    setConsultants((prev) =>
-                        prev.map((c) =>
-                            c.consultantName === item.consultantName &&
-                            c.organization === item.organization
-                                ? {
-                                      ...c,
-                                      status: 'error',
-                                      error:
-                                          err?.response?.data?.message ||
-                                          err?.message ||
-                                          'Analysis failed',
-                                  }
-                                : c
-                        )
-                    );
-                }
-            } else if (item.teamLeadId) {
-                setTeams((prev) =>
-                    prev.map((t) =>
-                        t.teamLeadId === item.teamLeadId
-                            ? { ...t, status: 'pending', error: '' }
-                            : t
-                    )
-                );
-                try {
-                    const r = await aiService.generateTeamAnalysis({
-                        startDate,
-                        endDate,
-                        teamLeadId: item.teamLeadId,
-                    });
-                    setTeams((prev) =>
-                        prev.map((t) =>
-                            t.teamLeadId === item.teamLeadId
-                                ? { ...t, status: 'done', analysis: r.analysis || '' }
-                                : t
-                        )
-                    );
-                } catch (err) {
-                    setTeams((prev) =>
-                        prev.map((t) =>
-                            t.teamLeadId === item.teamLeadId
-                                ? {
-                                      ...t,
-                                      status: 'error',
-                                      error:
-                                          err?.response?.data?.message ||
-                                          err?.message ||
-                                          'Analysis failed',
-                                  }
-                                : t
-                        )
-                    );
-                }
-            }
+        (item) => {
+            if (item.consultantName) return runOneConsultant(item);
+            if (item.teamLeadId) return runOneTeam(item);
+            return Promise.resolve();
         },
-        [startDate, endDate]
+        [runOneConsultant, runOneTeam]
     );
 
     const hasResults = totalTargets > 0;
@@ -587,7 +669,7 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
                     variant="contained"
                     size="small"
                     startIcon={loading ? <CircularProgress size={14} /> : <RunIcon />}
-                    onClick={run}
+                    onClick={runAll}
                     disabled={loading || !startDate || !endDate}
                     sx={{
                         textTransform: 'none',
@@ -599,9 +681,130 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
                     {loading
                         ? `Analyzing ${doneCount}/${totalTargets}`
                         : hasResults
-                        ? 'Re-run breakdown'
+                        ? 'Re-run all'
                         : 'Run deep breakdown'}
                 </Button>
+            </Box>
+
+            {/* Targeted runs — picking a value from either Autocomplete fires
+                a single analysis and drops the result into the card grid
+                below. Doesn't disturb any other in-flight or existing cards. */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1.5,
+                    alignItems: 'center',
+                    mb: 2,
+                    p: 1.5,
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--d-surface-muted, #FAFAF8)',
+                    border: '1px dashed var(--d-border, #E6E3DC)',
+                }}
+            >
+                <Typography
+                    sx={{
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        color: 'var(--d-text-muted, #8A887E)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        flexShrink: 0,
+                    }}
+                >
+                    Run one:
+                </Typography>
+                <Autocomplete
+                    size="small"
+                    options={targets.teams}
+                    value={teamPick}
+                    loading={targetsLoading}
+                    onChange={(_e, value) => {
+                        setTeamPick(null);
+                        if (value) runOneTeam(value);
+                    }}
+                    getOptionLabel={(opt) =>
+                        `${opt.teamName} · ${orgLabel(opt.organization)}`
+                    }
+                    isOptionEqualToValue={(a, b) => a.teamLeadId === b?.teamLeadId}
+                    noOptionsText="No teams in this window"
+                    disabled={!startDate || !endDate}
+                    sx={{ minWidth: 260, flex: '1 1 260px' }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            placeholder="Pick a team…"
+                            InputProps={{
+                                ...params.InputProps,
+                                startAdornment: (
+                                    <>
+                                        <TeamsIcon
+                                            sx={{
+                                                fontSize: 16,
+                                                color: 'var(--d-text-muted, #8A887E)',
+                                                ml: 0.5,
+                                                mr: 0.5,
+                                            }}
+                                        />
+                                        {params.InputProps.startAdornment}
+                                    </>
+                                ),
+                                sx: {
+                                    fontSize: 13,
+                                    borderRadius: '10px',
+                                    backgroundColor: 'var(--d-surface, #FFFFFF)',
+                                },
+                            }}
+                        />
+                    )}
+                />
+                <Autocomplete
+                    size="small"
+                    options={targets.consultants}
+                    value={consultantPick}
+                    loading={targetsLoading}
+                    onChange={(_e, value) => {
+                        setConsultantPick(null);
+                        if (value) runOneConsultant(value);
+                    }}
+                    getOptionLabel={(opt) =>
+                        `${opt.consultantName} · ${opt.teamName || '—'} · ${orgLabel(opt.organization)}`
+                    }
+                    isOptionEqualToValue={(a, b) =>
+                        a.consultantName === b?.consultantName &&
+                        a.organization === b?.organization
+                    }
+                    noOptionsText="No consultants in this window"
+                    disabled={!startDate || !endDate}
+                    sx={{ minWidth: 280, flex: '1 1 300px' }}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            placeholder="Pick a consultant…"
+                            InputProps={{
+                                ...params.InputProps,
+                                startAdornment: (
+                                    <>
+                                        <PersonIcon
+                                            sx={{
+                                                fontSize: 16,
+                                                color: 'var(--d-text-muted, #8A887E)',
+                                                ml: 0.5,
+                                                mr: 0.5,
+                                            }}
+                                        />
+                                        {params.InputProps.startAdornment}
+                                    </>
+                                ),
+                                sx: {
+                                    fontSize: 13,
+                                    borderRadius: '10px',
+                                    backgroundColor: 'var(--d-surface, #FFFFFF)',
+                                },
+                            }}
+                        />
+                    )}
+                />
             </Box>
 
             {loadError && (
@@ -690,8 +893,8 @@ const AIDeepBreakdown = ({ startDate, endDate }) => {
                         fontSize: 13,
                     }}
                 >
-                    Click <strong>Run deep breakdown</strong> to generate one AI analysis per
-                    team and per consultant for this window.
+                    Click <strong>Run deep breakdown</strong> for everything, or pick a
+                    single team or consultant above to analyze just that one.
                 </Box>
             )}
         </Box>
