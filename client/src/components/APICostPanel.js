@@ -109,7 +109,17 @@ const tableSx = {
 };
 
 const numSx = { fontVariantNumeric: 'tabular-nums' };
-const fmtCost = (n) => `$${(n || 0).toFixed(6)}`;
+
+// OpenAI bills in USD. The UAE Dirham is pegged to the US Dollar at a
+// fixed rate of 3.6725 AED per USD (CBUAE peg, unchanged since 1997), so
+// this conversion is stable and doesn't need a live FX lookup.
+const AED_PER_USD = 3.6725;
+const fmtCost = (usd) => {
+    const aed = (usd || 0) * AED_PER_USD;
+    // Keep 4 decimals — individual chat/analysis calls are sub-AED 0.01;
+    // summary totals round cleanly at 4 decimals too.
+    return `AED ${aed.toFixed(4)}`;
+};
 const fmtTokens = (n) => (n || 0).toLocaleString();
 
 const TypeChip = ({ type }) => {
@@ -232,7 +242,7 @@ const APICostPanel = () => {
                         <StatCard
                             title="Total Cost"
                             value={fmtCost(summary.totalCost)}
-                            subtitle="GPT-4o-mini · $0.15/$0.60 per 1M"
+                            subtitle={`GPT-4o-mini · AED ${(0.15 * AED_PER_USD).toFixed(2)}/${(0.60 * AED_PER_USD).toFixed(2)} per 1M`}
                             icon={MoneyIcon}
                             accent="success"
                         />
