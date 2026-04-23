@@ -23,6 +23,7 @@ import {
     AccessTime as AccessTimeIcon,
     VideoCall as VideoCallIcon,
     FactCheck as CommitmentsIcon,
+    ChatBubbleOutline as AskMeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -251,6 +252,16 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
                         <ListItemIcon><AutoAwesomeIcon /></ListItemIcon>
                         <ListItemText primary="AI Analysis" />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                        onClick={() => window.dispatchEvent(new CustomEvent('askme:open'))}
+                        sx={navItemSx}
+                    >
+                        <ListItemIcon><AskMeIcon /></ListItemIcon>
+                        <ListItemText primary="Ask me" />
                     </ListItemButton>
                 </ListItem>
 

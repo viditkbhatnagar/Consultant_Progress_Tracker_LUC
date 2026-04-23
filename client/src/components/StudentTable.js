@@ -268,8 +268,8 @@ const StudentTable = ({
             'Open Day Location': student.openDayLocation || '',
             'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
-            'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
-            'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'yyyy-MM-dd') : '',
+            'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'dd/MM/yyyy') : '',
+            'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'dd/MM/yyyy') : '',
             'Conversion Time (Days)': student.conversionTime,
             'Consultant': student.consultantName,
             'Team Leader': student.teamLeadName,
@@ -305,8 +305,8 @@ const StudentTable = ({
             'Open Day Location': student.openDayLocation || '',
             'Referred By': student.referredBy || '',
             'Campaign Name': student.campaignName,
-            'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'yyyy-MM-dd') : '',
-            'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'yyyy-MM-dd') : '',
+            'Enquiry Date': student.enquiryDate ? format(new Date(student.enquiryDate), 'dd/MM/yyyy') : '',
+            'Closing Date': student.closingDate ? format(new Date(student.closingDate), 'dd/MM/yyyy') : '',
             'Conversion Time (Days)': student.conversionTime,
             'Consultant': student.consultantName,
             'Team Leader': student.teamLeadName,
@@ -715,12 +715,12 @@ const StudentTable = ({
                                                 </TableCell>
                                                 <TableCell>
                                                     {student.enquiryDate
-                                                        ? format(new Date(student.enquiryDate), 'MMM d, yyyy')
+                                                        ? format(new Date(student.enquiryDate), 'dd/MM/yyyy')
                                                         : '-'}
                                                 </TableCell>
                                                 <TableCell>
                                                     {student.closingDate
-                                                        ? format(new Date(student.closingDate), 'MMM d, yyyy')
+                                                        ? format(new Date(student.closingDate), 'dd/MM/yyyy')
                                                         : '-'}
                                                 </TableCell>
                                                 <TableCell align="center">

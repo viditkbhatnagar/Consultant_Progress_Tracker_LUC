@@ -293,8 +293,8 @@ const LucStudentDetailDrawer = ({
                 </Section>
 
                 <Section title="Timeline">
-                    <Field label="Enquiry Date" value={student.enquiryDate ? format(new Date(student.enquiryDate), 'MMM d, yyyy') : ''} />
-                    <Field label="Closing Date" value={student.closingDate ? format(new Date(student.closingDate), 'MMM d, yyyy') : ''} />
+                    <Field label="Enquiry Date" value={student.enquiryDate ? format(new Date(student.enquiryDate), 'dd/MM/yyyy') : ''} />
+                    <Field label="Closing Date" value={student.closingDate ? format(new Date(student.closingDate), 'dd/MM/yyyy') : ''} />
                     <Field label="Conversion" value={student.conversionTime != null ? `${student.conversionTime} days` : ''} />
                     <Field label="Open Day" value={student.openDay} />
                     <Field label="Open Day Location" value={student.openDayLocation} full />

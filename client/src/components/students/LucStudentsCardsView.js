@@ -243,7 +243,7 @@ const LucStudentsCardsView = ({
                         <Row label="Team" value={s.teamLeadName || s.teamName || '—'} />
                         <Row
                             label="Closing"
-                            value={s.closingDate ? format(new Date(s.closingDate), 'MMM d, yyyy') : '—'}
+                            value={s.closingDate ? format(new Date(s.closingDate), 'dd/MM/yyyy') : '—'}
                         />
                     </Box>
                 );

@@ -441,6 +441,32 @@ const StudentFormDialog = ({
             return 'Please select a team lead';
         }
 
+        // Date sanity — today as an end-of-day boundary so picking "today"
+        // is still allowed but anything dated tomorrow+ is rejected.
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        if (formData.enquiryDate && new Date(formData.enquiryDate) > todayEnd) {
+            return 'Enquiry date cannot be in the future.';
+        }
+        if (formData.closingDate && new Date(formData.closingDate) > todayEnd) {
+            return 'Closing date cannot be in the future.';
+        }
+        if (
+            formData.enquiryDate &&
+            formData.closingDate &&
+            new Date(formData.closingDate) < new Date(formData.enquiryDate)
+        ) {
+            return 'Closing date cannot be earlier than the enquiry date.';
+        }
+
+        // Fee sanity — admission fee paid should never exceed the course fee.
+        // Catches the decimal-typo / extra-zero class of data-entry errors.
+        const course = Number(formData.courseFee) || 0;
+        const paid = Number(formData.admissionFeePaid) || 0;
+        if (paid > course && course > 0) {
+            return `Admission fee paid (AED ${paid.toLocaleString()}) cannot exceed course fee (AED ${course.toLocaleString()}).`;
+        }
+
         return null;
     };
 
@@ -722,6 +748,7 @@ const StudentFormDialog = ({
                                 onChange={handleChange('courseFee')}
                                 required
                                 placeholder="Enter amount"
+                                inputProps={{ min: 0 }}
                                 InputProps={{
                                     startAdornment: <InputAdornment position="start">AED</InputAdornment>,
                                 }}
@@ -733,6 +760,17 @@ const StudentFormDialog = ({
                                 value={formData.admissionFeePaid}
                                 onChange={handleChange('admissionFeePaid')}
                                 placeholder="Enter amount paid"
+                                inputProps={{ min: 0, max: Number(formData.courseFee) || undefined }}
+                                error={
+                                    Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
+                                    Number(formData.courseFee) > 0
+                                }
+                                helperText={
+                                    Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
+                                    Number(formData.courseFee) > 0
+                                        ? 'Cannot exceed the course fee.'
+                                        : ' '
+                                }
                                 InputProps={{
                                     startAdornment: <InputAdornment position="start">AED</InputAdornment>,
                                 }}
@@ -810,6 +848,8 @@ const StudentFormDialog = ({
                                     label="Enquiry Date"
                                     value={formData.enquiryDate}
                                     onChange={handleDateChange('enquiryDate')}
+                                    format="dd/MM/yyyy"
+                                    maxDate={new Date()}
                                     slotProps={{
                                         textField: {
                                             fullWidth: true,
@@ -823,6 +863,9 @@ const StudentFormDialog = ({
                                     label="Closing Date"
                                     value={formData.closingDate}
                                     onChange={handleDateChange('closingDate')}
+                                    format="dd/MM/yyyy"
+                                    maxDate={new Date()}
+                                    minDate={formData.enquiryDate || undefined}
                                     slotProps={{
                                         textField: {
                                             fullWidth: true,
@@ -908,13 +951,33 @@ const StudentFormDialog = ({
                                     required
                                     InputLabelProps={{ shrink: true }}
                                     SelectProps={{ native: true }}
+                                    helperText={
+                                        (() => {
+                                            const current = teamLeads?.find(
+                                                (t) => t._id === formData.teamLeadId
+                                            );
+                                            return current && current.isActive === false
+                                                ? 'Current team lead is inactive — pick an active one or leave as-is.'
+                                                : ' ';
+                                        })()
+                                    }
                                 >
                                     <option value="">Select Team Lead</option>
-                                    {teamLeads?.map(tl => (
-                                        <option key={tl._id} value={tl._id}>
-                                            {tl.name} ({tl.teamName})
-                                        </option>
-                                    ))}
+                                    {[...(teamLeads || [])]
+                                        // Sort active first, then by name, so the list
+                                        // defaults to active team leads at the top.
+                                        .sort((a, b) => {
+                                            const aActive = a.isActive !== false ? 0 : 1;
+                                            const bActive = b.isActive !== false ? 0 : 1;
+                                            if (aActive !== bActive) return aActive - bActive;
+                                            return (a.name || '').localeCompare(b.name || '');
+                                        })
+                                        .map((tl) => (
+                                            <option key={tl._id} value={tl._id}>
+                                                {tl.name} ({tl.teamName})
+                                                {tl.isActive === false ? ' — inactive' : ''}
+                                            </option>
+                                        ))}
                                 </TextField>
                             )}
                         </Box>

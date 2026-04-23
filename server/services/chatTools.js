@@ -29,6 +29,27 @@ const DailyAdmission = require('../models/DailyAdmission');
 
 const MAX_ROWS = 200;
 
+// Mirror of the studentController helper — hide LUC students with
+// admissionFeePaid = 0/null/unset from every chatbot query so the
+// numbers reconcile with what admins see on the Student DB page.
+// Backup at server/dumps/luc_zero_admission_fee_*.json.
+const HIDE_LUC_ZERO_FEE = {
+    $or: [
+        { organization: { $ne: 'luc' } },
+        { admissionFeePaid: { $gt: 0 } },
+    ],
+};
+const hideLucZeroFee = (filter) => {
+    if (filter.$or) {
+        const existing = filter.$or;
+        delete filter.$or;
+        filter.$and = [...(filter.$and || []), { $or: existing }, HIDE_LUC_ZERO_FEE];
+    } else {
+        filter.$and = [...(filter.$and || []), HIDE_LUC_ZERO_FEE];
+    }
+    return filter;
+};
+
 const toDate = (s) => (s ? new Date(s) : null);
 const inRange = (field, start, end) => {
     const f = {};
@@ -446,6 +467,8 @@ async function getStudents({
     const range = inRange('createdAt', startDate, endDate);
     if (range) Object.assign(filter, range);
 
+    hideLucZeroFee(filter);
+
     const cap = Math.min(Number(limit) || 50, MAX_ROWS);
     const rows = await Student.find(filter)
         .select(
@@ -542,9 +565,12 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
         : { _id: null };
 
     // ---------- LUC revenue AMOUNTS (booked + cash, from Student by closingDate) ----------
+    // Exclude LUC rows with admissionFeePaid = 0/null/unset so revenueBooked
+    // matches the Student DB KPI (dashboard hides them too).
     const lucStudentMatch = scopeLuc
         ? {
               organization: 'luc',
+              admissionFeePaid: { $gt: 0 },
               ...(s || e
                   ? {
                         closingDate: {

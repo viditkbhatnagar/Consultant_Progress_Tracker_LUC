@@ -120,7 +120,7 @@ const renderCell = (col, student, row, onRowClick) => {
         );
     }
     if (col.date) {
-        return raw ? format(new Date(raw), 'MMM d, yyyy') : '—';
+        return raw ? format(new Date(raw), 'dd/MM/yyyy') : '—';
     }
     if (col.conversionPill) {
         const days = raw;

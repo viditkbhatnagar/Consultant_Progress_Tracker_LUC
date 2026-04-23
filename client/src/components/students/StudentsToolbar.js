@@ -378,6 +378,7 @@ const StudentsToolbar = ({
                         label="Start"
                         value={startDate}
                         onChange={onStartDateChange}
+                        format="dd/MM/yyyy"
                         slotProps={{
                             textField: {
                                 size: 'small',
@@ -396,6 +397,7 @@ const StudentsToolbar = ({
                         label="End"
                         value={endDate}
                         onChange={onEndDateChange}
+                        format="dd/MM/yyyy"
                         slotProps={{
                             textField: {
                                 size: 'small',
