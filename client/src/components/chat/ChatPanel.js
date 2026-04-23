@@ -401,17 +401,35 @@ const ChatPanel = ({ open, onClose }) => {
                 ) : (
                     <ChatIcon sx={{ color: 'var(--d-accent)', fontSize: 22 }} />
                 )}
-                <Typography
-                    sx={{
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: 'var(--d-text)',
-                        flex: 1,
-                        letterSpacing: '-0.01em',
-                    }}
-                >
-                    {view === 'history' ? 'Chat history' : 'Ask me'}
-                </Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                        sx={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: 'var(--d-text)',
+                            letterSpacing: '-0.01em',
+                            lineHeight: 1.15,
+                        }}
+                    >
+                        {view === 'history' ? 'Chat history' : 'Ask me'}
+                    </Typography>
+                    {view === 'chat' && (
+                        <Typography
+                            sx={{
+                                fontSize: 11,
+                                color: 'var(--d-text-muted, #8A887E)',
+                                fontWeight: 500,
+                                letterSpacing: '0.01em',
+                                mt: 0.25,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Ask in any language · voice or text
+                        </Typography>
+                    )}
+                </Box>
                 {view === 'chat' && (
                     <>
                         <Tooltip title="History">
@@ -520,10 +538,12 @@ const ChatPanel = ({ open, onClose }) => {
                         ref={scrollRef}
                         sx={{
                             flex: 1,
-                            overflow: 'auto',
+                            overflowY: 'auto',
+                            overflowX: 'hidden',
                             py: 1.5,
                             display: 'flex',
                             flexDirection: 'column',
+                            minWidth: 0,
                         }}
                     >
                         {empty && (
