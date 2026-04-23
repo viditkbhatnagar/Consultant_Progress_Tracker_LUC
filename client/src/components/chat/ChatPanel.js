@@ -26,7 +26,10 @@ import {
     deleteConversation,
 } from '../../services/chatService';
 
-const DRAWER_WIDTH = 480;
+// Responsive drawer width. Keeps chats readable on narrow tablets but
+// gives markdown tables with 5-8 columns (counselor / student / date /
+// status / program / mode / remarks) enough room on desktop.
+const DRAWER_WIDTHS = { xs: '100%', sm: 560, md: 640, lg: 720 };
 
 const ChatPanel = ({ open, onClose }) => {
     const location = useLocation();
@@ -235,7 +238,7 @@ const ChatPanel = ({ open, onClose }) => {
             onClose={onClose}
             PaperProps={{
                 sx: {
-                    width: { xs: '100%', sm: DRAWER_WIDTH },
+                    width: DRAWER_WIDTHS,
                     backgroundColor: 'var(--d-bg, #F7F6F3)',
                     backgroundImage: 'none',
                     color: 'var(--d-text, #191918)',
