@@ -249,18 +249,33 @@ const MeetingsTableView = ({
                     </tbody>
                 </Box>
             </BoardHorizontalScroller>
-            <TablePagination
-                component="div"
-                count={total}
-                page={page}
-                onPageChange={(_e, next) => onPageChange(next)}
-                rowsPerPage={pageSize}
-                rowsPerPageOptions={[pageSize]}
-                sx={{
-                    borderTop: '1px solid var(--t-border)',
-                    '& .MuiTablePagination-toolbar': { fontSize: 12.5, color: 'var(--t-text-3)' },
-                }}
-            />
+            {pageSize ? (
+                <TablePagination
+                    component="div"
+                    count={total}
+                    page={page}
+                    onPageChange={(_e, next) => onPageChange(next)}
+                    rowsPerPage={pageSize}
+                    rowsPerPageOptions={[pageSize]}
+                    sx={{
+                        borderTop: '1px solid var(--t-border)',
+                        '& .MuiTablePagination-toolbar': { fontSize: 12.5, color: 'var(--t-text-3)' },
+                    }}
+                />
+            ) : (
+                <Box
+                    sx={{
+                        borderTop: '1px solid var(--t-border)',
+                        px: 2,
+                        py: 1,
+                        fontSize: 12,
+                        color: 'var(--t-text-muted)',
+                        textAlign: 'right',
+                    }}
+                >
+                    Showing all {total.toLocaleString()} meetings
+                </Box>
+            )}
 
             {/* Inline status-change popover */}
             <Menu

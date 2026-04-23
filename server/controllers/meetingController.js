@@ -65,11 +65,10 @@ exports.getMeetings = async (req, res, next) => {
         } = req.query;
 
         const page = Math.max(parseInt(pageParam, 10) || 1, 1);
-        // Board/Cards views in the redesigned tracker fetch all rows in the
-        // current filter window at once, so lift the cap to 500 (20/page
-        // Table view still uses the default). Pagination still happens
-        // server-side via skip+limit for the Table view.
-        const limit = Math.min(Math.max(parseInt(limitParam, 10) || 20, 1), 500);
+        // Meeting Tracker now defaults to "show all" — callers can pass a
+        // large limit when they want every matching row. Cap at 20,000 so
+        // a malicious/mistaken query can't eat the server.
+        const limit = Math.min(Math.max(parseInt(limitParam, 10) || 20, 1), 20000);
 
         const filter = buildScopeFilter(req);
 
@@ -115,6 +114,48 @@ exports.getMeetings = async (req, res, next) => {
                 total,
                 pages: Math.max(Math.ceil(total / limit), 1),
             },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Lean rows across the full filter window — no pagination.
+//          Powers the KPI strip so numbers reflect all matching meetings
+//          (not just the current page). Projects only the fields the
+//          KPIs need so the payload stays small even with thousands
+//          of rows.
+// @route   GET /api/meetings/stats
+// @access  Private (admin, team_lead)
+exports.getMeetingStats = async (req, res, next) => {
+    try {
+        const { startDate, endDate, teamLead, consultant, status, mode } = req.query;
+
+        const filter = buildScopeFilter(req);
+
+        if (startDate || endDate) {
+            filter.meetingDate = {};
+            if (startDate) filter.meetingDate.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.meetingDate.$lte = end;
+            }
+        }
+        if (teamLead && req.user.role === 'admin') filter.teamLead = teamLead;
+        if (consultant) filter.consultant = consultant;
+        if (status) filter.status = status;
+        if (mode) filter.mode = mode;
+
+        const rows = await Meeting.find(filter)
+            .select('meetingDate status')
+            .sort({ meetingDate: -1 })
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            count: rows.length,
+            data: rows,
         });
     } catch (error) {
         next(error);

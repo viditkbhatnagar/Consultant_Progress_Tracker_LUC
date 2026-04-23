@@ -1,6 +1,7 @@
 const express = require('express');
 const {
     getMeetings,
+    getMeetingStats,
     getMeeting,
     createMeeting,
     updateMeeting,
@@ -19,7 +20,8 @@ router
     .get(authorize('admin', 'team_lead'), getMeetings)
     .post(authorize('admin', 'team_lead'), createMeeting);
 
-// Specific route BEFORE /:id so Express matches it correctly.
+// Specific routes BEFORE /:id so Express matches them correctly.
+router.get('/stats', authorize('admin', 'team_lead'), getMeetingStats);
 router.get('/ai-analysis', authorize('admin', 'team_lead'), getAIAnalysis);
 
 router

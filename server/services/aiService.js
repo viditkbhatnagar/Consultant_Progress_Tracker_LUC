@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const Commitment = require('../models/Commitment');
 const Student = require('../models/Student');
+const User = require('../models/User');
 
 let openai;
 const getClient = () => {
@@ -618,12 +619,249 @@ Is the average conversion time healthy? Where could it be sped up?`;
     ];
 };
 
+// ─── PER-CONSULTANT ANALYSIS ───────────────────────────────
+// Scope: one named consultant, within [startDate, endDate]. Cross-team by
+// design — admin can pick any consultant from any team/org. Reads
+// commitments + students keyed by consultantName (denormalized on both
+// collections). Returns null if no activity in window.
+const aggregateConsultantData = async ({
+    consultantName,
+    startDate,
+    endDate,
+    organization,
+} = {}) => {
+    if (!consultantName) return null;
+
+    const commitFilter = {
+        consultantName,
+        weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    };
+    const studentFilter = {
+        consultantName,
+        closingDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    };
+    if (organization) {
+        commitFilter.organization = organization;
+        studentFilter.organization = organization;
+    }
+
+    const [commitments, students] = await Promise.all([
+        Commitment.find(commitFilter).lean(),
+        Student.find(studentFilter).lean(),
+    ]);
+
+    if (commitments.length === 0 && students.length === 0) return null;
+
+    const now = new Date();
+    const leadStages = {};
+    let achieved = 0;
+    let meetings = 0;
+    let closed = 0;
+    let revenue = 0;
+    let probabilitySum = 0;
+    let probabilityCount = 0;
+    let overdueFollowUps = 0;
+    const activeLeads = [];
+
+    for (const c of commitments) {
+        if (c.status === 'achieved' || c.admissionClosed) achieved++;
+        meetings += c.meetingsDone || 0;
+        if (c.admissionClosed) {
+            closed++;
+            revenue += c.closedAmount || 0;
+        }
+        const stage = c.leadStage || 'Unknown';
+        leadStages[stage] = (leadStages[stage] || 0) + 1;
+        if (typeof c.conversionProbability === 'number') {
+            probabilitySum += c.conversionProbability;
+            probabilityCount++;
+        }
+        if (c.followUpDate && new Date(c.followUpDate) < now && !c.admissionClosed) {
+            overdueFollowUps++;
+        }
+        if (!c.admissionClosed && c.status !== 'achieved') {
+            activeLeads.push({
+                student: c.studentName || 'Unnamed',
+                stage: c.leadStage,
+                probability: c.conversionProbability || 0,
+                followUpDate: c.followUpDate,
+                daysSinceCreated: Math.ceil(
+                    (now - new Date(c.createdAt)) / (1000 * 60 * 60 * 24)
+                ),
+            });
+        }
+    }
+
+    // Student-side metrics (actual admitted / revenue booked).
+    const totalStudentRevenue = students.reduce(
+        (s, st) => s + (st.courseFee || 0),
+        0
+    );
+    const avgConversion =
+        students.length > 0
+            ? Math.round(
+                  students.reduce((s, st) => s + (st.conversionTime || 0), 0) /
+                      students.length
+              )
+            : 0;
+
+    const teamName =
+        commitments[0]?.teamName ||
+        students[0]?.teamName ||
+        'Unknown team';
+    const resolvedOrg =
+        organization ||
+        commitments[0]?.organization ||
+        students[0]?.organization ||
+        'unknown';
+
+    return {
+        dateRange: { startDate, endDate },
+        consultantName,
+        teamName,
+        organization: resolvedOrg,
+        totalCommitments: commitments.length,
+        achieved,
+        achievementRate:
+            commitments.length > 0
+                ? Math.round((achieved / commitments.length) * 100)
+                : 0,
+        meetings,
+        closed,
+        commitmentRevenue: revenue,
+        studentAdmissions: students.length,
+        studentRevenue: totalStudentRevenue,
+        avgConversionDays: avgConversion,
+        avgProbability:
+            probabilityCount > 0
+                ? Math.round(probabilitySum / probabilityCount)
+                : 0,
+        overdueFollowUps,
+        leadStages,
+        topActiveLeads: activeLeads
+            .sort((a, b) => b.probability - a.probability)
+            .slice(0, 6),
+    };
+};
+
+const buildConsultantPrompt = (data) => {
+    const systemPrompt = `You are a senior sales-ops coach for an education consultancy. You receive performance data for a SINGLE consultant and produce a tight, personalised coaching brief. Be specific — cite exact numbers, lead stages, and active-lead names. Do NOT fabricate anything. Use markdown with ## headers and bullet points.`;
+
+    const userPrompt = `Analyze the performance of consultant **${data.consultantName}** (team: ${data.teamName}, org: ${data.organization}) for ${data.dateRange.startDate} to ${data.dateRange.endDate}:
+
+PERFORMANCE
+- Commitments: ${data.totalCommitments}  •  Achieved: ${data.achieved} (${data.achievementRate}%)
+- Meetings Done: ${data.meetings}
+- Admissions Closed: ${data.closed}  •  Closed-commitment Revenue: AED ${data.commitmentRevenue.toLocaleString()}
+- Student Admissions (closingDate in window): ${data.studentAdmissions}  •  Booked Revenue: AED ${data.studentRevenue.toLocaleString()}
+- Avg Conversion Time: ${data.avgConversionDays} days
+- Avg Conversion Probability: ${data.avgProbability}%
+- Overdue Follow-ups: ${data.overdueFollowUps}
+- Lead Stage Distribution: ${JSON.stringify(data.leadStages)}
+
+TOP ACTIVE LEADS (non-closed, sorted by probability):
+${
+    data.topActiveLeads.length > 0
+        ? data.topActiveLeads
+              .map(
+                  (l) =>
+                      `- ${l.student} — stage: ${l.stage || 'unset'}, prob: ${l.probability}%, age: ${l.daysSinceCreated}d${l.followUpDate ? `, follow-up: ${new Date(l.followUpDate).toLocaleDateString()}` : ''}`
+              )
+              .join('\n')
+        : '- (no active leads)'
+}
+
+Generate an analysis with EXACTLY these sections in this order. Keep total output under 300 words.
+
+## Snapshot
+Two sentences: how this consultant performed in the window overall. Quote the key numbers.
+
+## Strengths
+2-3 bullets. What's going well — cite metrics.
+
+## Watch-outs
+2-3 bullets. Stalled stages, overdue follow-ups, weak close rate, etc. Cite specifics.
+
+## Next actions
+3-4 bullets. Each must be a concrete action tied to a named lead or a specific metric.`;
+
+    return [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+    ];
+};
+
+// ─── ANALYSIS TARGETS ──────────────────────────────────────
+// Returns the list of teams (LUC + Skillhub) and consultants that had
+// activity in the [startDate, endDate] window. Used by the admin deep-
+// breakdown view to enumerate cards before firing per-target analyses.
+const listAnalysisTargets = async (startDate, endDate) => {
+    const dateFilter = {
+        weekStartDate: { $gte: new Date(startDate), $lte: new Date(endDate) },
+    };
+
+    // Teams from commitments (team_lead-scoped) + active team_lead/skillhub
+    // users so we still show branches with no commits in the window.
+    const [commitments, tlUsers] = await Promise.all([
+        Commitment.find(dateFilter)
+            .select('teamLead teamName consultantName organization')
+            .lean(),
+        User.find({
+            role: { $in: ['team_lead', 'skillhub'] },
+            isActive: { $ne: false },
+        })
+            .select('name teamName organization')
+            .lean(),
+    ]);
+
+    const teamMap = new Map();
+    for (const u of tlUsers) {
+        const key = String(u._id);
+        teamMap.set(key, {
+            teamLeadId: key,
+            teamName: u.teamName || u.name,
+            organization: u.organization || 'luc',
+            commitments: 0,
+        });
+    }
+    const consultantMap = new Map();
+    for (const c of commitments) {
+        const tlId = c.teamLead ? String(c.teamLead) : null;
+        if (tlId && teamMap.has(tlId)) {
+            teamMap.get(tlId).commitments += 1;
+        }
+        const cName = (c.consultantName || '').trim();
+        if (!cName) continue;
+        const key = `${cName}__${c.organization || 'luc'}`;
+        const row = consultantMap.get(key) || {
+            consultantName: cName,
+            teamName: c.teamName || '',
+            organization: c.organization || 'luc',
+            commitments: 0,
+        };
+        row.commitments += 1;
+        consultantMap.set(key, row);
+    }
+
+    const teams = [...teamMap.values()].sort((a, b) =>
+        a.teamName.localeCompare(b.teamName)
+    );
+    const consultants = [...consultantMap.values()].sort((a, b) =>
+        a.consultantName.localeCompare(b.consultantName)
+    );
+
+    return { teams, consultants };
+};
+
 module.exports = {
     aggregateAdminData,
     aggregateTeamLeadData,
     aggregateStudentData,
+    aggregateConsultantData,
     buildAdminPrompt,
     buildTeamLeadPrompt,
     buildStudentPrompt,
+    buildConsultantPrompt,
     generateAnalysis,
+    listAnalysisTargets,
 };
