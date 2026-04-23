@@ -98,3 +98,38 @@ export async function deleteConversation(id) {
     });
     return res.ok;
 }
+
+/**
+ * Transcribe a recorded audio blob using server-side OpenAI Whisper.
+ * Returns the transcript as plain text. Whisper auto-detects language —
+ * pass any supported language (English, Hindi, Malayalam, Arabic, etc.)
+ * without explicit configuration.
+ */
+export async function transcribeAudio(blob) {
+    const form = new FormData();
+    // Filename extension hints the mime to Whisper server-side. Keep it
+    // consistent with the blob's actual type when present.
+    const ext =
+        blob.type.includes('mp4') || blob.type.includes('m4a')
+            ? 'm4a'
+            : blob.type.includes('ogg')
+                ? 'ogg'
+                : blob.type.includes('wav')
+                    ? 'wav'
+                    : 'webm';
+    form.append('audio', blob, `voice.${ext}`);
+
+    const res = await fetch(url('/chat/transcribe'), {
+        method: 'POST',
+        headers: authHeaders(), // do NOT set Content-Type — browser sets multipart boundary
+        body: form,
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const msg = j.message || 'Transcription failed';
+        const err = new Error(msg);
+        err.status = res.status;
+        throw err;
+    }
+    return j.text || '';
+}
