@@ -5,6 +5,7 @@ import {
     DialogContent,
     DialogActions,
     Button,
+    Chip,
     TextField,
     Typography,
     Box,
@@ -17,6 +18,12 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+
+// Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
+// most-frequent round-hundred values actually in the LUC database (profiled
+// 2026-04-23) — 2500 and 1500 account for >60% of entries, so they're
+// first. The TL can still type any custom amount in the field itself.
+const LUC_ADMISSION_FEE_TIERS = [2500, 1500, 4000, 2000, 1000, 3000];
 
 // University options
 const UNIVERSITIES = [
@@ -753,28 +760,75 @@ const StudentFormDialog = ({
                                     startAdornment: <InputAdornment position="start">AED</InputAdornment>,
                                 }}
                             />
-                            <TextField
-                                sx={fieldStyle}
-                                label="Admission Fee Paid"
-                                type="number"
-                                value={formData.admissionFeePaid}
-                                onChange={handleChange('admissionFeePaid')}
-                                placeholder="Enter amount paid"
-                                inputProps={{ min: 0, max: Number(formData.courseFee) || undefined }}
-                                error={
-                                    Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
-                                    Number(formData.courseFee) > 0
-                                }
-                                helperText={
-                                    Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
-                                    Number(formData.courseFee) > 0
-                                        ? 'Cannot exceed the course fee.'
-                                        : ' '
-                                }
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">AED</InputAdornment>,
-                                }}
-                            />
+                            <Box sx={fieldStyle}>
+                                <TextField
+                                    fullWidth
+                                    label="Admission Fee Paid"
+                                    type="number"
+                                    value={formData.admissionFeePaid}
+                                    onChange={handleChange('admissionFeePaid')}
+                                    placeholder="Enter amount paid"
+                                    inputProps={{ min: 0, max: Number(formData.courseFee) || undefined }}
+                                    error={
+                                        Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
+                                        Number(formData.courseFee) > 0
+                                    }
+                                    helperText={
+                                        Number(formData.admissionFeePaid) > Number(formData.courseFee) &&
+                                        Number(formData.courseFee) > 0
+                                            ? 'Cannot exceed the course fee.'
+                                            : ' '
+                                    }
+                                    InputProps={{
+                                        startAdornment: <InputAdornment position="start">AED</InputAdornment>,
+                                    }}
+                                />
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: 0.75,
+                                        mt: -0.5,
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            color: 'text.secondary',
+                                            fontSize: 11,
+                                            letterSpacing: '0.02em',
+                                            mr: 0.5,
+                                        }}
+                                    >
+                                        Common:
+                                    </Typography>
+                                    {LUC_ADMISSION_FEE_TIERS.map((v) => {
+                                        const selected =
+                                            Number(formData.admissionFeePaid) === v;
+                                        return (
+                                            <Chip
+                                                key={v}
+                                                size="small"
+                                                label={`AED ${v.toLocaleString()}`}
+                                                clickable
+                                                variant={selected ? 'filled' : 'outlined'}
+                                                color={selected ? 'primary' : 'default'}
+                                                onClick={() =>
+                                                    handleChange('admissionFeePaid')({
+                                                        target: { value: String(v) },
+                                                    })
+                                                }
+                                                sx={{
+                                                    height: 24,
+                                                    fontSize: 11.5,
+                                                    fontWeight: selected ? 600 : 500,
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
                         </Box>
                     </Box>
 
