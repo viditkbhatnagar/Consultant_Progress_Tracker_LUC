@@ -28,8 +28,10 @@ import MeetingDetailDrawer from '../components/meetings/MeetingDetailDrawer';
 import MeetingsAIAnalysisDialog from '../components/meetings/MeetingsAIAnalysisDialog';
 import { TrackerThemeProvider, useThemeState } from '../utils/trackerTheme';
 
-const PAGE_SIZE = 20;
-const NON_TABLE_LIMIT = 500; // Board/Cards fetch everything in current filter
+// Default = show everything. User can type a number into the Rows/page
+// input to switch to paginated mode. SHOW_ALL_LIMIT is a hard cap the
+// server also honours (20k); well above any realistic meeting volume.
+const SHOW_ALL_LIMIT = 20000;
 const STORAGE_KEY = 'meetings-ui-prefs';
 
 const loadPrefs = () => {
@@ -58,14 +60,28 @@ const MeetingTrackerPage = () => {
     const [view, setView] = useState(prefs.view || 'table');
     const [density, setDensity] = useState(prefs.density || 'compact');
 
+    // Rows-per-page control for the Table view. `pageSizeInput` is the
+    // string the user is typing; `pageSize` is the committed positive int
+    // used by the data fetcher. pageSize === null means "show all".
+    const [pageSizeInput, setPageSizeInput] = useState(
+        typeof prefs.pageSize === 'number' && prefs.pageSize > 0
+            ? String(prefs.pageSize)
+            : ''
+    );
+    const [pageSize, setPageSize] = useState(
+        typeof prefs.pageSize === 'number' && prefs.pageSize > 0
+            ? prefs.pageSize
+            : null
+    );
+
     // Theme (light/dark) for this page only — persisted separately.
     const { mode, toggle: toggleTheme, tokensSx, contextValue } = useThemeState(
         'meetings-theme-mode'
     );
 
     useEffect(() => {
-        savePrefs({ view, density });
-    }, [view, density]);
+        savePrefs({ view, density, pageSize });
+    }, [view, density, pageSize]);
 
     // Data state — Table view uses paginated rows; Board/Cards use allRows.
     const [rows, setRows] = useState([]);
@@ -76,6 +92,12 @@ const MeetingTrackerPage = () => {
 
     const [allRows, setAllRows] = useState([]);
     const [allLoading, setAllLoading] = useState(false);
+
+    // KPI rows — lean {meetingDate, status} across the full filter window,
+    // independent of pagination. Pulled from /api/meetings/stats so the
+    // KPI strip reflects every matching meeting, not just the current
+    // page.
+    const [kpiRows, setKpiRows] = useState([]);
 
     const [filters, setFilters] = useState({
         status: '',
@@ -149,18 +171,19 @@ const MeetingTrackerPage = () => {
         [filters]
     );
 
-    // Table fetcher — paginated
+    // Table fetcher — paginated when pageSize is set; otherwise one big
+    // page with every matching row (server caps at SHOW_ALL_LIMIT).
     const loadTable = useCallback(async () => {
         setLoading(true);
         setFetchError('');
         try {
             const res = await meetingService.getMeetings({
                 ...commonFilterParams,
-                page: page + 1,
-                limit: PAGE_SIZE,
+                page: pageSize ? page + 1 : 1,
+                limit: pageSize || SHOW_ALL_LIMIT,
             });
             setRows(res.data || []);
-            setTotal(res.pagination?.total || 0);
+            setTotal(res.pagination?.total || (res.data || []).length);
         } catch (err) {
             setFetchError(err?.response?.data?.message || err?.message || 'Failed to load meetings');
             setRows([]);
@@ -168,9 +191,9 @@ const MeetingTrackerPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [commonFilterParams, page]);
+    }, [commonFilterParams, page, pageSize]);
 
-    // Board/Cards fetcher — single page with high limit
+    // Board/Cards fetcher — always show every matching row in the window.
     const loadAll = useCallback(async () => {
         setAllLoading(true);
         setFetchError('');
@@ -178,7 +201,7 @@ const MeetingTrackerPage = () => {
             const res = await meetingService.getMeetings({
                 ...commonFilterParams,
                 page: 1,
-                limit: NON_TABLE_LIMIT,
+                limit: SHOW_ALL_LIMIT,
             });
             setAllRows(res.data || []);
         } catch (err) {
@@ -189,10 +212,26 @@ const MeetingTrackerPage = () => {
         }
     }, [commonFilterParams]);
 
+    // KPI fetcher — pulls the full filtered dataset (lean projection) so
+    // KPI cards show all-time / all-filtered numbers independent of
+    // whatever pagination the user has set.
+    const loadKpis = useCallback(async () => {
+        try {
+            const res = await meetingService.getMeetingStats(commonFilterParams);
+            setKpiRows(res.data || []);
+        } catch {
+            setKpiRows([]);
+        }
+    }, [commonFilterParams]);
+
     useEffect(() => {
         if (view === 'table') loadTable();
         else loadAll();
     }, [view, loadTable, loadAll]);
+
+    useEffect(() => {
+        loadKpis();
+    }, [loadKpis]);
 
     const handleFilterChange = (field, value) => {
         setPage(0);
@@ -206,6 +245,7 @@ const MeetingTrackerPage = () => {
     const refreshCurrent = () => {
         if (view === 'table') loadTable();
         else loadAll();
+        loadKpis();
     };
 
     const openCreate = () => { setEditing(null); setDialogOpen(true); };
@@ -248,11 +288,12 @@ const MeetingTrackerPage = () => {
         try {
             await meetingService.deleteMeeting(row._id);
             setSnack({ open: true, message: 'Meeting deleted', severity: 'success' });
-            if (view === 'table' && rows.length === 1 && page > 0) {
+            if (view === 'table' && pageSize && rows.length === 1 && page > 0) {
                 setPage(page - 1);
             } else {
                 refreshCurrent();
             }
+            loadKpis();
             if (drawerOpen) closeDrawer();
         } catch (err) {
             setSnack({
@@ -296,13 +337,22 @@ const MeetingTrackerPage = () => {
         navigate('/login');
     };
 
-    // Dataset shown in KPIs: for Board/Cards use allRows (whole filter window);
-    // for Table use the current page rows (reasonable approximation, since
-    // pulling all rows just for KPIs would double the request cost).
-    const kpiRows = view === 'table' ? rows : allRows;
-
     const currentViewRows = view === 'table' ? rows : allRows;
     const currentViewLoading = view === 'table' ? loading : allLoading;
+
+    // Commit the typed pageSize string into the effective pageSize number
+    // on blur/Enter. Empty or 0 → "show all" (pageSize = null).
+    const commitPageSize = useCallback(() => {
+        const n = parseInt(pageSizeInput, 10);
+        if (Number.isFinite(n) && n > 0) {
+            setPageSize(n);
+            setPage(0);
+        } else {
+            setPageSize(null);
+            setPage(0);
+            if (pageSizeInput !== '') setPageSizeInput('');
+        }
+    }, [pageSizeInput]);
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -364,7 +414,9 @@ const MeetingTrackerPage = () => {
                         />
                         <span>
                             {view === 'table'
-                                ? `${rows.length} of ${total} meetings · page ${page + 1}`
+                                ? pageSize
+                                    ? `${rows.length} of ${total} meetings · page ${page + 1}`
+                                    : `${total.toLocaleString()} meeting${total === 1 ? '' : 's'}`
                                 : `${allRows.length} meetings in view`}
                         </span>
                     </Box>
@@ -392,6 +444,9 @@ const MeetingTrackerPage = () => {
                         onAIAnalysis={openAI}
                         mode={mode}
                         onToggleMode={toggleTheme}
+                        pageSizeInput={pageSizeInput}
+                        onPageSizeInputChange={setPageSizeInput}
+                        onPageSizeCommit={commitPageSize}
                     />
 
                     {view === 'table' && (
@@ -399,7 +454,7 @@ const MeetingTrackerPage = () => {
                             rows={rows}
                             total={total}
                             page={page}
-                            pageSize={PAGE_SIZE}
+                            pageSize={pageSize}
                             onPageChange={setPage}
                             loading={loading}
                             density={density}

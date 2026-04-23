@@ -24,6 +24,15 @@ const getMeetings = async (filters = {}) => {
     return response.data;
 };
 
+// Lean stats pull — every row matching the current filters, projected down
+// to {meetingDate, status}. Used by the KPI strip so KPIs reflect the full
+// dataset, not just the visible page.
+const getMeetingStats = async (filters = {}) => {
+    const params = buildParams(filters);
+    const response = await axios.get(`${API_URL}/stats?${params.toString()}`);
+    return response.data;
+};
+
 const getMeeting = async (id) => {
     const response = await axios.get(`${API_URL}/${id}`);
     return response.data;
@@ -54,6 +63,7 @@ const getAIAnalysis = async (filters = {}) => {
 
 const meetingService = {
     getMeetings,
+    getMeetingStats,
     getMeeting,
     createMeeting,
     updateMeeting,

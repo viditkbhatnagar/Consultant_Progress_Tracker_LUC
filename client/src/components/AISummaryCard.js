@@ -8,6 +8,8 @@ import { motion } from 'framer-motion';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
 import DateRangeSelector from './DateRangeSelector';
 import aiService from '../services/aiService';
+import AIDeepBreakdown from './AIDeepBreakdown';
+import { useAuth } from '../context/AuthContext';
 import {
     gridStagger,
     riseItemVariants,
@@ -98,6 +100,9 @@ const SectionSurface = ({ children, padding = 20, sx = {} }) => (
 );
 
 const AISummaryCard = () => {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+
     const [dateRange, setDateRange] = useState({
         startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
         endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
@@ -281,6 +286,13 @@ const AISummaryCard = () => {
                 <SectionSurface sx={{ textAlign: 'center' }}>
                     <Typography sx={{ color: 'var(--d-text-muted, #8A887E)' }}>{analysis}</Typography>
                 </SectionSurface>
+            )}
+
+            {isAdmin && (
+                <AIDeepBreakdown
+                    startDate={dateRange.startDate}
+                    endDate={dateRange.endDate}
+                />
             )}
         </Box>
     );

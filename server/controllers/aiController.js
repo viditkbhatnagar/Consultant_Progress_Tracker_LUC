@@ -2,12 +2,16 @@ const {
     aggregateAdminData,
     aggregateTeamLeadData,
     aggregateStudentData,
+    aggregateConsultantData,
     buildAdminPrompt,
     buildTeamLeadPrompt,
     buildStudentPrompt,
+    buildConsultantPrompt,
     generateAnalysis,
+    listAnalysisTargets,
 } = require('../services/aiService');
 const AIUsage = require('../models/AIUsage');
+const User = require('../models/User');
 const { resolveOrganization } = require('../middleware/auth');
 
 // @desc    Generate AI analysis for dashboard
@@ -102,6 +106,189 @@ exports.generateDashboardAnalysis = async (req, res, next) => {
             });
         }
 
+        next(error);
+    }
+};
+
+// @desc    List the teams + consultants an admin can run deep AI analysis
+//          on for a given window. Used by the admin AI Analysis page to
+//          render one collapsible card per target before firing the
+//          per-team / per-consultant endpoints.
+// @route   GET /api/ai/analysis-targets?startDate&endDate
+// @access  Private (Admin only)
+exports.getAnalysisTargets = async (req, res, next) => {
+    try {
+        const { startDate, endDate } = req.query;
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide startDate and endDate',
+            });
+        }
+        const targets = await listAnalysisTargets(startDate, endDate);
+        res.status(200).json({ success: true, data: targets });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// @desc    Per-team AI analysis. Admin picks a teamLead id; we reuse the
+//          existing team-lead aggregation + prompt so the content matches
+//          what that TL would see for themselves.
+// @route   POST /api/ai/team-analysis
+// @access  Private (Admin only)
+exports.generateTeamAnalysis = async (req, res, next) => {
+    try {
+        const { startDate, endDate, teamLeadId } = req.body;
+        if (!startDate || !endDate || !teamLeadId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide startDate, endDate and teamLeadId',
+            });
+        }
+
+        const tl = await User.findById(teamLeadId)
+            .select('name teamName organization role')
+            .lean();
+        if (!tl) {
+            return res
+                .status(404)
+                .json({ success: false, message: 'Team lead not found' });
+        }
+
+        const data = await aggregateTeamLeadData(teamLeadId, startDate, endDate);
+        if (!data) {
+            return res.status(200).json({
+                success: true,
+                target: {
+                    teamLeadId,
+                    teamName: tl.teamName || tl.name,
+                    organization: tl.organization,
+                },
+                analysis:
+                    'No commitment or student activity for this team in the selected window.',
+            });
+        }
+
+        const messages = buildTeamLeadPrompt(data);
+        const result = await generateAnalysis(messages);
+
+        AIUsage.create({
+            user: req.user.id,
+            role: req.user.role,
+            type: 'analysis',
+            teamName: tl.teamName || '',
+            organization: tl.organization || '',
+            model: result.usage.model,
+            promptTokens: result.usage.promptTokens,
+            completionTokens: result.usage.completionTokens,
+            totalTokens: result.usage.totalTokens,
+            cost: result.usage.cost,
+            dateRangeQueried: { startDate, endDate },
+        }).catch((err) => console.error('Failed to log AI usage:', err.message));
+
+        res.status(200).json({
+            success: true,
+            target: {
+                teamLeadId,
+                teamName: tl.teamName || tl.name,
+                organization: tl.organization,
+            },
+            analysis: result.content,
+        });
+    } catch (error) {
+        if (error.message === 'OPENAI_API_KEY is not configured on the server') {
+            return res.status(503).json({
+                success: false,
+                message:
+                    'AI analysis is not available. The OpenAI API key has not been configured.',
+            });
+        }
+        if (error.status === 429) {
+            return res.status(502).json({
+                success: false,
+                message:
+                    'AI service is temporarily rate-limited. Please try again in a moment.',
+            });
+        }
+        next(error);
+    }
+};
+
+// @desc    Per-consultant AI analysis. Admin picks a consultantName +
+//          organization (name alone is not unique across orgs). Scoped
+//          aggregation is cross-team by design so Skillhub counselors and
+//          LUC consultants are treated the same way.
+// @route   POST /api/ai/consultant-analysis
+// @access  Private (Admin only)
+exports.generateConsultantAnalysis = async (req, res, next) => {
+    try {
+        const { startDate, endDate, consultantName, organization } = req.body;
+        if (!startDate || !endDate || !consultantName) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Please provide startDate, endDate and consultantName',
+            });
+        }
+
+        const data = await aggregateConsultantData({
+            consultantName,
+            startDate,
+            endDate,
+            organization,
+        });
+
+        if (!data) {
+            return res.status(200).json({
+                success: true,
+                target: { consultantName, organization: organization || null },
+                analysis:
+                    'No commitment or student activity for this consultant in the selected window.',
+            });
+        }
+
+        const messages = buildConsultantPrompt(data);
+        const result = await generateAnalysis(messages);
+
+        AIUsage.create({
+            user: req.user.id,
+            role: req.user.role,
+            type: 'analysis',
+            teamName: data.teamName || '',
+            organization: data.organization || '',
+            model: result.usage.model,
+            promptTokens: result.usage.promptTokens,
+            completionTokens: result.usage.completionTokens,
+            totalTokens: result.usage.totalTokens,
+            cost: result.usage.cost,
+            dateRangeQueried: { startDate, endDate },
+        }).catch((err) => console.error('Failed to log AI usage:', err.message));
+
+        res.status(200).json({
+            success: true,
+            target: {
+                consultantName,
+                teamName: data.teamName,
+                organization: data.organization,
+            },
+            analysis: result.content,
+        });
+    } catch (error) {
+        if (error.message === 'OPENAI_API_KEY is not configured on the server') {
+            return res.status(503).json({
+                success: false,
+                message:
+                    'AI analysis is not available. The OpenAI API key has not been configured.',
+            });
+        }
+        if (error.status === 429) {
+            return res.status(502).json({
+                success: false,
+                message:
+                    'AI service is temporarily rate-limited. Please try again in a moment.',
+            });
+        }
         next(error);
     }
 };

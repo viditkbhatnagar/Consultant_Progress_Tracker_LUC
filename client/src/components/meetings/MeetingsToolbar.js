@@ -6,6 +6,8 @@ import {
     ToggleButtonGroup,
     Menu,
     MenuItem,
+    TextField,
+    Tooltip,
     Typography,
     Divider,
 } from '@mui/material';
@@ -148,6 +150,9 @@ const MeetingsToolbar = ({
     onAIAnalysis,
     mode = 'light',
     onToggleMode,
+    pageSizeInput = '',
+    onPageSizeInputChange,
+    onPageSizeCommit,
 }) => {
     const hasFilters = Boolean(
         filters.status ||
@@ -417,6 +422,60 @@ const MeetingsToolbar = ({
                 )}
 
                 <Box sx={{ flex: 1 }} />
+
+                {view === 'table' && onPageSizeInputChange && (
+                    <Tooltip
+                        title="Leave blank to show all rows. Enter a number (e.g. 107) to paginate."
+                        placement="top"
+                        arrow
+                    >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                            <Typography
+                                sx={{
+                                    fontSize: 11.5,
+                                    color: 'var(--t-text-muted)',
+                                    fontWeight: 500,
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                Rows / page
+                            </Typography>
+                            <TextField
+                                size="small"
+                                value={pageSizeInput}
+                                placeholder="All"
+                                onChange={(e) => {
+                                    const v = e.target.value.replace(/[^0-9]/g, '');
+                                    onPageSizeInputChange(v);
+                                }}
+                                onBlur={() => onPageSizeCommit && onPageSizeCommit()}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                    }
+                                }}
+                                inputProps={{
+                                    inputMode: 'numeric',
+                                    pattern: '[0-9]*',
+                                    'aria-label': 'Rows per page',
+                                }}
+                                sx={{
+                                    width: 78,
+                                    '& .MuiInputBase-root': {
+                                        fontSize: 12,
+                                        borderRadius: '999px',
+                                        height: 30,
+                                    },
+                                    '& input': {
+                                        textAlign: 'center',
+                                        fontVariantNumeric: 'tabular-nums',
+                                        padding: '4px 8px',
+                                    },
+                                }}
+                            />
+                        </Box>
+                    </Tooltip>
+                )}
             </Box>
         </Box>
     );
