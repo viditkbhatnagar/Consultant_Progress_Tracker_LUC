@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
-import { Box, IconButton, Tooltip } from '@mui/material';
-import {
-    ChatBubbleOutline as ChatIcon,
-    Close as CloseIcon,
-} from '@mui/icons-material';
+import { Box } from '@mui/material';
+import { ChatBubbleOutline as ChatIcon } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import ChatPanel from './ChatPanel';
 import { useAuth } from '../../context/AuthContext';
 
-// Floating "Ask me" launcher. Extended pill-style button with a chat
-// bubble icon; collapses to a simple close icon while the panel is open.
-// Mounted once at the app root — hidden on /login and for any
+// Floating "Ask me" launcher. Only shown while the chat drawer is
+// CLOSED — the drawer has its own close button in the header, so a
+// floating close FAB would be redundant. Hidden on /login and for any
 // unauthenticated view.
 const FloatingChatLauncher = () => {
     const [open, setOpen] = useState(false);
@@ -22,37 +19,15 @@ const FloatingChatLauncher = () => {
 
     return (
         <>
-            <Box
-                sx={{
-                    position: 'fixed',
-                    right: { xs: 16, sm: 24 },
-                    bottom: { xs: 16, sm: 24 },
-                    zIndex: (theme) => theme.zIndex.drawer + 2,
-                }}
-            >
-                {open ? (
-                    <Tooltip title="Close assistant" placement="left">
-                        <IconButton
-                            aria-label="Close assistant"
-                            onClick={() => setOpen(false)}
-                            sx={{
-                                width: 48,
-                                height: 48,
-                                backgroundColor: 'var(--d-surface, #FFFFFF)',
-                                color: 'var(--d-text-2, #2A2927)',
-                                border: '1px solid var(--d-border, #E6E3DC)',
-                                boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
-                                transition:
-                                    'background-color var(--d-dur-sm, 180ms) var(--d-ease-enter, ease)',
-                                '&:hover': {
-                                    backgroundColor: 'var(--d-surface-hover, #EFEDE8)',
-                                },
-                            }}
-                        >
-                            <CloseIcon />
-                        </IconButton>
-                    </Tooltip>
-                ) : (
+            {!open && (
+                <Box
+                    sx={{
+                        position: 'fixed',
+                        right: { xs: 16, sm: 24 },
+                        bottom: { xs: 16, sm: 24 },
+                        zIndex: (theme) => theme.zIndex.drawer + 2,
+                    }}
+                >
                     <Box
                         component="button"
                         type="button"
@@ -94,8 +69,8 @@ const FloatingChatLauncher = () => {
                             Ask me
                         </Box>
                     </Box>
-                )}
-            </Box>
+                </Box>
+            )}
             <ChatPanel open={open} onClose={() => setOpen(false)} />
         </>
     );
