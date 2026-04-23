@@ -151,6 +151,44 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
         if (!formData.mode) return setError('Mode is required');
         if (!formData.courseDuration) return setError('Course duration is required');
 
+        // Date sanity — same rules as LUC. Dates are stored as YYYY-MM-DD
+        // strings in this form (HTML date input); comparing against an
+        // ISO-formatted today keeps the math string-safe.
+        const todayIso = new Date().toISOString().slice(0, 10);
+        if (formData.enquiryDate && formData.enquiryDate > todayIso) {
+            return setError('Enquiry date cannot be in the future.');
+        }
+        if (formData.closingDate && formData.closingDate > todayIso) {
+            return setError('Closing date cannot be in the future.');
+        }
+        if (
+            formData.enquiryDate &&
+            formData.closingDate &&
+            formData.closingDate < formData.enquiryDate
+        ) {
+            return setError('Closing date cannot be earlier than the enquiry date.');
+        }
+        if (formData.dateOfEnrollment && formData.dateOfEnrollment > todayIso) {
+            return setError('Date of enrollment cannot be in the future.');
+        }
+
+        // Fee sanity — admission + registration + EMI-paid can never
+        // exceed course fee. Prevents the decimal/extra-zero typos that
+        // showed up in LUC data.
+        const course = Number(formData.courseFee) || 0;
+        const regFeeNum = Number(formData.registrationFee) || 0;
+        const admNum = Number(formData.admissionFeePaid) || 0;
+        const emiPaidNum = (formData.emis || []).reduce(
+            (sum, e) => sum + (Number(e.paidAmount) || 0),
+            0
+        );
+        const totalPaid = regFeeNum + admNum + emiPaidNum;
+        if (course > 0 && totalPaid > course) {
+            return setError(
+                `Total paid (AED ${totalPaid.toLocaleString()}) cannot exceed course fee (AED ${course.toLocaleString()}).`
+            );
+        }
+
         const curriculum = composeCurriculum(formData.board, formData.igcseVariant);
         if (!curriculum) return setError('Curriculum could not be resolved.');
 
@@ -582,12 +620,17 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth type="date" label="Enquiry Date" InputLabelProps={{ shrink: true }}
                             value={formData.enquiryDate}
-                            onChange={(e) => set('enquiryDate', e.target.value)} />
+                            onChange={(e) => set('enquiryDate', e.target.value)}
+                            inputProps={{ max: new Date().toISOString().slice(0, 10) }} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField fullWidth type="date" label="Closing Date" InputLabelProps={{ shrink: true }}
                             value={formData.closingDate}
-                            onChange={(e) => set('closingDate', e.target.value)} />
+                            onChange={(e) => set('closingDate', e.target.value)}
+                            inputProps={{
+                                max: new Date().toISOString().slice(0, 10),
+                                min: formData.enquiryDate || undefined,
+                            }} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl fullWidth required>

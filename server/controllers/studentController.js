@@ -4,6 +4,75 @@ const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 const { isSkillhub } = require('../config/organizations');
 
+// Server-side data-quality guard — matches the client-side validation so
+// a direct API hit can't bypass it. Returns an error string if the
+// payload is bad, null if it's OK. Rules:
+//   1. enquiryDate / closingDate / dateOfEnrollment cannot be future
+//   2. closingDate cannot be before enquiryDate
+//   3. admissionFeePaid (+ registrationFee + EMI paid for Skillhub)
+//      cannot exceed courseFee
+// These were the top data-entry bugs surfaced by scripts/auditLucStudentsDeep.js.
+const validateStudentPayload = (payload, { isUpdate = false } = {}) => {
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const parseDate = (d) => (d ? new Date(d) : null);
+    const enquiry = parseDate(payload.enquiryDate);
+    const closing = parseDate(payload.closingDate);
+    const enrollment = parseDate(payload.dateOfEnrollment);
+
+    if (enquiry && enquiry > todayEnd) return 'Enquiry date cannot be in the future.';
+    if (closing && closing > todayEnd) return 'Closing date cannot be in the future.';
+    if (enrollment && enrollment > todayEnd) return 'Date of enrollment cannot be in the future.';
+    if (enquiry && closing && closing < enquiry) {
+        return 'Closing date cannot be earlier than the enquiry date.';
+    }
+
+    const course = Number(payload.courseFee) || 0;
+    if (course > 0) {
+        const adm = Number(payload.admissionFeePaid) || 0;
+        const reg = Number(payload.registrationFee) || 0;
+        const emi = Array.isArray(payload.emis)
+            ? payload.emis.reduce((s, e) => s + (Number(e?.paidAmount) || 0), 0)
+            : 0;
+        const total = adm + reg + emi;
+        if (total > course) {
+            return `Total paid (AED ${total.toLocaleString()}) cannot exceed course fee (AED ${course.toLocaleString()}).`;
+        }
+        // On update the client may send only the field that changed. If
+        // any single money field individually exceeds courseFee that's
+        // obviously wrong too.
+        if (adm > course) {
+            return `Admission fee paid cannot exceed course fee (AED ${course.toLocaleString()}).`;
+        }
+    }
+    return null;
+};
+module.exports.validateStudentPayload = validateStudentPayload;
+
+// Hide LUC students with admissionFeePaid = 0/null/unset from every list
+// and aggregate query. They stay in the DB (backup dump in
+// server/dumps/luc_zero_admission_fee_*.json) but are excluded from the
+// UI and KPI cards. Skillhub rows are never affected.
+const applyHideLucZeroFeeFilter = (filter) => {
+    const guard = {
+        $or: [
+            { organization: { $ne: 'luc' } },
+            { admissionFeePaid: { $gt: 0 } },
+        ],
+    };
+    if (filter.$or) {
+        // Merge any pre-existing $or into $and so we can safely add another.
+        const existing = filter.$or;
+        delete filter.$or;
+        filter.$and = [...(filter.$and || []), { $or: existing }, guard];
+    } else {
+        filter.$and = [...(filter.$and || []), guard];
+    }
+    return filter;
+};
+module.exports.applyHideLucZeroFeeFilter = applyHideLucZeroFeeFilter;
+
 // @desc    Get distinct LUC program names (for the Meeting Tracker dropdown)
 // @route   GET /api/students/programs
 // @access  Private (Admin/Team Lead)
@@ -121,6 +190,8 @@ exports.getStudents = async (req, res, next) => {
         const limit = Math.max(1, Math.min(500, Number.isNaN(rawLimit) ? 500 : rawLimit));
         const skip = (page - 1) * limit;
 
+        applyHideLucZeroFeeFilter(filter);
+
         const [students, total] = await Promise.all([
             Student.find(filter)
                 .populate('teamLead', 'name email teamName')
@@ -189,6 +260,10 @@ exports.getStudent = async (req, res, next) => {
 // @access  Private (Admin/Team Lead)
 exports.createStudent = async (req, res, next) => {
     try {
+        const badReason = validateStudentPayload(req.body);
+        if (badReason) {
+            return res.status(400).json({ success: false, message: badReason });
+        }
         const {
             studentName,
             gender,
@@ -323,6 +398,17 @@ exports.updateStudent = async (req, res, next) => {
                 success: false,
                 message: 'Not authorized to update this student',
             });
+        }
+
+        // Merge the incoming patch over the current doc so the validator
+        // can see the final would-be state (the payload may be partial).
+        const merged = {
+            ...student.toObject(),
+            ...req.body,
+        };
+        const badReason = validateStudentPayload(merged, { isUpdate: true });
+        if (badReason) {
+            return res.status(400).json({ success: false, message: badReason });
         }
 
         // Fields that can be updated
@@ -614,6 +700,8 @@ exports.getStudentStats = async (req, res, next) => {
                     conversionOperator === 'gt' ? { $gt: days } : { $lt: days };
             }
         }
+
+        applyHideLucZeroFeeFilter(filter);
 
         // Single aggregation that computes everything the KPI strip needs.
         // EMI paid amounts live in an array sub-doc so we $map → $sum them

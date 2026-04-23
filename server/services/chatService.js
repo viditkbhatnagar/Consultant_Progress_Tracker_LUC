@@ -423,6 +423,7 @@ If BOTH org and team are ambiguous (rare — e.g. "meetings this week" where the
 - Markdown. Use tables for ≤10 structured rows, bullets for unranked lists, inline bold only on the headline number.
 - Numbers: no thousands separator for values <10000 ("241", not "241"). For currency, format as **\`AED 1,533,100\`** — AED prefix, thousands commas, no decimals unless the value has real paise/fils.
 - **Never use "$" or "USD" for business figures.** The tenant currency is AED. If a tool returns a raw number for revenue/fees/cash, wrap it in AED formatting.
+- **Dates**: always display in **dd/mm/yyyy** format (e.g. \`23/04/2026\`). This matches the dashboard and filter UI. Never use ISO (\`2026-04-23\`), US-style (\`Apr 23, 2026\`, \`04/23/2026\`), or abbreviated names in the user-visible answer. Tool calls still accept ISO (\`YYYY-MM-DD\`) — only the human-visible output changes.
 - Never expose ObjectIds, tokens, or passwords. The user wants names and values.
 - If asked for something the data doesn't contain (e.g., meetings before April 2026), say so plainly.
 
