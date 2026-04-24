@@ -1,7 +1,15 @@
-import React, { useMemo } from 'react';
-import { Box, Typography } from '@mui/material';
+import React, { useMemo, useState } from 'react';
+import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import {
+    ThumbUpAltOutlined as ThumbUpIcon,
+    ThumbDownAltOutlined as ThumbDownIcon,
+    ThumbUpAlt as ThumbUpFilled,
+    ThumbDownAlt as ThumbDownFilled,
+} from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import SourceChips from '../docs/SourceChips';
+import { submitFeedback } from '../../services/docsChatService';
 
 // Small circular "VB" avatar displayed next to every assistant bubble.
 // Branded, themed, and keyed to the accent color so it sits naturally
@@ -65,7 +73,71 @@ const ThinkingDots = () => (
 // Render a single chat message. Uses `react-markdown` + GFM (tables,
 // task lists, strikethrough). Assistant messages show a small VB avatar
 // on the left; user messages stay right-aligned with no avatar.
-const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
+const FeedbackBar = ({ logId }) => {
+    const [rating, setRating] = useState(null); // 'up' | 'down' | null
+    const [pending, setPending] = useState(false);
+
+    const handle = async (r) => {
+        if (pending || rating === r) return;
+        setPending(true);
+        try {
+            await submitFeedback({ logId, rating: r });
+            setRating(r);
+        } catch (_) {
+            /* silent — feedback is non-critical; icon just won't fill */
+        } finally {
+            setPending(false);
+        }
+    };
+
+    return (
+        <Box
+            sx={{
+                mt: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                color: 'var(--d-text-muted, #8A887E)',
+            }}
+        >
+            <Typography sx={{ fontSize: 11, mr: 0.75, letterSpacing: '0.04em' }}>
+                Was this helpful?
+            </Typography>
+            <Tooltip title={rating === 'up' ? 'Thanks!' : 'Helpful'} arrow>
+                <IconButton
+                    size="small"
+                    onClick={() => handle('up')}
+                    disabled={pending}
+                    aria-label="thumbs up"
+                    sx={{ color: rating === 'up' ? 'var(--d-accent, #2383E2)' : 'inherit' }}
+                >
+                    {rating === 'up' ? (
+                        <ThumbUpFilled sx={{ fontSize: 14 }} />
+                    ) : (
+                        <ThumbUpIcon sx={{ fontSize: 14 }} />
+                    )}
+                </IconButton>
+            </Tooltip>
+            <Tooltip title={rating === 'down' ? 'Flagged' : 'Not helpful'} arrow>
+                <IconButton
+                    size="small"
+                    onClick={() => handle('down')}
+                    disabled={pending}
+                    aria-label="thumbs down"
+                    sx={{ color: rating === 'down' ? 'var(--d-danger, #B91C1C)' : 'inherit' }}
+                >
+                    {rating === 'down' ? (
+                        <ThumbDownFilled sx={{ fontSize: 14 }} />
+                    ) : (
+                        <ThumbDownIcon sx={{ fontSize: 14 }} />
+                    )}
+                </IconButton>
+            </Tooltip>
+        </Box>
+    );
+};
+
+const ChatMessage = ({ role, content, streaming = false, onChipClick, sources, logId }) => {
     const isUser = role === 'user';
 
     // Detect trailing "options" list so we can render them as clickable
@@ -290,6 +362,14 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick }) => {
                         </>
                     )}
                 </Box>
+
+                {!isUser && sources && sources.length > 0 && !streaming && (
+                    <SourceChips sources={sources} />
+                )}
+
+                {!isUser && !streaming && logId && (
+                    <FeedbackBar logId={logId} />
+                )}
 
                 {chips.length > 0 && !streaming && (
                     <Box

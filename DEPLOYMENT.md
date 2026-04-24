@@ -401,3 +401,118 @@ For ongoing support:
 - [ ] Documentation updated
 
 Your Team Progress Tracker is now ready for production! 🚀
+
+---
+
+## Docs RAG Feature — Render Deploy Cutover
+
+The program-docs chatbot (LUC-only) ships with an in-memory embedding index,
+two generation providers, and a persisted query log. Everything runs on the
+existing Render web service — no new services required.
+
+### New env vars to set in Render dashboard
+
+| Key | Example value | Notes |
+|---|---|---|
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim, $0.02/M tokens |
+| `OPENAI_CHAT_MODEL` | `gpt-4o-mini` | fallback generation model |
+| `GROQ_API_KEY` | `gsk_…` | obtain at console.groq.com |
+| `GROQ_CHAT_MODEL` | `llama-3.3-70b-versatile` | primary generation model |
+| `LLM_PRIMARY` | `groq` | `groq` or `openai` |
+| `LLM_FALLBACK` | `openai` | fallback when primary errors |
+| `DOCS_RAG_ENABLED` | `true` | feature flag (future use) |
+| `DOCS_RAG_TOPK` | `5` | retrieval top-K |
+| `DOCS_RAG_MIN_SCORE` | `0.35` | refusal threshold (cosine) |
+| `DOCS_RAG_EXACT_MATCH_THRESHOLD` | `0.82` | Tier 1 cutoff |
+| `DOCS_RAG_CACHE_TTL_SECONDS` | `86400` | 24h cache |
+
+`OPENAI_API_KEY`, `MONGODB_URI`, `JWT_SECRET` are already set from the
+tracker deploy — don't duplicate.
+
+### Atlas region caveat
+
+The in-memory index ships ~5 MB of embeddings over the wire at every boot
+(215 chunks × 2 × 1536 floats, JSON-encoded). On **remote** Atlas (different
+region from Render) boot takes ~25 s. On **colocated** Atlas (same region)
+boot completes in under 2 s. Before merging, confirm the Render service
+region matches the Atlas cluster region. If they diverge, either move the
+Atlas cluster or plan for the ~25 s unavailability window at each cold boot.
+
+### Step-by-step deploy runbook
+
+1. **Pre-flight** (local)
+   ```
+   npm run ingest:docs:force    # ~$0.02, 2–3 min; verifies script + content
+   ```
+   Then spot-check via the existing Phase 1–3 tests in PRs.
+2. **Set env vars** in the Render dashboard for both staging and prod
+   services (see table above). Restart is NOT needed yet.
+3. **Merge to main.** Render auto-deploys.
+4. **Wait for "Live"** on the Render dashboard. Then:
+   ```
+   curl https://<render-host>/api/docs-chat/health
+   ```
+   Expected: HTTP 200 with `ok:true, chunksLoaded:215`. If 503, the Mongo
+   query is still running — wait up to 30 s and re-hit.
+5. **Ingest the corpus on prod** (first deploy only — subsequent deploys
+   find the chunks already in Atlas):
+   - Open the Docs RAG admin dashboard (`/admin/docs-rag`) as an admin user.
+   - Click **Force re-ingest**. Wait ~2–3 min for the green success banner.
+   - Refresh the page — "Chunks loaded" should read 215.
+6. **Smoke tests** against prod (swap in a real LUC admin JWT):
+   ```
+   # Tier 1 exact match
+   curl -N -H "Authorization: Bearer $LUC" -H 'Content-Type: application/json' \
+     -X POST https://<host>/api/docs-chat \
+     -d '{"query":"What accreditations does the DBA have?"}'
+
+   # Skillhub 403
+   curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+     -H "Authorization: Bearer $SKILLHUB" -H 'Content-Type: application/json' \
+     -X POST https://<host>/api/docs-chat -d '{"query":"test"}'
+
+   # PDF static auth gate
+   curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+     https://<host>/program-docs/ssm-dba/DBA.pdf     # 401
+   curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+     -H "Authorization: Bearer $LUC" \
+     https://<host>/program-docs/ssm-dba/DBA.pdf     # 200
+   ```
+7. **Announce to the team.** Share the LUC walkthrough: ask a docs question
+   in the chat drawer, click a source chip, PDF opens.
+
+### Rollback procedure
+
+If anything breaks post-deploy:
+
+1. **Non-LUC users impacted?** Very unlikely — the Phase 2/3 changes are
+   all gated behind `orgGate('luc')` or `isLuc` client checks. Skillhub &
+   manager paths are untouched. If you see Skillhub breakage, that's the
+   flag to rollback.
+2. **Quick disable** (no redeploy): set `DOCS_RAG_ENABLED=false` in Render
+   and restart the service. Note: the env var is loaded but not enforced
+   as a kill-switch yet — a first-class toggle is a future phase. For a
+   hard disable today, rollback or delete `DocChunk` rows.
+3. **Full rollback**: in Render, "Manual deploy" → pick the last green
+   commit before this branch merged. Takes ~3 min. No DB migration to
+   reverse — `DocChunk` / `QueryCache` / `DocsChatLog` collections sit
+   idle.
+4. **Data cleanup** (optional, only if rolling back permanently):
+   ```
+   # from a shell connected to prod Atlas
+   db.docchunks.drop();
+   db.querycaches.drop();
+   db.docschatlogs.drop();
+   ```
+
+### Content updates (future-you)
+
+To refresh a PDF or add a new program:
+1. Replace / add PDFs at `client/public/program-docs/<slug>/`.
+2. For a new slug, update `PROGRAMS` in `server/models/DocChunk.js` (8
+   entries today → 9+) and `DOC_TYPE_MAP` in
+   `server/scripts/ingestProgramDocs.js`.
+3. Locally run `npm run ingest:docs:force` to verify.
+4. Commit, push, deploy.
+5. On prod, admin → Docs RAG → **Force re-ingest**.
+
