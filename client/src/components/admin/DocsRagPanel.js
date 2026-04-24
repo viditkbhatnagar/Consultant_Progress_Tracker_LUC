@@ -7,7 +7,6 @@ import {
     CardContent,
     Chip,
     CircularProgress,
-    Container,
     Divider,
     Grid,
     LinearProgress,
@@ -49,7 +48,7 @@ import { formatDistanceToNow } from 'date-fns';
 import {
     fetchDocsRagStats,
     triggerReingest,
-} from '../services/docsChatService';
+} from '../../services/docsChatService';
 
 // Short slug label (used directly on the X axis) + full display name (used
 // in the tooltip). Keeps the chart scannable and still gives the full name
@@ -252,7 +251,12 @@ const DonutLegendRow = ({ colorKey, label, count, pct }) => (
 
 // ── Main page ──────────────────────────────────────────────────────────
 
-const AdminDocsRag = () => {
+// Phase 5 Commit 7 — the content that used to live at /admin/docs-rag
+// now renders inside the "AI Usage" page as a sub-tab. The outer
+// <Container> wrapper was dropped since the parent AIUsageTabs provides
+// page-level chrome; everything inside remains identical to the Phase
+// 4.3 polished dashboard.
+const DocsRagPanel = () => {
     const theme = useTheme();
     const isNarrow = useMediaQuery(theme.breakpoints.down('sm'));
     const [stats, setStats] = useState(null);
@@ -348,14 +352,14 @@ const AdminDocsRag = () => {
 
     if (loading && !stats) {
         return (
-            <Container sx={{ py: 6, textAlign: 'center' }}>
+            <Box sx={{ py: 6, textAlign: 'center' }}>
                 <CircularProgress />
-            </Container>
+            </Box>
         );
     }
 
     return (
-        <Container maxWidth="xl" sx={{ py: 2 }}>
+        <Box sx={{ py: 1 }}>
             {/* Header — tighter top spacing so content lands above the fold */}
             <Stack
                 direction={{ xs: 'column', sm: 'row' }}
@@ -905,8 +909,8 @@ const AdminDocsRag = () => {
                 onClose={() => setIngestMsg('')}
                 message={ingestMsg}
             />
-        </Container>
+        </Box>
     );
 };
 
-export default AdminDocsRag;
+export default DocsRagPanel;
