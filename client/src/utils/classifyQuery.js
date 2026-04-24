@@ -1,20 +1,43 @@
 // Client-side router classifier for the unified chat drawer (spec §9).
 // Returns 'tracker' | 'docs' | 'ambiguous'. Pure function — no network.
 //
-// Strategy: two keyword regexes + the Phase 2 program alias list.
-//   - Strict tracker signal AND no docs signal → tracker.
-//   - Strict docs signal AND no tracker signal → docs.
-//   - Both or neither → ambiguous (caller defaults to docs for LUC users
-//     per spec step A).
-//
-// Keep this list in sync with the backend retrieval corpus as new terms
-// surface. If a query genuinely spans both (e.g. "how many students asked
-// about Ofqual last week?"), the ambiguous path + docs default is fine —
-// the docs answer is the more interesting one for a consultant.
+// Phase 4.2 hotfix: tracker is now the safe default. Tracker can gracefully
+// say "I don't have enough data" when a query falls outside its scope; docs
+// refuses hard, so docs-on-ambiguous creates a worse UX than the inverse.
+// Only strict-docs signal (docs keyword or program alias + no tracker
+// keyword) routes to docs. Everything else → tracker.
 
-const TRACKER_RE =
-    /\b(meeting|commitment|lead stage|consultant|admission|weekly|this week|team lead|student|hourly|enrollment|pipeline|follow[\s-]?up|revenue|target|attendance|conversion)\b/i;
+// Broad tracker-term regex. Includes verbs, nouns, time ranges, counts, and
+// domain entities that only make sense in the CRM data. "team" on its own
+// is a tracker signal (distinct from the "team lead" phrase in the original
+// list), because "my team", "team performance" etc. are common.
+const TRACKER_RE = new RegExp(
+    '\\b(' +
+        // admissions + students
+        'admission|admissions|admitted|enrollment|enrolled|student|students|' +
+        // attendance
+        'attendance|attend|absent|absents|present|presents|' +
+        // ranking / performance
+        'performer|performance|top|bottom|ranking|rank|' +
+        // targets / metrics / kpis
+        'revenue|target|achievement|goal|quota|conversion|metric|kpi|' +
+        // counts
+        'total|count|how many|how much|' +
+        // time ranges
+        'today|yesterday|this week|last week|this month|last month|' +
+        'this year|last year|weekly|monthly|' +
+        // CRM entities
+        'meeting|commitment|lead|leads|deal|pipeline|' +
+        'consultant|consultants|counselor|counsellor|' +
+        'team|team lead|follow[\\s-]?up|' +
+        // tracker surfaces / reports
+        'hourly|slot|schedule|report|analytics|dashboard' +
+        ')\\b',
+    'i'
+);
 
+// Docs-term regex — vocabulary specific to the program collateral. Unchanged
+// from Phase 3 except for the explicit PROGRAM_ALIASES matcher below.
 const DOCS_RE =
     /\b(accredit|ofqual|mfhea|deac|iacbe|eduqua|dba|mba|bba|othm|knights|ssm|malaysia|must|ioscm|specialization|specialisation|eligibility|ects|dissertation|viva|fee|tuition|curriculum|modules?|semester|credits?|pathway|top[\s-]?up|scholarship)\b/i;
 
@@ -54,16 +77,17 @@ export function classifyQuery(query) {
 
     if (trackerHit && !docsHit) return 'tracker';
     if (docsHit && !trackerHit) return 'docs';
+    // Both match OR neither match → ambiguous. Caller routes to tracker
+    // under the new Phase 4.2 default.
     return 'ambiguous';
 }
 
-// Default-to-docs for LUC users on ambiguous queries (spec step A).
-// Non-LUC users should never reach here — docs is gated LUC-only — but if
-// they do, fall back to tracker so we don't hit a 403.
-export function routeFor(query, user) {
+// Route resolver. Under Phase 4.2 the only path that returns 'docs' is a
+// strict docs classification. Everything else (including ambiguous) goes
+// to tracker. Skillhub hard-lock is enforced at the ChatPanel call site —
+// this function is org-agnostic.
+export function routeFor(query) {
     const c = classifyQuery(query);
-    if (c === 'tracker') return 'tracker';
     if (c === 'docs') return 'docs';
-    // ambiguous
-    return user && user.organization === 'luc' ? 'docs' : 'tracker';
+    return 'tracker';
 }
