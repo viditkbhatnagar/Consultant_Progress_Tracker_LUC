@@ -138,7 +138,7 @@ const prepForBm25 = (text) => tokenize(text);
 async function loadChunks() {
     const rows = await DocChunk.find({})
         .select(
-            'chunkId program programDisplayName docType section questionText content embedding questionEmbedding sourceFile pageNumber pdfPath tokens'
+            'chunkId program programDisplayName docType section questionText content embedding questionEmbedding sourceFile pageNumber pdfPath highlightedPdfPath tokens'
         )
         .lean();
 
@@ -289,6 +289,10 @@ function sourceFromChunk(chunk, score, retrievalMethod) {
         sourceFile: chunk.sourceFile,
         pageNumber: chunk.pageNumber,
         pdfUrl: `${chunk.pdfPath}#page=${chunk.pageNumber}`,
+        // Phase 5: pre-highlighted single-page PDF for the inline preview
+        // panel. May be null on chunks ingested before the highlight
+        // script ran; the client falls back to pdfUrl in that case.
+        highlightedPdfPath: chunk.highlightedPdfPath || null,
         score: Number(score.toFixed(4)),
         retrievalMethod,
     };
