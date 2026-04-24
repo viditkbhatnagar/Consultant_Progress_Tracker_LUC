@@ -156,7 +156,9 @@ const ChatPanel = ({ open, onClose }) => {
             // Client-side router (spec §9 Pattern B). LUC consultants get
             // tracker + docs; Skillhub/manager stay on the tracker-only
             // path so /api/docs-chat is never called from non-LUC UI.
-            const route = isLuc ? routeFor(trimmed, user) : 'tracker';
+            // Phase 4.2: classifier itself is org-agnostic; the Skillhub
+            // hard-lock lives here. Tracker is the default on ambiguous.
+            const route = isLuc ? routeFor(trimmed) : 'tracker';
 
             const userMsg = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
             const assistantMsg = {
@@ -206,7 +208,9 @@ const ChatPanel = ({ open, onClose }) => {
                     return;
                 }
                 if (event === 'done') {
-                    // docs-chat ships sources + tier + exactMatch + logId.
+                    // docs-chat ships sources + tier + exactMatch + logId +
+                    // latencyMs. Tracker chat emits done with no extra
+                    // fields today, so the spread-with-fallback is safe.
                     setMessages((prev) =>
                         prev.map((m) =>
                             m.role === 'assistant' && m.streaming
@@ -218,6 +222,7 @@ const ChatPanel = ({ open, onClose }) => {
                                       exactMatch: data?.exactMatch,
                                       programFilter: data?.programFilter,
                                       logId: data?.logId || null,
+                                      latencyMs: data?.latencyMs ?? null,
                                   }
                                 : m
                         )
@@ -626,6 +631,7 @@ const ChatPanel = ({ open, onClose }) => {
                                 streaming={m.streaming}
                                 sources={m.sources}
                                 logId={m.logId}
+                                latencyMs={m.latencyMs}
                                 onChipClick={(t) => send(t)}
                             />
                         ))}
