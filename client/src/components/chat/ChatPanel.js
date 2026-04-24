@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
+    CircularProgress,
     Drawer,
     IconButton,
     TextField,
     Tooltip,
     Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -17,6 +20,7 @@ import {
     ArrowBack as BackIcon,
     Mic as MicIcon,
     Stop as StopIcon,
+    OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import ChatMessage from './ChatMessage';
@@ -28,7 +32,10 @@ import {
     deleteConversation,
     transcribeAudio,
 } from '../../services/chatService';
-import { streamDocsChat } from '../../services/docsChatService';
+import {
+    streamDocsChat,
+    fetchPdfBlobUrl,
+} from '../../services/docsChatService';
 import { routeFor } from '../../utils/classifyQuery';
 import { getAskMeContext } from '../../utils/askMeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -53,13 +60,36 @@ const pickMimeType = () => {
 // status / program / mode / remarks) enough room on desktop.
 const DRAWER_WIDTHS = { xs: '100%', sm: 560, md: 640, lg: 720 };
 
+// Phase 5: when the inline PDF preview panel is open the drawer expands
+// to roughly two-thirds of the viewport so the PDF + chat both get
+// comfortable widths. On narrow viewports we never show the split — the
+// mobile fallback navigates to /pdf-viewer instead.
+const DRAWER_WIDTHS_WITH_PREVIEW = {
+    xs: '100%',
+    sm: '100%',
+    md: '92vw',
+    lg: '82vw',
+    xl: '1280px',
+};
+
 const ChatPanel = ({ open, onClose }) => {
     const location = useLocation();
     const { user } = useAuth();
+    const theme = useTheme();
+    // `md` is the split-vs-overlay breakpoint. Below this, source chips
+    // navigate to the full-screen /pdf-viewer route instead of opening
+    // the inline preview (60%/40% split doesn't fit below ~900 px).
+    const isNarrow = useMediaQuery(theme.breakpoints.down('md'));
     // LUC users get the docs router; everyone else sees the tracker-only
     // chatbot unchanged. `isLuc` pattern matches the app-wide convention
     // of defaulting missing organization to 'luc'.
     const isLuc = (user?.organization || 'luc') === 'luc';
+
+    // Phase 5 preview state. `preview` is null when the split is closed.
+    // When set: { blobUrl, title, page, chunkId, loading, error }. The
+    // blobUrl is owned by this component — revoked on close/unmount so we
+    // don't leak object URLs for the life of the session.
+    const [preview, setPreview] = useState(null);
     const [messages, setMessages] = useState([]); // visible turns
     const [conversationId, setConversationId] = useState(null);
     const [input, setInput] = useState('');
@@ -93,6 +123,57 @@ const ChatPanel = ({ open, onClose }) => {
             return () => clearTimeout(t);
         }
     }, [open]);
+
+    const closePreview = useCallback(() => {
+        setPreview((p) => {
+            if (p?.blobUrl) URL.revokeObjectURL(p.blobUrl);
+            return null;
+        });
+    }, []);
+
+    // Fetch the highlighted (or fallback regular) PDF as a blob — matches
+    // the authenticated-fetch pattern the PdfViewer page uses.
+    const openPreview = useCallback(async ({ path, page, title, chunkId }) => {
+        if (!path) return;
+        // Revoke any previous blob before starting a new fetch.
+        setPreview((prev) => {
+            if (prev?.blobUrl) URL.revokeObjectURL(prev.blobUrl);
+            return { blobUrl: null, title, page, chunkId, loading: true, error: '' };
+        });
+        try {
+            const blobUrl = await fetchPdfBlobUrl(path);
+            setPreview({
+                blobUrl,
+                title,
+                page,
+                chunkId,
+                loading: false,
+                error: '',
+            });
+        } catch (err) {
+            setPreview({
+                blobUrl: null,
+                title,
+                page,
+                chunkId,
+                loading: false,
+                error: err.message || 'Failed to load preview',
+            });
+        }
+    }, []);
+
+    // Release any held blob URL when the component unmounts or the drawer
+    // is dismissed entirely (not just when the preview panel is closed).
+    useEffect(() => {
+        if (!open && preview?.blobUrl) {
+            URL.revokeObjectURL(preview.blobUrl);
+            setPreview(null);
+        }
+    }, [open, preview]);
+    useEffect(() => () => {
+        if (preview?.blobUrl) URL.revokeObjectURL(preview.blobUrl);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const refreshHistory = useCallback(async () => {
         try {
@@ -288,7 +369,7 @@ const ChatPanel = ({ open, onClose }) => {
                 setActiveToolName('');
             }
         },
-        [conversationId, sending, refreshHistory, isLuc, user]
+        [conversationId, sending, refreshHistory, isLuc]
     );
 
     const onKeyDown = (e) => {
@@ -407,6 +488,8 @@ const ChatPanel = ({ open, onClose }) => {
 
     const empty = messages.length === 0;
 
+    const splitActive = Boolean(preview) && !isNarrow;
+
     return (
         <Drawer
             anchor="right"
@@ -414,16 +497,125 @@ const ChatPanel = ({ open, onClose }) => {
             onClose={onClose}
             PaperProps={{
                 sx: {
-                    width: DRAWER_WIDTHS,
+                    width: splitActive ? DRAWER_WIDTHS_WITH_PREVIEW : DRAWER_WIDTHS,
                     backgroundColor: 'var(--d-bg, #F7F6F3)',
                     backgroundImage: 'none',
                     color: 'var(--d-text, #191918)',
                     borderLeft: '1px solid var(--d-border, #E6E3DC)',
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: splitActive ? 'row' : 'column',
+                    transition: 'width 220ms ease',
                 },
             }}
         >
+            {/* Phase 5 — inline PDF preview panel (desktop only). On
+                narrow viewports source chips navigate to /pdf-viewer
+                instead, so this branch never renders. */}
+            {splitActive && (
+                <Box
+                    sx={{
+                        width: { md: '55%', lg: '58%', xl: '62%' },
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRight: '1px solid var(--d-border, #E6E3DC)',
+                        backgroundColor: '#1f1f1f',
+                    }}
+                >
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            px: 1.5,
+                            py: 1,
+                            backgroundColor: 'var(--d-surface, #FFFFFF)',
+                            borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
+                            color: 'var(--d-text, #191918)',
+                        }}
+                    >
+                        <Typography
+                            sx={{
+                                flex: 1,
+                                fontSize: 13,
+                                fontWeight: 600,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {preview.title} · page {preview.page}
+                        </Typography>
+                        {preview.blobUrl && (
+                            <Tooltip title="Open in new tab">
+                                <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                        window.open(
+                                            preview.blobUrl +
+                                                `#page=${preview.page}`,
+                                            '_blank'
+                                        )
+                                    }
+                                >
+                                    <OpenInNewIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+                        <Tooltip title="Close preview">
+                            <IconButton size="small" onClick={closePreview}>
+                                <CloseIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                    <Box sx={{ position: 'relative', flex: 1 }}>
+                        {preview.loading && (
+                            <Box
+                                sx={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#fff',
+                                }}
+                            >
+                                <CircularProgress color="inherit" size={24} />
+                            </Box>
+                        )}
+                        {preview.error && (
+                            <Box sx={{ p: 2, color: '#fff' }}>
+                                <Typography variant="body2">
+                                    {preview.error}
+                                </Typography>
+                            </Box>
+                        )}
+                        {preview.blobUrl && !preview.loading && !preview.error && (
+                            <iframe
+                                title={`${preview.title} preview`}
+                                src={`${preview.blobUrl}#page=${preview.page}`}
+                                style={{
+                                    border: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    background: '#fff',
+                                }}
+                            />
+                        )}
+                    </Box>
+                </Box>
+            )}
+
+            <Box
+                sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: splitActive ? 1 : 'unset',
+                    minWidth: 0,
+                    width: splitActive ? 'auto' : '100%',
+                    height: splitActive ? '100%' : undefined,
+                }}
+            >
             {/* Header */}
             <Box
                 sx={{
@@ -633,6 +825,7 @@ const ChatPanel = ({ open, onClose }) => {
                                 logId={m.logId}
                                 latencyMs={m.latencyMs}
                                 onChipClick={(t) => send(t)}
+                                onOpenPreview={isNarrow ? null : openPreview}
                             />
                         ))}
 
@@ -842,6 +1035,7 @@ const ChatPanel = ({ open, onClose }) => {
                     </Box>
                 </>
             )}
+            </Box>
         </Drawer>
     );
 };

@@ -49,6 +49,20 @@ app.use(
     })
 );
 
+// Phase 5 — single-page, pre-highlighted PDFs used by the in-drawer
+// preview panel. Same middleware stack as /program-docs/* so the kill
+// switch, auth, and LUC-only gating all apply identically.
+app.use(
+    '/program-docs-highlighted',
+    docsRagEnabled,
+    protect,
+    orgGate('luc'),
+    express.static(
+        path.join(__dirname, '..', 'client', 'public', 'program-docs-highlighted'),
+        { fallthrough: false, index: false }
+    )
+);
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.status(200).json({
