@@ -24,7 +24,6 @@ import {
     VideoCall as VideoCallIcon,
     FactCheck as CommitmentsIcon,
     ChatBubbleOutline as AskMeIcon,
-    MenuBook as DocsRagIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -269,14 +268,7 @@ const AdminSidebar = ({ onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysi
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAPICosts} selected={apiCostsActive} sx={navItemSx}>
                         <ListItemIcon><MoneyIcon /></ListItemIcon>
-                        <ListItemText primary="API Costs" />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => navigate('/admin/docs-rag')} sx={navItemSx}>
-                        <ListItemIcon><DocsRagIcon /></ListItemIcon>
-                        <ListItemText primary="Docs RAG" />
+                        <ListItemText primary="AI Usage" />
                     </ListItemButton>
                 </ListItem>
 
