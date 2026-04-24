@@ -139,7 +139,7 @@ const prepForBm25 = (text) => tokenize(text);
 async function loadChunks() {
     const rows = await DocChunk.find({})
         .select(
-            'chunkId program programDisplayName docType section questionText content embedding questionEmbedding sourceFile pageNumber pdfPath highlightedPdfPath tokens'
+            'chunkId program programDisplayName docType section questionText content embedding questionEmbedding sourceFile pageNumber pdfPath highlightedPdfPath snippetPath tokens'
         )
         .lean();
 
@@ -294,6 +294,10 @@ function sourceFromChunk(chunk, score, retrievalMethod) {
         // panel. May be null on chunks ingested before the highlight
         // script ran; the client falls back to pdfUrl in that case.
         highlightedPdfPath: chunk.highlightedPdfPath || null,
+        // Phase 5.3: PNG snippet used by the in-drawer preview. Clients
+        // render this as <img> (no browser PDF chrome) and fall back to
+        // highlightedPdfPath when null.
+        snippetPath: chunk.snippetPath || null,
         score: Number(score.toFixed(4)),
         retrievalMethod,
     };

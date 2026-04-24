@@ -37,17 +37,19 @@ const SourceChips = ({ sources, onOpenPreview }) => {
     const navigate = useNavigate();
     if (!sources || sources.length === 0) return null;
 
-    // Phase 5 — resolve the preview target per source. Prefer the
-    // pre-highlighted single-page PDF when ingested; fall back to the
-    // full PDF with a page anchor for chunks that predate the highlight
-    // script or cases where the script's text-search didn't hit.
+    // Phase 5.3 — resolve the preview target per source. The preview
+    // panel prefers the PNG snippet (no browser PDF chrome), and the
+    // "Open full PDF" button opens the highlighted single-page PDF.
+    // Either can be null on legacy chunks; callers fall back cleanly.
+    const titleFor = (src) =>
+        `${SHORT_NAMES[src.program] || src.programDisplayName || src.program}` +
+        (src.section ? ` · ${SECTION_LABELS[src.section] || src.section}` : '') +
+        ` · p.${src.pageNumber}`;
     const targetFor = (src) => ({
-        path: src.highlightedPdfPath || src.pdfUrl.split('#')[0],
-        page: src.highlightedPdfPath ? 1 : src.pageNumber,
-        title:
-            SHORT_NAMES[src.program] ||
-            src.programDisplayName ||
-            src.program,
+        snippetPath: src.snippetPath || null,
+        fullPdfPath: src.highlightedPdfPath || src.pdfUrl.split('#')[0],
+        page: src.pageNumber,
+        title: titleFor(src),
         chunkId: src.chunkId,
     });
 
@@ -96,8 +98,12 @@ const SourceChips = ({ sources, onOpenPreview }) => {
                             if (onOpenPreview) {
                                 onOpenPreview(t);
                             } else {
+                                // Mobile fallback: open the full highlighted
+                                // PDF (snippets are only used by the split-
+                                // pane; mobile users get the whole page via
+                                // the existing /pdf-viewer route).
                                 navigate(
-                                    `/pdf-viewer?url=${encodeURIComponent(t.path)}&page=${t.page}&title=${encodeURIComponent(t.title)}`
+                                    `/pdf-viewer?url=${encodeURIComponent(t.fullPdfPath)}&page=${t.page}&title=${encodeURIComponent(t.title)}`
                                 );
                             }
                         }}

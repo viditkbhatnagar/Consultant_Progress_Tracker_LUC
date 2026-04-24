@@ -63,6 +63,20 @@ app.use(
     )
 );
 
+// Phase 5.3 — PNG snippet crops (highlight region + context) used by
+// the split-pane preview. Same auth/org stack. Tiny compared to the
+// full-page PDFs (~40-80 KB each at 150 DPI).
+app.use(
+    '/program-docs-snippets',
+    docsRagEnabled,
+    protect,
+    orgGate('luc'),
+    express.static(
+        path.join(__dirname, '..', 'client', 'public', 'program-docs-snippets'),
+        { fallthrough: false, index: false }
+    )
+);
+
 // Health check
 app.get('/api/health', (req, res) => {
     res.status(200).json({
