@@ -13,7 +13,6 @@ import MeetingTrackerPage from './pages/MeetingTrackerPage';
 import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
 import PdfViewer from './pages/PdfViewer';
-import AdminDocsRag from './pages/AdminDocsRag';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
 
@@ -137,13 +136,27 @@ function App() {
               }
             />
 
-            {/* Admin-only docs-RAG telemetry + reingest dashboard */}
+            {/* Legacy admin-docs-rag URL — kept as a redirect so existing
+                bookmarks / deep-links land on the new "AI Usage → Docs RAG"
+                tab. Same deal for /admin/api-costs. Both go through the
+                main admin dashboard with ?section=ai-usage so the existing
+                sidebar-driven tab activation fires. */}
             <Route
               path="/admin/docs-rag"
               element={
-                <PrivateRoute allowedRoles={['admin']}>
-                  <AdminDocsRag />
-                </PrivateRoute>
+                <Navigate
+                  to="/admin/dashboard?section=ai-usage&tab=docs-rag"
+                  replace
+                />
+              }
+            />
+            <Route
+              path="/admin/api-costs"
+              element={
+                <Navigate
+                  to="/admin/dashboard?section=ai-usage"
+                  replace
+                />
               }
             />
 

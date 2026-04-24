@@ -29,7 +29,7 @@ import {
     AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import { getUsers } from '../services/authService';
@@ -47,7 +47,7 @@ import UserManagementDialog from '../components/UserManagementDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import AdminSidebar from '../components/AdminSidebar';
 import AISummaryCard from '../components/AISummaryCard';
-import APICostPanel from '../components/APICostPanel';
+import AIUsageTabs from '../components/admin/AIUsageTabs';
 import AdminSkillhubView from '../components/skillhub/AdminSkillhubView';
 import { LeadStageChart } from '../components/Charts';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
@@ -125,6 +125,19 @@ const AdminDashboard = () => {
     const [users, setUsers] = useState([]);
     const [error, setError] = useState('');
     const [tabValue, setTabValue] = useState(0);
+    const location = useLocation();
+
+    // Phase 5 Commit 7 — the legacy /admin/docs-rag and /admin/api-costs
+    // routes redirect here with ?section=ai-usage so the sidebar's
+    // "AI Usage" tab (index 5) activates on arrival. The DocsRagPanel
+    // sub-tab is picked up by AIUsageTabs from ?tab=docs-rag.
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('section') === 'ai-usage' && tabValue !== 5) {
+            setTabValue(5);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.search]);
     // Seed orgSection from the persisted admin org scope so a refresh while
     // viewing Skillhub preserves the user's context.
     const [orgSection, setOrgSection] = useState(() => (
@@ -916,7 +929,7 @@ const AdminDashboard = () => {
                         )}
 
                         {tabValue === 4 && <AISummaryCard />}
-                        {tabValue === 5 && <APICostPanel />}
+                        {tabValue === 5 && <AIUsageTabs />}
                     </AnimatedTabPanel>
                 </>
             )}
