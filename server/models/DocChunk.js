@@ -99,6 +99,14 @@ const DocChunkSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
+        // Phase 5.3: PNG crop centred on the highlighted region used by
+        // the in-drawer preview panel. Sidesteps the browser's PDF
+        // toolbar+sidebar chrome that consumed 80% of the pane before
+        // this pass. Full-PDF path above remains the "open full" target.
+        snippetPath: {
+            type: String,
+            default: null,
+        },
         contentHash: {
             type: String,
             required: true,

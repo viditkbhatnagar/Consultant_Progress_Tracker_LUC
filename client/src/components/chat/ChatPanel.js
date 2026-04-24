@@ -126,52 +126,77 @@ const ChatPanel = ({ open, onClose }) => {
 
     const closePreview = useCallback(() => {
         setPreview((p) => {
-            if (p?.blobUrl) URL.revokeObjectURL(p.blobUrl);
+            if (p?.snippetBlobUrl) URL.revokeObjectURL(p.snippetBlobUrl);
+            if (p?.pdfBlobUrl) URL.revokeObjectURL(p.pdfBlobUrl);
             return null;
         });
     }, []);
 
-    // Fetch the highlighted (or fallback regular) PDF as a blob — matches
-    // the authenticated-fetch pattern the PdfViewer page uses.
-    const openPreview = useCallback(async ({ path, page, title, chunkId }) => {
-        if (!path) return;
-        // Revoke any previous blob before starting a new fetch.
-        setPreview((prev) => {
-            if (prev?.blobUrl) URL.revokeObjectURL(prev.blobUrl);
-            return { blobUrl: null, title, page, chunkId, loading: true, error: '' };
-        });
-        try {
-            const blobUrl = await fetchPdfBlobUrl(path);
-            setPreview({
-                blobUrl,
-                title,
-                page,
-                chunkId,
-                loading: false,
-                error: '',
+    // Phase 5.3 — the preview panel prefers the PNG snippet (no browser
+    // PDF chrome) and keeps the highlighted full-page PDF blob handy for
+    // the "Open full PDF" button. Both resources are fetched through the
+    // authenticated blob helper so the static mounts stay gated.
+    const openPreview = useCallback(
+        async ({ snippetPath, fullPdfPath, page, title, chunkId }) => {
+            if (!snippetPath && !fullPdfPath) return;
+            // Revoke any previous blobs before starting new fetches.
+            setPreview((prev) => {
+                if (prev?.snippetBlobUrl) URL.revokeObjectURL(prev.snippetBlobUrl);
+                if (prev?.pdfBlobUrl) URL.revokeObjectURL(prev.pdfBlobUrl);
+                return {
+                    snippetBlobUrl: null,
+                    pdfBlobUrl: null,
+                    title,
+                    page,
+                    chunkId,
+                    loading: true,
+                    error: '',
+                };
             });
-        } catch (err) {
-            setPreview({
-                blobUrl: null,
-                title,
-                page,
-                chunkId,
-                loading: false,
-                error: err.message || 'Failed to load preview',
-            });
-        }
-    }, []);
+            try {
+                // Fetch snippet (if available) and full PDF in parallel.
+                // Fallback: if snippet is missing, we still want the PDF
+                // blob for the iframe path.
+                const [snip, pdf] = await Promise.all([
+                    snippetPath ? fetchPdfBlobUrl(snippetPath) : Promise.resolve(null),
+                    fullPdfPath ? fetchPdfBlobUrl(fullPdfPath) : Promise.resolve(null),
+                ]);
+                setPreview({
+                    snippetBlobUrl: snip,
+                    pdfBlobUrl: pdf,
+                    title,
+                    page,
+                    chunkId,
+                    loading: false,
+                    error: '',
+                });
+            } catch (err) {
+                setPreview({
+                    snippetBlobUrl: null,
+                    pdfBlobUrl: null,
+                    title,
+                    page,
+                    chunkId,
+                    loading: false,
+                    error: err.message || 'Failed to load preview',
+                });
+            }
+        },
+        []
+    );
 
-    // Release any held blob URL when the component unmounts or the drawer
-    // is dismissed entirely (not just when the preview panel is closed).
+    // Release any held blob URLs when the drawer is dismissed entirely
+    // (not just when the preview panel's close button is clicked).
     useEffect(() => {
-        if (!open && preview?.blobUrl) {
-            URL.revokeObjectURL(preview.blobUrl);
+        if (!open && (preview?.snippetBlobUrl || preview?.pdfBlobUrl)) {
+            if (preview.snippetBlobUrl) URL.revokeObjectURL(preview.snippetBlobUrl);
+            if (preview.pdfBlobUrl) URL.revokeObjectURL(preview.pdfBlobUrl);
             setPreview(null);
         }
     }, [open, preview]);
     useEffect(() => () => {
-        if (preview?.blobUrl) URL.revokeObjectURL(preview.blobUrl);
+        if (preview?.snippetBlobUrl) URL.revokeObjectURL(preview.snippetBlobUrl);
+        if (preview?.pdfBlobUrl) URL.revokeObjectURL(preview.pdfBlobUrl);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -547,15 +572,15 @@ const ChatPanel = ({ open, onClose }) => {
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {preview.title} · page {preview.page}
+                            {preview.title}
                         </Typography>
-                        {preview.blobUrl && (
-                            <Tooltip title="Open in new tab">
+                        {preview.pdfBlobUrl && (
+                            <Tooltip title="Open full PDF in new tab">
                                 <IconButton
                                     size="small"
                                     onClick={() =>
                                         window.open(
-                                            preview.blobUrl +
+                                            preview.pdfBlobUrl +
                                                 `#page=${preview.page}`,
                                             '_blank'
                                         )
@@ -571,7 +596,22 @@ const ChatPanel = ({ open, onClose }) => {
                             </IconButton>
                         </Tooltip>
                     </Box>
-                    <Box sx={{ position: 'relative', flex: 1 }}>
+                    <Box
+                        sx={{
+                            position: 'relative',
+                            flex: 1,
+                            // Preview body sits on a neutral dark
+                            // background so the PNG snippet (which has a
+                            // white letter-box margin) reads as content
+                            // rather than UI chrome.
+                            backgroundColor: '#1f1f1f',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'center',
+                            overflow: 'auto',
+                            p: 2,
+                        }}
+                    >
                         {preview.loading && (
                             <Box
                                 sx={{
@@ -593,18 +633,42 @@ const ChatPanel = ({ open, onClose }) => {
                                 </Typography>
                             </Box>
                         )}
-                        {preview.blobUrl && !preview.loading && !preview.error && (
-                            <iframe
-                                title={`${preview.title} preview`}
-                                src={`${preview.blobUrl}#page=${preview.page}`}
-                                style={{
-                                    border: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    background: '#fff',
+                        {/* Phase 5.3 — PNG snippet path is the default
+                            render. Kills the browser PDF-viewer toolbar
+                            + sidebar that previously ate 80% of the pane.
+                            Fallback to the highlighted-PDF iframe only
+                            when the snippet is missing (legacy chunks
+                            where PyMuPDF's text search didn't hit). */}
+                        {!preview.loading && !preview.error && preview.snippetBlobUrl && (
+                            <Box
+                                component="img"
+                                src={preview.snippetBlobUrl}
+                                alt={`${preview.title} snippet`}
+                                sx={{
+                                    maxWidth: '100%',
+                                    maxHeight: '100%',
+                                    objectFit: 'contain',
+                                    backgroundColor: '#fff',
+                                    borderRadius: 1,
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
                                 }}
                             />
                         )}
+                        {!preview.loading &&
+                            !preview.error &&
+                            !preview.snippetBlobUrl &&
+                            preview.pdfBlobUrl && (
+                                <iframe
+                                    title={`${preview.title} preview`}
+                                    src={`${preview.pdfBlobUrl}#page=${preview.page}`}
+                                    style={{
+                                        border: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        background: '#fff',
+                                    }}
+                                />
+                            )}
                     </Box>
                 </Box>
             )}
