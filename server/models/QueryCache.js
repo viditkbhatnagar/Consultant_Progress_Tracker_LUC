@@ -11,6 +11,8 @@ const SourceSchema = new mongoose.Schema(
         sourceFile: String,
         pageNumber: Number,
         pdfUrl: String,
+        // Phase 5: pre-highlighted single-page PDF path
+        highlightedPdfPath: String,
         score: Number,
         retrievalMethod: String,
     },
