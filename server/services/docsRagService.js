@@ -19,6 +19,7 @@ const bm25Factory = require('wink-bm25-text-search');
 const DocChunk = require('../models/DocChunk');
 const QueryCache = require('../models/QueryCache');
 const DocsChatLog = require('../models/DocsChatLog');
+const ChatConversation = require('../models/ChatConversation');
 const config = require('../config/docsRagConfig');
 const { PROGRAMS, PROGRAM_SLUGS } = DocChunk;
 
@@ -454,6 +455,32 @@ async function writeLog(fields) {
     }
 }
 
+// Phase 5 — persist the docs turn as a ChatConversation row so the "Ask
+// me" chat-history drawer lists tracker and docs conversations in one
+// interleaved list, sorted by lastActivityAt. Stateless per request:
+// each docs query becomes its own single-turn conversation. Threading
+// is a future enhancement. Silent on failure — persistence is never
+// allowed to break the user-facing response.
+async function writeDocsConversation({ user, userMessage, assistantText }) {
+    if (!user || !user._id || !userMessage || !assistantText) return;
+    try {
+        const title = (userMessage || '').slice(0, 60).replace(/\s+/g, ' ').trim() || 'Docs query';
+        await ChatConversation.create({
+            user: user._id,
+            title,
+            source: 'docs',
+            messages: [
+                { role: 'user', content: userMessage },
+                { role: 'assistant', content: assistantText },
+            ],
+            lastActivityAt: new Date(),
+        });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[docsRag] conversation persist failed: ${err.message}`);
+    }
+}
+
 // ── Generation: Groq primary, OpenAI fallback ───────────────────────────
 async function* streamGroq(messages) {
     const client = getGroq();
@@ -545,6 +572,11 @@ async function answer(query, { user, leadContext = null, res }) {
 
     if (cached) {
         sse(res, 'delta', { text: cached.answer });
+        writeDocsConversation({
+            user,
+            userMessage: query,
+            assistantText: cached.answer,
+        });
         const logId = await writeLog({
             ...baseLog,
             tier: cached.tier,
@@ -577,6 +609,11 @@ async function answer(query, { user, leadContext = null, res }) {
     // ── Tier 3 — refusal ───────────────────────────────────────────────
     if (result.refuse) {
         sse(res, 'delta', { text: REFUSAL });
+        writeDocsConversation({
+            user,
+            userMessage: query,
+            assistantText: REFUSAL,
+        });
         const logId = await writeLog({
             ...baseLog,
             tier: 3,
@@ -607,6 +644,12 @@ async function answer(query, { user, leadContext = null, res }) {
         const chunk = result.chunks[0];
         const answerText = `From your QNA guide:\n\n${chunk.content}`;
         sse(res, 'delta', { text: answerText });
+
+        writeDocsConversation({
+            user,
+            userMessage: query,
+            assistantText: answerText,
+        });
 
         const logId = await writeLog({
             ...baseLog,
@@ -678,6 +721,15 @@ async function answer(query, { user, leadContext = null, res }) {
         sse(res, 'error', { message: err.message || 'Generation failed' });
         res.end();
         return;
+    }
+
+    // Persist the generated answer as a unified ChatConversation row.
+    if (aggregated.trim()) {
+        writeDocsConversation({
+            user,
+            userMessage: query,
+            assistantText: aggregated,
+        });
     }
 
     const logId = await writeLog({
