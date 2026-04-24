@@ -28,6 +28,10 @@ import {
     deleteConversation,
     transcribeAudio,
 } from '../../services/chatService';
+import { streamDocsChat } from '../../services/docsChatService';
+import { routeFor } from '../../utils/classifyQuery';
+import { getAskMeContext } from '../../utils/askMeContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Prefer opus-in-webm (widest support) but fall back on platforms that
 // don't allow it (Safari historically — iOS 14.3+ supports it now but
@@ -51,6 +55,11 @@ const DRAWER_WIDTHS = { xs: '100%', sm: 560, md: 640, lg: 720 };
 
 const ChatPanel = ({ open, onClose }) => {
     const location = useLocation();
+    const { user } = useAuth();
+    // LUC users get the docs router; everyone else sees the tracker-only
+    // chatbot unchanged. `isLuc` pattern matches the app-wide convention
+    // of defaulting missing organization to 'luc'.
+    const isLuc = (user?.organization || 'luc') === 'luc';
     const [messages, setMessages] = useState([]); // visible turns
     const [conversationId, setConversationId] = useState(null);
     const [input, setInput] = useState('');
@@ -144,12 +153,19 @@ const ChatPanel = ({ open, onClose }) => {
             const trimmed = (text || '').trim();
             if (!trimmed || sending) return;
 
+            // Client-side router (spec §9 Pattern B). LUC consultants get
+            // tracker + docs; Skillhub/manager stay on the tracker-only
+            // path so /api/docs-chat is never called from non-LUC UI.
+            const route = isLuc ? routeFor(trimmed, user) : 'tracker';
+
             const userMsg = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
             const assistantMsg = {
                 id: `a-${Date.now()}`,
                 role: 'assistant',
                 content: '',
                 streaming: true,
+                sources: [],
+                route,
             };
             setMessages((prev) => [...prev, userMsg, assistantMsg]);
             setInput('');
@@ -159,72 +175,100 @@ const ChatPanel = ({ open, onClose }) => {
             const controller = new AbortController();
             abortRef.current = controller;
 
+            // Shared SSE event handler (events are already normalized
+            // across chatService and docsChatService: delta / done / error,
+            // plus tracker-only meta / tool-start / tool-end).
+            const onEvent = ({ event, data }) => {
+                if (event === 'meta' && data?.conversationId) {
+                    setConversationId(data.conversationId);
+                    return;
+                }
+                if (event === 'delta' && data?.text) {
+                    setMessages((prev) => {
+                        const out = [...prev];
+                        const last = out[out.length - 1];
+                        if (last && last.role === 'assistant') {
+                            out[out.length - 1] = {
+                                ...last,
+                                content: last.content + data.text,
+                            };
+                        }
+                        return out;
+                    });
+                    return;
+                }
+                if (event === 'tool-start' && data?.name) {
+                    setActiveToolName(data.name);
+                    return;
+                }
+                if (event === 'tool-end') {
+                    setActiveToolName('');
+                    return;
+                }
+                if (event === 'done') {
+                    // docs-chat ships sources + tier + exactMatch + logId.
+                    setMessages((prev) =>
+                        prev.map((m) =>
+                            m.role === 'assistant' && m.streaming
+                                ? {
+                                      ...m,
+                                      streaming: false,
+                                      sources: data?.sources || m.sources || [],
+                                      tier: data?.tier,
+                                      exactMatch: data?.exactMatch,
+                                      programFilter: data?.programFilter,
+                                      logId: data?.logId || null,
+                                  }
+                                : m
+                        )
+                    );
+                    setSending(false);
+                    setActiveToolName('');
+                    if (route === 'tracker') refreshHistory();
+                    return;
+                }
+                if (event === 'error') {
+                    setMessages((prev) => {
+                        const out = [...prev];
+                        const last = out[out.length - 1];
+                        if (last && last.role === 'assistant') {
+                            out[out.length - 1] = {
+                                ...last,
+                                streaming: false,
+                                content:
+                                    last.content +
+                                    (last.content ? '\n\n' : '') +
+                                    `_Error: ${data?.message || 'something went wrong'}_`,
+                            };
+                        }
+                        return out;
+                    });
+                    setSending(false);
+                    setActiveToolName('');
+                }
+            };
+
             try {
-                await streamChatTurn({
-                    message: trimmed,
-                    conversationId,
-                    signal: controller.signal,
-                    onEvent: ({ event, data }) => {
-                        if (event === 'meta' && data?.conversationId) {
-                            setConversationId(data.conversationId);
-                            return;
-                        }
-                        if (event === 'delta' && data?.text) {
-                            setMessages((prev) => {
-                                const out = [...prev];
-                                const last = out[out.length - 1];
-                                if (last && last.role === 'assistant') {
-                                    out[out.length - 1] = {
-                                        ...last,
-                                        content: last.content + data.text,
-                                    };
-                                }
-                                return out;
-                            });
-                            return;
-                        }
-                        if (event === 'tool-start' && data?.name) {
-                            setActiveToolName(data.name);
-                            return;
-                        }
-                        if (event === 'tool-end') {
-                            setActiveToolName('');
-                            return;
-                        }
-                        if (event === 'done') {
-                            setMessages((prev) =>
-                                prev.map((m) =>
-                                    m.role === 'assistant' && m.streaming
-                                        ? { ...m, streaming: false }
-                                        : m
-                                )
-                            );
-                            setSending(false);
-                            setActiveToolName('');
-                            refreshHistory();
-                            return;
-                        }
-                        if (event === 'error') {
-                            setMessages((prev) => {
-                                const out = [...prev];
-                                const last = out[out.length - 1];
-                                if (last && last.role === 'assistant') {
-                                    out[out.length - 1] = {
-                                        ...last,
-                                        streaming: false,
-                                        content:
-                                            last.content +
-                                            (last.content ? '\n\n' : '') +
-                                            `_Error: ${data?.message || 'something went wrong'}_`,
-                                    };
-                                }
-                                return out;
-                            });
-                            setSending(false);
-                            setActiveToolName('');
-                        }
-                    },
-                });
+                if (route === 'docs') {
+                    // Pull ambient context (e.g. open Student detail drawer)
+                    // so we can auto-scope docs retrieval by program.
+                    const ctx = getAskMeContext() || {};
+                    await streamDocsChat({
+                        query: trimmed,
+                        studentId: ctx.studentId,
+                        leadId: ctx.leadId,
+                        programHint: ctx.programHint,
+                        signal: controller.signal,
+                        onEvent,
+                    });
+                } else {
+                    await streamChatTurn({
+                        message: trimmed,
+                        conversationId,
+                        signal: controller.signal,
+                        onEvent,
+                    });
+                }
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     setMessages((prev) =>
@@ -239,7 +283,7 @@ const ChatPanel = ({ open, onClose }) => {
                 setActiveToolName('');
             }
         },
-        [conversationId, sending, refreshHistory]
+        [conversationId, sending, refreshHistory, isLuc, user]
     );
 
     const onKeyDown = (e) => {
@@ -580,6 +624,8 @@ const ChatPanel = ({ open, onClose }) => {
                                 role={m.role}
                                 content={m.content}
                                 streaming={m.streaming}
+                                sources={m.sources}
+                                logId={m.logId}
                                 onChipClick={(t) => send(t)}
                             />
                         ))}

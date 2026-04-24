@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     Drawer,
     Box,
@@ -22,6 +22,7 @@ import {
     shortUniversity,
     conversionColor,
 } from '../../utils/studentDesign';
+import { setAskMeContext, clearAskMeContext } from '../../utils/askMeContext';
 
 const Section = ({ title, children }) => (
     <Box sx={{ mb: 2.5 }}>
@@ -86,6 +87,19 @@ const LucStudentDetailDrawer = ({
     canEdit = true,
     canDelete = true,
 }) => {
+    // Publish ambient "Ask me" context while this drawer is open so that
+    // docs-chat queries auto-scope by the student's program (spec Phase 3 B).
+    // Clear on close / unmount so a later chat open without a detail
+    // drawer active reverts to program-agnostic retrieval.
+    useEffect(() => {
+        if (open && student?._id) {
+            setAskMeContext({ studentId: student._id });
+        } else {
+            clearAskMeContext();
+        }
+        return () => clearAskMeContext();
+    }, [open, student?._id]);
+
     if (!student) {
         return (
             <Drawer

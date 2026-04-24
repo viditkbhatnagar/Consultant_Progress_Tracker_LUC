@@ -4,6 +4,10 @@ const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const { protect } = require('./middleware/auth');
+const orgGate = require('./middleware/orgGate');
+const docsRagEnabled = require('./middleware/docsRagEnabled');
+const docsRag = require('./services/docsRagService');
 
 // Connect to database
 connectDB();
@@ -28,6 +32,22 @@ app.use('/api/ai', require('./routes/ai'));
 app.use('/api/hourly', require('./routes/hourly'));
 app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/docs-chat', require('./routes/docsChat'));
+
+// Auth-gated static PDFs (spec §7). Must sit before the SPA catch-all so
+// that /program-docs/* never falls through to index.html. JWT + LUC-only.
+// Kill switch first: when disabled, don't even hint at 401/403 — return
+// 503 so the chat drawer and the PDF route fail in lockstep.
+app.use(
+    '/program-docs',
+    docsRagEnabled,
+    protect,
+    orgGate('luc'),
+    express.static(path.join(__dirname, '..', 'client', 'public', 'program-docs'), {
+        fallthrough: false,
+        index: false,
+    })
+);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -55,6 +75,23 @@ const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
+
+// Load the Docs RAG in-memory index. Mongoose buffers operations until
+// connection is up, so calling loadChunks() immediately is safe regardless
+// of whether connectDB has resolved. Don't block boot on failure — if the
+// index can't load, /api/docs-chat returns 503 until an admin triggers
+// /api/docs-chat/admin/reingest.
+const t0 = Date.now();
+docsRag
+    .loadChunks()
+    .then((s) =>
+        console.log(
+            `Docs RAG: loaded ${s.chunks} chunks (${s.questions} questions in exact-match index) in ${Date.now() - t0}ms`
+        )
+    )
+    .catch((err) =>
+        console.error(`Docs RAG: failed to load chunks — ${err.message}`)
+    );
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
