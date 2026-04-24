@@ -239,7 +239,10 @@ const ChatPanel = ({ open, onClose }) => {
             // path so /api/docs-chat is never called from non-LUC UI.
             // Phase 4.2: classifier itself is org-agnostic; the Skillhub
             // hard-lock lives here. Tracker is the default on ambiguous.
-            const route = isLuc ? routeFor(trimmed) : 'tracker';
+            // Phase 5.3: routeFor is async — keyword rules synchronously
+            // decide strong cases, ambiguous queries escalate to the
+            // server's LLM classifier (~200ms, cached).
+            const route = isLuc ? await routeFor(trimmed) : 'tracker';
 
             const userMsg = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
             const assistantMsg = {
