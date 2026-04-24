@@ -93,7 +93,6 @@ const FeedbackBar = ({ logId }) => {
     return (
         <Box
             sx={{
-                mt: 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0.25,
@@ -137,7 +136,15 @@ const FeedbackBar = ({ logId }) => {
     );
 };
 
-const ChatMessage = ({ role, content, streaming = false, onChipClick, sources, logId }) => {
+const ChatMessage = ({
+    role,
+    content,
+    streaming = false,
+    onChipClick,
+    sources,
+    logId,
+    latencyMs,
+}) => {
     const isUser = role === 'user';
 
     // Detect trailing "options" list so we can render them as clickable
@@ -367,8 +374,30 @@ const ChatMessage = ({ role, content, streaming = false, onChipClick, sources, l
                     <SourceChips sources={sources} />
                 )}
 
-                {!isUser && !streaming && logId && (
-                    <FeedbackBar logId={logId} />
+                {!isUser && !streaming && (logId || latencyMs != null) && (
+                    <Box
+                        sx={{
+                            mt: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: 1.25,
+                        }}
+                    >
+                        {logId && <FeedbackBar logId={logId} />}
+                        {latencyMs != null && (
+                            <Typography
+                                sx={{
+                                    fontSize: 10.5,
+                                    color: 'var(--d-text-muted, #8A887E)',
+                                    letterSpacing: '0.02em',
+                                    fontVariantNumeric: 'tabular-nums',
+                                }}
+                            >
+                                Answered in {(latencyMs / 1000).toFixed(1)}s
+                            </Typography>
+                        )}
+                    </Box>
                 )}
 
                 {chips.length > 0 && !streaming && (

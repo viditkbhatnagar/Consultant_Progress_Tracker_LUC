@@ -562,7 +562,7 @@ async function answer(query, { user, leadContext = null, res }) {
             tier: cached.tier,
             cached: true,
             logId,
-            elapsedMs: Date.now() - t0,
+            latencyMs: Date.now() - t0,
         });
         res.end();
         return;
@@ -592,7 +592,7 @@ async function answer(query, { user, leadContext = null, res }) {
             tier: 3,
             cached: false,
             logId,
-            elapsedMs: Date.now() - t0,
+            latencyMs: Date.now() - t0,
         });
         res.end();
         return;
@@ -625,7 +625,7 @@ async function answer(query, { user, leadContext = null, res }) {
             tier: 1,
             cached: false,
             logId,
-            elapsedMs: Date.now() - t0,
+            latencyMs: Date.now() - t0,
         });
         res.end();
 
@@ -699,7 +699,7 @@ async function answer(query, { user, leadContext = null, res }) {
         provider,
         cached: false,
         logId,
-        elapsedMs: Date.now() - t0,
+        latencyMs: Date.now() - t0,
     });
     res.end();
 
