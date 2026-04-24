@@ -395,8 +395,8 @@ const ChatMessage = ({
                         {latencyMs != null && (
                             <Typography
                                 sx={{
-                                    fontSize: 10.5,
-                                    color: 'var(--d-text-muted, #8A887E)',
+                                    fontSize: '0.75rem',
+                                    color: 'text.secondary',
                                     letterSpacing: '0.02em',
                                     fontVariantNumeric: 'tabular-nums',
                                 }}
