@@ -47,6 +47,16 @@ const chatConversationSchema = new mongoose.Schema(
         // Human-readable title — auto-derived from the first user message
         // after the first turn completes. Editable later if we want.
         title: { type: String, default: 'New chat' },
+        // Phase 5 — which surface the conversation came from. Default
+        // 'tracker' matches pre-existing rows; docs queries tag 'docs'
+        // so the history drawer can optionally filter later. Today both
+        // are shown interleaved by lastActivityAt / createdAt.
+        source: {
+            type: String,
+            enum: ['tracker', 'docs'],
+            default: 'tracker',
+            index: true,
+        },
         messages: { type: [messageSchema], default: [] },
         // Last-accessed timestamp drives the conversation-list ordering
         // without forcing us to read the embedded messages array.
