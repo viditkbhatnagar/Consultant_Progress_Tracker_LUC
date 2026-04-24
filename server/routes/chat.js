@@ -8,6 +8,7 @@ const {
     deleteConversation,
     transcribeAudio,
 } = require('../controllers/chatController');
+const { classify: classifyRoute } = require('../services/classifierService');
 
 const router = express.Router();
 
@@ -28,5 +29,20 @@ router.post('/transcribe', audioUpload.single('audio'), transcribeAudio);
 router.get('/conversations', listConversations);
 router.get('/conversations/:id', getConversation);
 router.delete('/conversations/:id', deleteConversation);
+
+// Phase 5.3 — LLM fallback used by the client's classifyQuery when its
+// keyword rules are ambiguous. Hot in-memory cache (1h TTL) keeps the
+// typical repeat-query path free. Never throws; worst case returns
+// route:'tracker' on transport error.
+router.post('/classify', async (req, res) => {
+    const q = (req.body && req.body.query) || '';
+    if (typeof q !== 'string' || !q.trim()) {
+        return res
+            .status(400)
+            .json({ success: false, message: 'query (string) is required' });
+    }
+    const { route, cached } = await classifyRoute(q);
+    res.json({ success: true, route, cached });
+});
 
 module.exports = router;
