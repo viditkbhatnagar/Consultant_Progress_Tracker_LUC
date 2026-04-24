@@ -144,6 +144,7 @@ const ChatMessage = ({
     sources,
     logId,
     latencyMs,
+    onOpenPreview,
 }) => {
     const isUser = role === 'user';
 
@@ -371,7 +372,10 @@ const ChatMessage = ({
                 </Box>
 
                 {!isUser && sources && sources.length > 0 && !streaming && (
-                    <SourceChips sources={sources} />
+                    <SourceChips
+                        sources={sources}
+                        onOpenPreview={onOpenPreview}
+                    />
                 )}
 
                 {!isUser && !streaming && (logId || latencyMs != null) && (

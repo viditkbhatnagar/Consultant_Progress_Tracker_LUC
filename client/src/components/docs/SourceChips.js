@@ -33,9 +33,23 @@ const labelFor = (src) => {
     return `${prog} · ${dt} · ${section} · p.${src.pageNumber}`;
 };
 
-const SourceChips = ({ sources }) => {
+const SourceChips = ({ sources, onOpenPreview }) => {
     const navigate = useNavigate();
     if (!sources || sources.length === 0) return null;
+
+    // Phase 5 — resolve the preview target per source. Prefer the
+    // pre-highlighted single-page PDF when ingested; fall back to the
+    // full PDF with a page anchor for chunks that predate the highlight
+    // script or cases where the script's text-search didn't hit.
+    const targetFor = (src) => ({
+        path: src.highlightedPdfPath || src.pdfUrl.split('#')[0],
+        page: src.highlightedPdfPath ? 1 : src.pageNumber,
+        title:
+            SHORT_NAMES[src.program] ||
+            src.programDisplayName ||
+            src.program,
+        chunkId: src.chunkId,
+    });
 
     // Dedupe by chunkId so the same chunk doesn't render twice if the
     // backend happens to return it via both dense and BM25 (RRF usually
@@ -73,15 +87,20 @@ const SourceChips = ({ sources }) => {
                         icon={<DocIcon sx={{ fontSize: 14 }} />}
                         label={labelFor(src)}
                         size="small"
-                        onClick={() =>
-                            navigate(
-                                `/pdf-viewer?url=${encodeURIComponent(
-                                    src.pdfUrl.split('#')[0]
-                                )}&page=${src.pageNumber}&title=${encodeURIComponent(
-                                    SHORT_NAMES[src.program] || src.programDisplayName || ''
-                                )}`
-                            )
-                        }
+                        onClick={() => {
+                            const t = targetFor(src);
+                            // Desktop: open inline split-pane preview via
+                            // the callback ChatPanel provides. Mobile or
+                            // any context without a callback: fall back
+                            // to the full-screen /pdf-viewer route.
+                            if (onOpenPreview) {
+                                onOpenPreview(t);
+                            } else {
+                                navigate(
+                                    `/pdf-viewer?url=${encodeURIComponent(t.path)}&page=${t.page}&title=${encodeURIComponent(t.title)}`
+                                );
+                            }
+                        }}
                         sx={{
                             cursor: 'pointer',
                             fontSize: 11,

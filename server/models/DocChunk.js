@@ -91,6 +91,14 @@ const DocChunkSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
+        // Phase 5: path to a single-page PDF with the chunk's text pre-
+        // highlighted (yellow over content, light-blue over questionText
+        // on QNA chunks). Populated by generateHighlightedPdfs.py after
+        // the embedding ingest. Null until that script runs.
+        highlightedPdfPath: {
+            type: String,
+            default: null,
+        },
         contentHash: {
             type: String,
             required: true,
