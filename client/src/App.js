@@ -12,6 +12,8 @@ import HourlyTrackerPage from './pages/HourlyTrackerPage';
 import MeetingTrackerPage from './pages/MeetingTrackerPage';
 import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
+import PdfViewer from './pages/PdfViewer';
+import AdminDocsRag from './pages/AdminDocsRag';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
 
@@ -118,6 +120,29 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['skillhub']}>
                   <SkillhubDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Authenticated PDF viewer for program docs (LUC only).
+                PrivateRoute keeps manager + skillhub out; the PDF-fetch
+                call itself also re-enforces LUC via the server's
+                orgGate('luc') middleware. */}
+            <Route
+              path="/pdf-viewer"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <PdfViewer />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Admin-only docs-RAG telemetry + reingest dashboard */}
+            <Route
+              path="/admin/docs-rag"
+              element={
+                <PrivateRoute allowedRoles={['admin']}>
+                  <AdminDocsRag />
                 </PrivateRoute>
               }
             />

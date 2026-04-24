@@ -54,8 +54,8 @@ db_backup_*/
 .env
 .env.local
 
-# Claude Code
-CLAUDE.md
+# Docs RAG build artifact — regenerated on every ingest, not source
+server/program-docs-manifest.json
 
 # Prototype files
 consultant-tracker-v2.html
