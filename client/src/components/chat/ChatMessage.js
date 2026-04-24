@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { Avatar, Box, IconButton, Tooltip, Typography } from '@mui/material';
 import {
     ThumbUpAltOutlined as ThumbUpIcon,
     ThumbDownAltOutlined as ThumbDownIcon,
@@ -11,32 +11,25 @@ import remarkGfm from 'remark-gfm';
 import SourceChips from '../docs/SourceChips';
 import { submitFeedback } from '../../services/docsChatService';
 
-// Small circular "VB" avatar displayed next to every assistant bubble.
-// Branded, themed, and keyed to the accent color so it sits naturally
-// in both light and dark mode without extra assets.
-const VBAvatar = () => (
-    <Box
-        aria-hidden
+// Learners Education assistant avatar. The logo image is served from
+// /logo.png (placed in client/public/); the green bgcolor (#22A04E is
+// the LE brand green) acts as both fallback when the image fails to
+// load and a subtle ring around the transparent-background logo.
+// Applied to both tracker and docs assistant messages for uniform
+// branding.
+const BrandAvatar = () => (
+    <Avatar
+        src="/logo.png"
+        alt="Learners Education"
         sx={{
             width: 28,
             height: 28,
             minWidth: 28,
-            borderRadius: '50%',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'var(--d-accent, #2383E2)',
-            color: '#FFFFFF',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.02em',
+            bgcolor: '#22A04E',
             boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-            userSelect: 'none',
             flexShrink: 0,
         }}
-    >
-        VB
-    </Box>
+    />
 );
 
 // Pulsing three-dot "thinking" indicator shown while the assistant is
@@ -199,7 +192,7 @@ const ChatMessage = ({
                 boxSizing: 'border-box',
             }}
         >
-            {!isUser && <VBAvatar />}
+            {!isUser && <BrandAvatar />}
 
             <Box
                 sx={{
@@ -222,7 +215,7 @@ const ChatMessage = ({
                             mb: 0.5,
                         }}
                     >
-                        VB
+                        Learners
                     </Typography>
                 )}
                 <Box
@@ -251,10 +244,20 @@ const ChatMessage = ({
                         wordBreak: 'break-word',
                         minWidth: 0,
                         overflow: 'hidden',
-                        '& p': { margin: '0 0 6px 0' },
-                        '& p:last-child': { margin: 0 },
-                        '& ul, & ol': { margin: '4px 0 4px 18px', padding: 0 },
-                        '& li': { margin: '2px 0' },
+                        // Tight markdown spacing — previously a 6-bullet
+                        // answer took ~3x the vertical space of the text
+                        // itself, mostly because react-markdown wraps
+                        // each <li> child in a <p> (loose-list mode) and
+                        // our default p margin stacked against the li
+                        // margin. Zero out the inner-p margin and keep
+                        // list spacing at the user-spec values.
+                        '& p': { margin: '6px 0', lineHeight: 1.5 },
+                        '& p:first-of-type': { marginTop: 0 },
+                        '& p:last-child': { marginBottom: 0 },
+                        '& ul, & ol': { margin: '4px 0', paddingLeft: '1.3em' },
+                        '& li': { margin: '2px 0', lineHeight: 1.4 },
+                        '& li > p': { margin: 0 },
+                        '& li + li': { marginTop: '2px' },
                         '& code': {
                             fontFamily: 'var(--d-font-mono, monospace)',
                             fontSize: 12.5,
