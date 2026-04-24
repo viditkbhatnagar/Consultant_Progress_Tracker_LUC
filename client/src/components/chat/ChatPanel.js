@@ -22,7 +22,6 @@ import {
     Stop as StopIcon,
     OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
-import { useLocation } from 'react-router-dom';
 import ChatMessage from './ChatMessage';
 import SuggestedChips from './SuggestedChips';
 import {
@@ -73,7 +72,6 @@ const DRAWER_WIDTHS_WITH_PREVIEW = {
 };
 
 const ChatPanel = ({ open, onClose }) => {
-    const location = useLocation();
     const { user } = useAuth();
     const theme = useTheme();
     // `md` is the split-vs-overlay breakpoint. Below this, source chips
@@ -865,7 +863,7 @@ const ChatPanel = ({ open, onClose }) => {
                                         mb: 0.5,
                                     }}
                                 >
-                                    Ask anything about the tracker.
+                                    Ask me anything.
                                 </Typography>
                                 <Typography
                                     sx={{
@@ -874,13 +872,32 @@ const ChatPanel = ({ open, onClose }) => {
                                         lineHeight: 1.5,
                                     }}
                                 >
-                                    Revenue, team performance, attendance, student records — in
-                                    natural language. I read live data and answer in seconds.
+                                    {isLuc ? (
+                                        <>
+                                            Tracker data (revenue, teams, admissions, attendance)
+                                            OR program info (DBA, MBA, BBA, Knights, SSM, Malaysia
+                                            MBA, IOSCM, OTHM). Natural language, live answers with
+                                            sources when quoting program docs.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Tracker data (revenue, teams, admissions, attendance)
+                                            in natural language. Live answers in seconds.
+                                        </>
+                                    )}
                                 </Typography>
                             </Box>
                         )}
 
-                        {empty && <SuggestedChips pathname={location.pathname} onPick={send} />}
+                        {empty && (
+                            <SuggestedChips
+                                onPick={send}
+                                // Skillhub orgs are tracker-only — docs-RAG
+                                // is LUC-scope per spec §10. Hide the docs
+                                // suggestions to match the routing reality.
+                                includeDocs={isLuc}
+                            />
+                        )}
 
                         {messages.map((m) => (
                             <ChatMessage
@@ -1010,7 +1027,7 @@ const ChatPanel = ({ open, onClose }) => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onKeyDown}
-                            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about revenue, team performance, attendance… or tap the mic'}
+                            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about tracker data or our programs… or tap the mic'}
                             fullWidth
                             multiline
                             maxRows={4}
