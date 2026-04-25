@@ -1,12 +1,13 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 
-// Phase 5.4 — the new-chat empty state advertises BOTH tracker AND
-// docs capabilities. We keep two groups, each with its own muted
-// "FROM …" mini-label, so consultants see at a glance what the
-// chatbot can answer. Skillhub users only see the tracker group
-// because docs-RAG is LUC-only (spec §10).
-const TRACKER_GROUP = {
+// Phase 5.4/5.6 — the new-chat empty state advertises BOTH tracker AND
+// docs capabilities. We keep groups labelled with a small uppercase
+// "FROM …" header so consultants see at a glance what the chatbot can
+// answer. Skillhub users only see the tracker group (docs-RAG is
+// LUC-only, spec §10) and their tracker prompts are branch-flavoured.
+
+const TRACKER_GROUP_LUC = {
     label: 'FROM THE TRACKER',
     items: [
         'Total revenue this month across LUC and Skillhub',
@@ -14,6 +15,15 @@ const TRACKER_GROUP = {
         'How many commitments are pending right now?',
     ],
 };
+
+const trackerGroupForSkillhub = (branch) => ({
+    label: 'FROM THE TRACKER',
+    items: [
+        `Total revenue this month for ${branch}`,
+        'How many students enrolled this week?',
+        'Outstanding fee summary by student',
+    ],
+});
 
 const DOCS_GROUP = {
     label: 'FROM PROGRAM DOCS',
@@ -73,8 +83,21 @@ const GroupLabel = ({ children }) => (
     </Typography>
 );
 
-const SuggestedChips = ({ onPick, includeDocs = true }) => {
-    const groups = [TRACKER_GROUP];
+const SuggestedChips = ({ onPick, organization }) => {
+    let trackerGroup;
+    let includeDocs;
+    if (organization === 'skillhub_training') {
+        trackerGroup = trackerGroupForSkillhub('Training');
+        includeDocs = false;
+    } else if (organization === 'skillhub_institute') {
+        trackerGroup = trackerGroupForSkillhub('Institute');
+        includeDocs = false;
+    } else {
+        // LUC (or anything else): full LUC + docs experience.
+        trackerGroup = TRACKER_GROUP_LUC;
+        includeDocs = true;
+    }
+    const groups = [trackerGroup];
     if (includeDocs) groups.push(DOCS_GROUP);
 
     return (

@@ -20,6 +20,7 @@ import {
     AccessTime as AccessTimeIcon,
     AutoAwesome as AutoAwesomeIcon,
     BarChart as AnalyticsIcon,
+    ChatBubbleOutline as AskMeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ORGANIZATION_LABELS } from '../../utils/constants';
@@ -206,6 +207,12 @@ const SkillhubSidebar = ({ activeView, onNavigate, onNewAdmission, onLogout }) =
                 {navItem('commitments', 'Commitments', AssignmentIcon, () => onNavigate('commitments'))}
                 {navItem('analytics', 'Analytics', AnalyticsIcon, () => onNavigate('analytics'))}
                 {navItem('ai', 'AI Analysis', AutoAwesomeIcon, () => onNavigate('ai'))}
+                {/* Ask me — Skillhub gets the same chat drawer as LUC, but
+                    docs-RAG is server-side gated to LUC only (spec §10).
+                    Skillhub queries always route to /api/chat/stream. */}
+                {navItem('askme', 'Ask me', AskMeIcon, () =>
+                    window.dispatchEvent(new CustomEvent('askme:open'))
+                )}
                 {navItem('new-admission', 'New Admission', PersonAddIcon, onNewAdmission)}
                 {navItem('hourly', 'Hourly Tracker', AccessTimeIcon, () => navigate('/hourly-tracker'))}
             </List>

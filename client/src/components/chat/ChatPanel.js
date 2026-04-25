@@ -82,6 +82,14 @@ const ChatPanel = ({ open, onClose }) => {
     // chatbot unchanged. `isLuc` pattern matches the app-wide convention
     // of defaulting missing organization to 'luc'.
     const isLuc = (user?.organization || 'luc') === 'luc';
+    // Skillhub branch label used in the empty-state subtitle so the
+    // Training and Institute logins each see their own branch name.
+    const skillhubBranch =
+        user?.organization === 'skillhub_training'
+            ? 'Training'
+            : user?.organization === 'skillhub_institute'
+                ? 'Institute'
+                : null;
 
     // Phase 5 preview state. `preview` is null when the split is closed.
     // When set: { blobUrl, title, page, chunkId, loading, error }. The
@@ -1000,6 +1008,12 @@ const ChatPanel = ({ open, onClose }) => {
                                             MBA, IOSCM, OTHM). Natural language, live answers with
                                             sources when quoting program docs.
                                         </>
+                                    ) : skillhubBranch ? (
+                                        <>
+                                            Tracker data for {skillhubBranch} branch — admissions,
+                                            students, fees, attendance. Live data, natural
+                                            language.
+                                        </>
                                     ) : (
                                         <>
                                             Tracker data (revenue, teams, admissions, attendance)
@@ -1013,10 +1027,12 @@ const ChatPanel = ({ open, onClose }) => {
                         {empty && (
                             <SuggestedChips
                                 onPick={send}
-                                // Skillhub orgs are tracker-only — docs-RAG
-                                // is LUC-scope per spec §10. Hide the docs
-                                // suggestions to match the routing reality.
-                                includeDocs={isLuc}
+                                // SuggestedChips picks tracker-only,
+                                // branch-flavoured prompts for Skillhub
+                                // (training / institute) and the full
+                                // tracker + docs mix for LUC. Server-
+                                // side already 403s Skillhub on docs-RAG.
+                                organization={user?.organization || 'luc'}
                             />
                         )}
 
