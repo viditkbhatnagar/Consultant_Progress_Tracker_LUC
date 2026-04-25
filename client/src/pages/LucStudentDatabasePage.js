@@ -12,6 +12,7 @@ import {
 import {
     Logout as LogoutIcon,
     ArrowBack as ArrowBackIcon,
+    SaveAlt as ExportCenterIcon,
 } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -21,7 +22,8 @@ import { useAuth } from '../context/AuthContext';
 import studentService from '../services/studentService';
 import consultantService from '../services/consultantService';
 import { getUsers } from '../services/authService';
-import exportService from '../services/exportService';
+import xlsxBuilder from '../services/xlsxBuilder';
+import { lucColumns } from '../config/exportColumns/students';
 import { useAdminOrgScope, getAdminOrgScope } from '../utils/adminOrgScope';
 import AdminOrgTabs from '../components/AdminOrgTabs';
 import StudentFormDialog from '../components/StudentFormDialog';
@@ -33,7 +35,6 @@ import {
     LUC_UNIVERSITIES,
     LUC_SOURCES,
     MONTHS,
-    LUC_COLUMNS,
     getFilterPrograms,
 } from '../utils/studentDesign';
 import StudentsToolbar, {
@@ -356,24 +357,12 @@ const LucStudentDatabasePage = () => {
     };
 
     // ── EXPORT ──
-    const buildExportRows = () =>
-        displayed.map((s, i) => {
-            const row = { '#': i + 1 };
-            LUC_COLUMNS.filter((c) => c.export).forEach((c) => {
-                const label = c.exportLbl || c.lbl;
-                let v = s[c.key];
-                if (c.date && v) v = format(new Date(v), 'yyyy-MM-dd');
-                if (c.money) v = v || 0;
-                row[label] = v == null ? '' : v;
-            });
-            return row;
-        });
-
+    // Delegates to xlsxBuilder against the canonical Students column config
+    // (LUC variant). The legacy `buildExportRows` and inline date/money
+    // shaping moved into xlsxBuilder + the column config; this handler now
+    // just hands the displayed rows over.
     const doExport = (kind) => {
-        const rows = buildExportRows();
-        const filename = `student_database_${format(new Date(), 'yyyy-MM-dd')}`;
-        if (kind === 'xlsx') exportService.exportToExcel(rows, filename);
-        else exportService.exportToCSV(rows, filename);
+        xlsxBuilder.exportRawSheet(displayed, lucColumns, 'student_database', kind);
         showToast(`Exported ${kind.toUpperCase()}`);
     };
 
@@ -532,6 +521,15 @@ const LucStudentDatabasePage = () => {
                             </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {isManager && (
+                                <Button
+                                    startIcon={<ExportCenterIcon />}
+                                    onClick={() => navigate('/exports')}
+                                    sx={{ color: '#fff', textTransform: 'none' }}
+                                >
+                                    Open Export Center →
+                                </Button>
+                            )}
                             <Typography sx={{ fontSize: 13 }}>
                                 {user?.name} (
                                 {isAdmin

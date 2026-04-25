@@ -59,3 +59,9 @@ server/program-docs-manifest.json
 
 # Prototype files
 consultant-tracker-v2.html
+
+# Raw spreadsheet exports — keep out of the public repo (likely PII).
+# Block-list added during Export Center anonymization audit. Use
+# `git add -f path.xlsx` to commit a deliberately public xlsx
+# (e.g. a documentation template).
+*.xlsx

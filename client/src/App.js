@@ -12,6 +12,7 @@ import HourlyTrackerPage from './pages/HourlyTrackerPage';
 import MeetingTrackerPage from './pages/MeetingTrackerPage';
 import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
+import ExportCenterPage from './pages/ExportCenterPage';
 import PdfViewer from './pages/PdfViewer';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
@@ -119,6 +120,18 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['skillhub']}>
                   <SkillhubDashboard />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Export Center — admin, team_lead, manager, skillhub. The page
+                hides datasets the role can't access and gates org tabs per
+                the permission matrix in the plan §6. */}
+            <Route
+              path="/exports"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'manager', 'skillhub']}>
+                  <ExportCenterPage />
                 </PrivateRoute>
               }
             />

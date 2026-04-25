@@ -12,7 +12,6 @@ import {
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
-    Download as DownloadIcon,
     Logout as LogoutIcon,
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
@@ -21,6 +20,7 @@ import {
     VideoCall as VideoCallIcon,
     FactCheck as CommitmentsIcon,
     ChatBubbleOutline as AskMeIcon,
+    SaveAlt as ExportCenterIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
@@ -59,7 +59,7 @@ const MOTIVATIONAL_QUOTES = [
     "The difference between ordinary and extraordinary is that little extra.",
 ];
 
-const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
+const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
@@ -275,9 +275,9 @@ const Sidebar = ({ onAddCommitment, onExport, onLogout, onAIAnalysis, onDashboar
                 </ListItem>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={(e) => onExport(e.currentTarget)} sx={navItemSx}>
-                        <ListItemIcon><DownloadIcon /></ListItemIcon>
-                        <ListItemText primary="Export Data" />
+                    <ListItemButton onClick={() => navigate('/exports')} sx={navItemSx}>
+                        <ListItemIcon><ExportCenterIcon /></ListItemIcon>
+                        <ListItemText primary="Export Center" />
                     </ListItemButton>
                 </ListItem>
             </List>
