@@ -110,7 +110,32 @@ const DataGrid = ({
                 // header and body cells.
                 '& .tpt-rdg-money': { textAlign: 'right', justifyContent: 'flex-end' },
                 '& .tpt-rdg-date':  { fontVariantNumeric: 'tabular-nums' },
-                '& .rdg':           { blockSize: '100%', inlineSize: '100%' },
+                // rdg ships its colors via the CSS `light-dark()` function,
+                // which keys off the OS color scheme — so a user with OS dark
+                // mode + our app in light mode gets light-grey header text on
+                // a light header background (header text invisible). Pin
+                // rdg's vars to literal values + force a light color-scheme
+                // so the header always renders dark-on-light.
+                '& .rdg': {
+                    blockSize: '100%',
+                    inlineSize: '100%',
+                    colorScheme: 'light',
+                    '--rdg-color': '#0f172a',
+                    '--rdg-background-color': '#ffffff',
+                    '--rdg-header-background-color': '#f8fafc',
+                    '--rdg-header-draggable-background-color': '#e2e8f0',
+                    '--rdg-row-hover-background-color': '#f1f5f9',
+                    '--rdg-border-color': '#e2e8f0',
+                    '--rdg-summary-border-color': '#cbd5e1',
+                },
+                '& .rdg-header-row': {
+                    color: '#0f172a',
+                    fontWeight: 600,
+                    backgroundColor: '#f8fafc',
+                },
+                '& .rdg-header-row .rdg-cell': {
+                    color: '#0f172a',
+                },
             }}
         >
             <RDG
