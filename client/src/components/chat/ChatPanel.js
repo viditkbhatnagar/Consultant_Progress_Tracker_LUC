@@ -516,6 +516,120 @@ const ChatPanel = ({ open, onClose }) => {
 
     const splitActive = Boolean(preview) && !isNarrow;
 
+    // Phase 5.5 — the input renders in two different places depending on
+    // chat state. When empty, it sits INSIDE the centered empty-state
+    // cluster (right under the suggestion chips); when there are
+    // messages, it pins to the bottom of the drawer with a top border
+    // separating it from the message list. Same JSX either way; only
+    // the chrome (border, surface bg) changes.
+    const renderInput = (pinned) => (
+        <Box
+            sx={{
+                p: 1.5,
+                borderTop: pinned
+                    ? '1px solid var(--d-border-soft, #ECE9E2)'
+                    : 'none',
+                backgroundColor: pinned
+                    ? 'var(--d-surface, #FFFFFF)'
+                    : 'transparent',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 1,
+            }}
+        >
+            <TextField
+                inputRef={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about tracker data or our programs… or tap the mic'}
+                fullWidth
+                multiline
+                maxRows={4}
+                size="small"
+                disabled={sending || recording || transcribing}
+                sx={{
+                    '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'var(--d-surface, #FFFFFF)',
+                        borderRadius: '10px',
+                        fontSize: 14,
+                        '& fieldset': { borderColor: 'var(--d-border, #E6E3DC)' },
+                        '&:hover fieldset': { borderColor: 'var(--d-accent, #2383E2)' },
+                        '&.Mui-focused fieldset': {
+                            borderColor: 'var(--d-accent, #2383E2)',
+                            borderWidth: '1px',
+                        },
+                    },
+                }}
+            />
+
+            {/* Mic / Stop toggle — voice input. Recording state swaps
+                to a red stop button. Disabled while a previous trans-
+                cription is in-flight or while the assistant is streaming. */}
+            <Tooltip title={recording ? 'Stop recording' : 'Voice input'}>
+                <span>
+                    <IconButton
+                        onClick={recording ? stopRecording : startRecording}
+                        disabled={sending || transcribing}
+                        sx={{
+                            backgroundColor: recording
+                                ? 'var(--d-danger, #B91C1C)'
+                                : 'var(--d-surface-muted, #F1EFEA)',
+                            color: recording ? '#FFFFFF' : 'var(--d-text-2, #2A2927)',
+                            border: '1px solid',
+                            borderColor: recording
+                                ? 'var(--d-danger, #B91C1C)'
+                                : 'var(--d-border, #E6E3DC)',
+                            borderRadius: '10px',
+                            width: 40,
+                            height: 40,
+                            transition:
+                                'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter), border-color var(--d-dur-sm) var(--d-ease-enter)',
+                            '&:hover': {
+                                backgroundColor: recording
+                                    ? 'var(--d-danger-text, #B91C1C)'
+                                    : 'var(--d-surface-hover, #EFEDE8)',
+                                borderColor: recording
+                                    ? 'var(--d-danger, #B91C1C)'
+                                    : 'var(--d-accent, #2383E2)',
+                            },
+                            '&.Mui-disabled': {
+                                backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                                color: 'var(--d-text-muted, #8A887E)',
+                            },
+                        }}
+                    >
+                        {recording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
+                    </IconButton>
+                </span>
+            </Tooltip>
+
+            <Tooltip title="Send">
+                <span>
+                    <IconButton
+                        onClick={() => send(input)}
+                        disabled={sending || recording || transcribing || !input.trim()}
+                        sx={{
+                            backgroundColor: 'var(--d-accent, #2383E2)',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
+                            width: 40,
+                            height: 40,
+                            '&:hover': { backgroundColor: 'var(--d-accent-text, #1F6FBF)' },
+                            '&.Mui-disabled': {
+                                backgroundColor: 'var(--d-disabled, #C9C5BB)',
+                                color: 'var(--d-surface, #FFFFFF)',
+                            },
+                        }}
+                    >
+                        <SendIcon fontSize="small" />
+                    </IconButton>
+                </span>
+            </Tooltip>
+        </Box>
+    );
+
     return (
         <Drawer
             anchor="right"
@@ -850,6 +964,13 @@ const ChatPanel = ({ open, onClose }) => {
                             display: 'flex',
                             flexDirection: 'column',
                             minWidth: 0,
+                            // Phase 5.5 — when there are no messages we
+                            // vertically centre the empty-state cluster
+                            // (header + chips + input) so the drawer
+                            // doesn't show a 400 px dead zone above a
+                            // bottom-pinned input. The pinned input is
+                            // hidden in that state — see render below.
+                            justifyContent: empty ? 'center' : 'flex-start',
                         }}
                     >
                         {empty && (
@@ -898,6 +1019,13 @@ const ChatPanel = ({ open, onClose }) => {
                                 includeDocs={isLuc}
                             />
                         )}
+
+                        {/* Phase 5.5 — empty-state input lives directly
+                            below the suggestion chips with a small gap.
+                            When the user sends their first message the
+                            cluster collapses and the bottom-pinned input
+                            (rendered below this scroll Box) takes over. */}
+                        {empty && <Box sx={{ mt: 1, px: 1 }}>{renderInput(false)}</Box>}
 
                         {messages.map((m) => (
                             <ChatMessage
@@ -1010,113 +1138,10 @@ const ChatPanel = ({ open, onClose }) => {
                         )}
                     </Box>
 
-                    {/* Input */}
-                    <Box
-                        sx={{
-                            p: 1.5,
-                            borderTop: '1px solid var(--d-border-soft, #ECE9E2)',
-                            backgroundColor: 'var(--d-surface, #FFFFFF)',
-                            flexShrink: 0,
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            gap: 1,
-                        }}
-                    >
-                        <TextField
-                            inputRef={inputRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={onKeyDown}
-                            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about tracker data or our programs… or tap the mic'}
-                            fullWidth
-                            multiline
-                            maxRows={4}
-                            size="small"
-                            disabled={sending || recording || transcribing}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    backgroundColor: 'var(--d-surface, #FFFFFF)',
-                                    borderRadius: '10px',
-                                    fontSize: 14,
-                                    '& fieldset': { borderColor: 'var(--d-border, #E6E3DC)' },
-                                    '&:hover fieldset': { borderColor: 'var(--d-accent, #2383E2)' },
-                                    '&.Mui-focused fieldset': {
-                                        borderColor: 'var(--d-accent, #2383E2)',
-                                        borderWidth: '1px',
-                                    },
-                                },
-                            }}
-                        />
-
-                        {/* Mic / Stop toggle — voice input. Recording state
-                            swaps to a red stop button. Disabled while a
-                            previous transcription is in-flight or while
-                            the assistant is streaming. */}
-                        <Tooltip title={recording ? 'Stop recording' : 'Voice input'}>
-                            <span>
-                                <IconButton
-                                    onClick={recording ? stopRecording : startRecording}
-                                    disabled={sending || transcribing}
-                                    sx={{
-                                        backgroundColor: recording
-                                            ? 'var(--d-danger, #B91C1C)'
-                                            : 'var(--d-surface-muted, #F1EFEA)',
-                                        color: recording
-                                            ? '#FFFFFF'
-                                            : 'var(--d-text-2, #2A2927)',
-                                        border: '1px solid',
-                                        borderColor: recording
-                                            ? 'var(--d-danger, #B91C1C)'
-                                            : 'var(--d-border, #E6E3DC)',
-                                        borderRadius: '10px',
-                                        width: 40,
-                                        height: 40,
-                                        transition:
-                                            'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter), border-color var(--d-dur-sm) var(--d-ease-enter)',
-                                        '&:hover': {
-                                            backgroundColor: recording
-                                                ? 'var(--d-danger-text, #B91C1C)'
-                                                : 'var(--d-surface-hover, #EFEDE8)',
-                                            borderColor: recording
-                                                ? 'var(--d-danger, #B91C1C)'
-                                                : 'var(--d-accent, #2383E2)',
-                                        },
-                                        '&.Mui-disabled': {
-                                            backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
-                                            color: 'var(--d-text-muted, #8A887E)',
-                                        },
-                                    }}
-                                >
-                                    {recording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-
-                        <Tooltip title="Send">
-                            <span>
-                                <IconButton
-                                    onClick={() => send(input)}
-                                    disabled={sending || recording || transcribing || !input.trim()}
-                                    sx={{
-                                        backgroundColor: 'var(--d-accent, #2383E2)',
-                                        color: '#FFFFFF',
-                                        borderRadius: '10px',
-                                        width: 40,
-                                        height: 40,
-                                        '&:hover': {
-                                            backgroundColor: 'var(--d-accent-text, #1F6FBF)',
-                                        },
-                                        '&.Mui-disabled': {
-                                            backgroundColor: 'var(--d-disabled, #C9C5BB)',
-                                            color: 'var(--d-surface, #FFFFFF)',
-                                        },
-                                    }}
-                                >
-                                    <SendIcon fontSize="small" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                    </Box>
+                    {/* Bottom-pinned input — only when there are
+                        messages. Empty-state input renders inside the
+                        centered cluster above. */}
+                    {!empty && renderInput(true)}
                 </>
             )}
             </Box>
