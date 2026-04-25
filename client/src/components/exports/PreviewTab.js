@@ -220,14 +220,21 @@ const PreviewTab = ({
 
     // Apply client-side sort. Pivot mode pins the trailing Totals row at
     // the bottom regardless of direction.
+    //
+    // Synthetic columns like LUC's `sno` (or Skillhub's `__row`) define
+    // `format: (_row, i) => i + 1` — the displayed value depends on the
+    // row's POSITION in baseGridRows, not on row data. To make those
+    // columns sort correctly we have to feed the original index into
+    // `format` BEFORE sorting (otherwise every row gets the same key and
+    // the sort is a no-op).
     const gridRows = React.useMemo(() => {
         if (!sortColumns || sortColumns.length === 0) return baseGridRows;
         const { columnKey, direction } = sortColumns[0];
         const col = gridColumns.find((c) => c.key === columnKey);
         if (!col) return baseGridRows;
 
-        const getSortableValue = (row) => {
-            if (typeof col.format === 'function') return col.format(row, 0);
+        const getSortableValue = (row, originalIndex) => {
+            if (typeof col.format === 'function') return col.format(row, originalIndex);
             const path = col.key;
             return path.includes('.')
                 ? path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), row)
@@ -247,17 +254,21 @@ const PreviewTab = ({
                 : sb.localeCompare(sa, 'en', { numeric: true, sensitivity: 'base' });
         };
 
+        // Decorate rows with their original index so sort keys for
+        // index-based formatters resolve correctly, then strip the index
+        // back off before handing rows to rdg.
+        const decorate = (rows) =>
+            rows.map((row, i) => ({ row, key: getSortableValue(row, i) }));
+        const sortDecorated = (decorated) =>
+            [...decorated].sort((a, b) => compareCells(a.key, b.key));
+
         if (mode === 'pivot' && baseGridRows.length > 0) {
             const body = baseGridRows.slice(0, -1);
             const totals = baseGridRows[baseGridRows.length - 1];
-            const sortedBody = [...body].sort((ra, rb) =>
-                compareCells(getSortableValue(ra), getSortableValue(rb))
-            );
+            const sortedBody = sortDecorated(decorate(body)).map((d) => d.row);
             return [...sortedBody, totals];
         }
-        return [...baseGridRows].sort((ra, rb) =>
-            compareCells(getSortableValue(ra), getSortableValue(rb))
-        );
+        return sortDecorated(decorate(baseGridRows)).map((d) => d.row);
     }, [sortColumns, baseGridRows, gridColumns, mode]);
 
     const sortableColumns = React.useMemo(
