@@ -320,5 +320,10 @@ StudentSchema.index({ month: 1 });
 StudentSchema.index({ source: 1 });
 StudentSchema.index({ program: 1 });
 StudentSchema.index({ organization: 1, studentStatus: 1 });
+// Export Center pivot indexes (plan §9). Mongoose builds these in the
+// background on app start; no migration needed.
+StudentSchema.index({ organization: 1, source: 1, closingDate: -1 });
+StudentSchema.index({ organization: 1, leadSource: 1, createdAt: -1 });
+StudentSchema.index({ organization: 1, university: 1, program: 1 });
 
 module.exports = mongoose.model('Student', StudentSchema);

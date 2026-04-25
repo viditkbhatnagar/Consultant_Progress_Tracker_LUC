@@ -129,11 +129,6 @@ const CommitmentSchema = new mongoose.Schema(
                 this.commitmentMade = value;
             }
         },
-        leadStage: {
-            type: String,
-            enum: ['Cold', 'Warm', 'Hot', 'Unresponsive', 'Meeting Scheduled', 'Admission'],
-            default: 'Cold',
-        },
         commitmentAchieved: {
             type: String,
             trim: true,
@@ -251,6 +246,8 @@ CommitmentSchema.index({ teamLead: 1, weekNumber: 1, year: 1 });
 CommitmentSchema.index({ weekStartDate: 1 });
 CommitmentSchema.index({ leadStage: 1 });
 CommitmentSchema.index({ admissionClosed: 1 });
+// Export Center pivot index (plan §9).
+CommitmentSchema.index({ organization: 1, status: 1, weekStartDate: 1 });
 
 const Commitment = mongoose.model('Commitment', CommitmentSchema);
 

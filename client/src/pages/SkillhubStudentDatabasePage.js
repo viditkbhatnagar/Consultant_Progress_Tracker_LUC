@@ -23,7 +23,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import studentService from '../services/studentService';
 import consultantService from '../services/consultantService';
-import exportService from '../services/exportService';
+import xlsxBuilder from '../services/xlsxBuilder';
+import { skillhubColumns } from '../config/exportColumns/students';
 import { useAdminOrgScope, getAdminOrgScope } from '../utils/adminOrgScope';
 import AdminOrgTabs from '../components/AdminOrgTabs';
 import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFormDialog';
@@ -363,30 +364,12 @@ const SkillhubStudentDatabasePage = () => {
     };
 
     // ── EXPORT ──
+    // Delegates to xlsxBuilder against the canonical Students column config
+    // (Skillhub variant). The legacy inline 17-column array moved into
+    // `client/src/config/exportColumns/students.js`.
     const doExport = (kind) => {
-        const rows = displayed.map((s, i) => ({
-            '#': i + 1,
-            'Enrollment #': s.enrollmentNumber || '',
-            'Name': s.studentName || '',
-            'School': s.school || '',
-            'Curriculum': s.curriculum || '',
-            'Year/Grade': s.yearOrGrade || '',
-            'Acad. Year': s.academicYear || '',
-            'Counselor': s.consultantName || '',
-            'Mode': s.mode || '',
-            'Date of Enrollment': s.dateOfEnrollment
-                ? format(new Date(s.dateOfEnrollment), 'yyyy-MM-dd')
-                : '',
-            'Course Fee (AED)': s.courseFee || 0,
-            'Outstanding (AED)': s.outstandingAmount ?? 0,
-            'Status': SKILLHUB_STATUS_META[s.studentStatus]?.lbl || s.studentStatus,
-            'Lead Source': s.leadSource || '',
-            'Student Phone': s.phones?.student || '',
-            'Student Email': s.emails?.student || '',
-        }));
-        const filename = `skillhub_${curriculum}_${statusTab}_${format(new Date(), 'yyyy-MM-dd')}`;
-        if (kind === 'xlsx') exportService.exportToExcel(rows, filename);
-        else exportService.exportToCSV(rows, filename);
+        const filename = `skillhub_${curriculum}_${statusTab}`;
+        xlsxBuilder.exportRawSheet(displayed, skillhubColumns, filename, kind);
         showToast(`Exported ${kind.toUpperCase()}`);
     };
 

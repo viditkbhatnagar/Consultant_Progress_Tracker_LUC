@@ -93,5 +93,7 @@ HourlyActivitySchema.index(
 
 // Fast daily lookups
 HourlyActivitySchema.index({ date: 1 });
+// Export Center pivot index (plan §9).
+HourlyActivitySchema.index({ organization: 1, date: 1, activityType: 1 });
 
 module.exports = mongoose.model('HourlyActivity', HourlyActivitySchema);

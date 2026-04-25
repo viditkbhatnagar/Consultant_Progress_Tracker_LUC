@@ -22,7 +22,6 @@ import {
     Stop as StopIcon,
     OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
-import { useLocation } from 'react-router-dom';
 import ChatMessage from './ChatMessage';
 import SuggestedChips from './SuggestedChips';
 import {
@@ -73,7 +72,6 @@ const DRAWER_WIDTHS_WITH_PREVIEW = {
 };
 
 const ChatPanel = ({ open, onClose }) => {
-    const location = useLocation();
     const { user } = useAuth();
     const theme = useTheme();
     // `md` is the split-vs-overlay breakpoint. Below this, source chips
@@ -84,6 +82,14 @@ const ChatPanel = ({ open, onClose }) => {
     // chatbot unchanged. `isLuc` pattern matches the app-wide convention
     // of defaulting missing organization to 'luc'.
     const isLuc = (user?.organization || 'luc') === 'luc';
+    // Skillhub branch label used in the empty-state subtitle so the
+    // Training and Institute logins each see their own branch name.
+    const skillhubBranch =
+        user?.organization === 'skillhub_training'
+            ? 'Training'
+            : user?.organization === 'skillhub_institute'
+                ? 'Institute'
+                : null;
 
     // Phase 5 preview state. `preview` is null when the split is closed.
     // When set: { blobUrl, title, page, chunkId, loading, error }. The
@@ -126,52 +132,77 @@ const ChatPanel = ({ open, onClose }) => {
 
     const closePreview = useCallback(() => {
         setPreview((p) => {
-            if (p?.blobUrl) URL.revokeObjectURL(p.blobUrl);
+            if (p?.snippetBlobUrl) URL.revokeObjectURL(p.snippetBlobUrl);
+            if (p?.pdfBlobUrl) URL.revokeObjectURL(p.pdfBlobUrl);
             return null;
         });
     }, []);
 
-    // Fetch the highlighted (or fallback regular) PDF as a blob — matches
-    // the authenticated-fetch pattern the PdfViewer page uses.
-    const openPreview = useCallback(async ({ path, page, title, chunkId }) => {
-        if (!path) return;
-        // Revoke any previous blob before starting a new fetch.
-        setPreview((prev) => {
-            if (prev?.blobUrl) URL.revokeObjectURL(prev.blobUrl);
-            return { blobUrl: null, title, page, chunkId, loading: true, error: '' };
-        });
-        try {
-            const blobUrl = await fetchPdfBlobUrl(path);
-            setPreview({
-                blobUrl,
-                title,
-                page,
-                chunkId,
-                loading: false,
-                error: '',
+    // Phase 5.3 — the preview panel prefers the PNG snippet (no browser
+    // PDF chrome) and keeps the highlighted full-page PDF blob handy for
+    // the "Open full PDF" button. Both resources are fetched through the
+    // authenticated blob helper so the static mounts stay gated.
+    const openPreview = useCallback(
+        async ({ snippetPath, fullPdfPath, page, title, chunkId }) => {
+            if (!snippetPath && !fullPdfPath) return;
+            // Revoke any previous blobs before starting new fetches.
+            setPreview((prev) => {
+                if (prev?.snippetBlobUrl) URL.revokeObjectURL(prev.snippetBlobUrl);
+                if (prev?.pdfBlobUrl) URL.revokeObjectURL(prev.pdfBlobUrl);
+                return {
+                    snippetBlobUrl: null,
+                    pdfBlobUrl: null,
+                    title,
+                    page,
+                    chunkId,
+                    loading: true,
+                    error: '',
+                };
             });
-        } catch (err) {
-            setPreview({
-                blobUrl: null,
-                title,
-                page,
-                chunkId,
-                loading: false,
-                error: err.message || 'Failed to load preview',
-            });
-        }
-    }, []);
+            try {
+                // Fetch snippet (if available) and full PDF in parallel.
+                // Fallback: if snippet is missing, we still want the PDF
+                // blob for the iframe path.
+                const [snip, pdf] = await Promise.all([
+                    snippetPath ? fetchPdfBlobUrl(snippetPath) : Promise.resolve(null),
+                    fullPdfPath ? fetchPdfBlobUrl(fullPdfPath) : Promise.resolve(null),
+                ]);
+                setPreview({
+                    snippetBlobUrl: snip,
+                    pdfBlobUrl: pdf,
+                    title,
+                    page,
+                    chunkId,
+                    loading: false,
+                    error: '',
+                });
+            } catch (err) {
+                setPreview({
+                    snippetBlobUrl: null,
+                    pdfBlobUrl: null,
+                    title,
+                    page,
+                    chunkId,
+                    loading: false,
+                    error: err.message || 'Failed to load preview',
+                });
+            }
+        },
+        []
+    );
 
-    // Release any held blob URL when the component unmounts or the drawer
-    // is dismissed entirely (not just when the preview panel is closed).
+    // Release any held blob URLs when the drawer is dismissed entirely
+    // (not just when the preview panel's close button is clicked).
     useEffect(() => {
-        if (!open && preview?.blobUrl) {
-            URL.revokeObjectURL(preview.blobUrl);
+        if (!open && (preview?.snippetBlobUrl || preview?.pdfBlobUrl)) {
+            if (preview.snippetBlobUrl) URL.revokeObjectURL(preview.snippetBlobUrl);
+            if (preview.pdfBlobUrl) URL.revokeObjectURL(preview.pdfBlobUrl);
             setPreview(null);
         }
     }, [open, preview]);
     useEffect(() => () => {
-        if (preview?.blobUrl) URL.revokeObjectURL(preview.blobUrl);
+        if (preview?.snippetBlobUrl) URL.revokeObjectURL(preview.snippetBlobUrl);
+        if (preview?.pdfBlobUrl) URL.revokeObjectURL(preview.pdfBlobUrl);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -239,7 +270,10 @@ const ChatPanel = ({ open, onClose }) => {
             // path so /api/docs-chat is never called from non-LUC UI.
             // Phase 4.2: classifier itself is org-agnostic; the Skillhub
             // hard-lock lives here. Tracker is the default on ambiguous.
-            const route = isLuc ? routeFor(trimmed) : 'tracker';
+            // Phase 5.3: routeFor is async — keyword rules synchronously
+            // decide strong cases, ambiguous queries escalate to the
+            // server's LLM classifier (~200ms, cached).
+            const route = isLuc ? await routeFor(trimmed) : 'tracker';
 
             const userMsg = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
             const assistantMsg = {
@@ -490,6 +524,120 @@ const ChatPanel = ({ open, onClose }) => {
 
     const splitActive = Boolean(preview) && !isNarrow;
 
+    // Phase 5.5 — the input renders in two different places depending on
+    // chat state. When empty, it sits INSIDE the centered empty-state
+    // cluster (right under the suggestion chips); when there are
+    // messages, it pins to the bottom of the drawer with a top border
+    // separating it from the message list. Same JSX either way; only
+    // the chrome (border, surface bg) changes.
+    const renderInput = (pinned) => (
+        <Box
+            sx={{
+                p: 1.5,
+                borderTop: pinned
+                    ? '1px solid var(--d-border-soft, #ECE9E2)'
+                    : 'none',
+                backgroundColor: pinned
+                    ? 'var(--d-surface, #FFFFFF)'
+                    : 'transparent',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 1,
+            }}
+        >
+            <TextField
+                inputRef={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about tracker data or our programs… or tap the mic'}
+                fullWidth
+                multiline
+                maxRows={4}
+                size="small"
+                disabled={sending || recording || transcribing}
+                sx={{
+                    '& .MuiOutlinedInput-root': {
+                        backgroundColor: 'var(--d-surface, #FFFFFF)',
+                        borderRadius: '10px',
+                        fontSize: 14,
+                        '& fieldset': { borderColor: 'var(--d-border, #E6E3DC)' },
+                        '&:hover fieldset': { borderColor: 'var(--d-accent, #2383E2)' },
+                        '&.Mui-focused fieldset': {
+                            borderColor: 'var(--d-accent, #2383E2)',
+                            borderWidth: '1px',
+                        },
+                    },
+                }}
+            />
+
+            {/* Mic / Stop toggle — voice input. Recording state swaps
+                to a red stop button. Disabled while a previous trans-
+                cription is in-flight or while the assistant is streaming. */}
+            <Tooltip title={recording ? 'Stop recording' : 'Voice input'}>
+                <span>
+                    <IconButton
+                        onClick={recording ? stopRecording : startRecording}
+                        disabled={sending || transcribing}
+                        sx={{
+                            backgroundColor: recording
+                                ? 'var(--d-danger, #B91C1C)'
+                                : 'var(--d-surface-muted, #F1EFEA)',
+                            color: recording ? '#FFFFFF' : 'var(--d-text-2, #2A2927)',
+                            border: '1px solid',
+                            borderColor: recording
+                                ? 'var(--d-danger, #B91C1C)'
+                                : 'var(--d-border, #E6E3DC)',
+                            borderRadius: '10px',
+                            width: 40,
+                            height: 40,
+                            transition:
+                                'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter), border-color var(--d-dur-sm) var(--d-ease-enter)',
+                            '&:hover': {
+                                backgroundColor: recording
+                                    ? 'var(--d-danger-text, #B91C1C)'
+                                    : 'var(--d-surface-hover, #EFEDE8)',
+                                borderColor: recording
+                                    ? 'var(--d-danger, #B91C1C)'
+                                    : 'var(--d-accent, #2383E2)',
+                            },
+                            '&.Mui-disabled': {
+                                backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
+                                color: 'var(--d-text-muted, #8A887E)',
+                            },
+                        }}
+                    >
+                        {recording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
+                    </IconButton>
+                </span>
+            </Tooltip>
+
+            <Tooltip title="Send">
+                <span>
+                    <IconButton
+                        onClick={() => send(input)}
+                        disabled={sending || recording || transcribing || !input.trim()}
+                        sx={{
+                            backgroundColor: 'var(--d-accent, #2383E2)',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
+                            width: 40,
+                            height: 40,
+                            '&:hover': { backgroundColor: 'var(--d-accent-text, #1F6FBF)' },
+                            '&.Mui-disabled': {
+                                backgroundColor: 'var(--d-disabled, #C9C5BB)',
+                                color: 'var(--d-surface, #FFFFFF)',
+                            },
+                        }}
+                    >
+                        <SendIcon fontSize="small" />
+                    </IconButton>
+                </span>
+            </Tooltip>
+        </Box>
+    );
+
     return (
         <Drawer
             anchor="right"
@@ -544,15 +692,15 @@ const ChatPanel = ({ open, onClose }) => {
                                 whiteSpace: 'nowrap',
                             }}
                         >
-                            {preview.title} · page {preview.page}
+                            {preview.title}
                         </Typography>
-                        {preview.blobUrl && (
-                            <Tooltip title="Open in new tab">
+                        {preview.pdfBlobUrl && (
+                            <Tooltip title="Open full PDF in new tab">
                                 <IconButton
                                     size="small"
                                     onClick={() =>
                                         window.open(
-                                            preview.blobUrl +
+                                            preview.pdfBlobUrl +
                                                 `#page=${preview.page}`,
                                             '_blank'
                                         )
@@ -568,7 +716,22 @@ const ChatPanel = ({ open, onClose }) => {
                             </IconButton>
                         </Tooltip>
                     </Box>
-                    <Box sx={{ position: 'relative', flex: 1 }}>
+                    <Box
+                        sx={{
+                            position: 'relative',
+                            flex: 1,
+                            // Preview body sits on a neutral dark
+                            // background so the PNG snippet (which has a
+                            // white letter-box margin) reads as content
+                            // rather than UI chrome.
+                            backgroundColor: '#1f1f1f',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'center',
+                            overflow: 'auto',
+                            p: 2,
+                        }}
+                    >
                         {preview.loading && (
                             <Box
                                 sx={{
@@ -590,30 +753,61 @@ const ChatPanel = ({ open, onClose }) => {
                                 </Typography>
                             </Box>
                         )}
-                        {preview.blobUrl && !preview.loading && !preview.error && (
-                            <iframe
-                                title={`${preview.title} preview`}
-                                src={`${preview.blobUrl}#page=${preview.page}`}
-                                style={{
-                                    border: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    background: '#fff',
+                        {/* Phase 5.3 — PNG snippet path is the default
+                            render. Kills the browser PDF-viewer toolbar
+                            + sidebar that previously ate 80% of the pane.
+                            Fallback to the highlighted-PDF iframe only
+                            when the snippet is missing (legacy chunks
+                            where PyMuPDF's text search didn't hit). */}
+                        {!preview.loading && !preview.error && preview.snippetBlobUrl && (
+                            <Box
+                                component="img"
+                                src={preview.snippetBlobUrl}
+                                alt={`${preview.title} snippet`}
+                                sx={{
+                                    maxWidth: '100%',
+                                    maxHeight: '100%',
+                                    objectFit: 'contain',
+                                    backgroundColor: '#fff',
+                                    borderRadius: 1,
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
                                 }}
                             />
                         )}
+                        {!preview.loading &&
+                            !preview.error &&
+                            !preview.snippetBlobUrl &&
+                            preview.pdfBlobUrl && (
+                                <iframe
+                                    title={`${preview.title} preview`}
+                                    src={`${preview.pdfBlobUrl}#page=${preview.page}`}
+                                    style={{
+                                        border: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        background: '#fff',
+                                    }}
+                                />
+                            )}
                     </Box>
                 </Box>
             )}
 
+            {/* Phase 5.7 — chat-column wrapper. ALWAYS flex:1 + minHeight:0
+                so the body Box's `flex:1` + `justifyContent:center` has a
+                real height to centre against. Previously wrapper was
+                `flex:'unset', height:undefined` when no preview was open,
+                which gave the body Box no height — the empty-state
+                cluster collapsed to its content size and stuck to the
+                top of the drawer with the rest of the Paper showing as
+                empty space below. */}
             <Box
                 sx={{
                     display: 'flex',
                     flexDirection: 'column',
-                    flex: splitActive ? 1 : 'unset',
+                    flex: 1,
                     minWidth: 0,
-                    width: splitActive ? 'auto' : '100%',
-                    height: splitActive ? '100%' : undefined,
+                    minHeight: 0,
                 }}
             >
             {/* Header */}
@@ -785,35 +979,81 @@ const ChatPanel = ({ open, onClose }) => {
                             display: 'flex',
                             flexDirection: 'column',
                             minWidth: 0,
+                            // Allow the flex child to shrink below its
+                            // intrinsic content height so the centre
+                            // alignment below works inside an overflow
+                            // container.
+                            minHeight: 0,
+                            // Phase 5.5/5.7 — when there are messages,
+                            // we stack from the top (default flex-start)
+                            // and the bottom-pinned input takes over.
+                            // When empty the cluster sits inside an
+                            // m:'auto 0' wrapper below — safer than
+                            // justify-center which clips the top of an
+                            // overflowing container on narrow viewports.
                         }}
                     >
                         {empty && (
-                            <Box sx={{ px: 2.5, pt: 2, pb: 1 }}>
-                                <Typography
-                                    sx={{
-                                        fontSize: 15,
-                                        fontWeight: 700,
-                                        color: 'var(--d-text)',
-                                        letterSpacing: '-0.01em',
-                                        mb: 0.5,
-                                    }}
-                                >
-                                    Ask anything about the tracker.
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontSize: 13,
-                                        color: 'var(--d-text-3)',
-                                        lineHeight: 1.5,
-                                    }}
-                                >
-                                    Revenue, team performance, attendance, student records — in
-                                    natural language. I read live data and answer in seconds.
-                                </Typography>
+                            <Box sx={{ m: 'auto 0', width: '100%' }}>
+                                <Box sx={{ px: 2.5, pt: 2, pb: 1 }}>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color: 'var(--d-text)',
+                                            letterSpacing: '-0.01em',
+                                            mb: 0.5,
+                                        }}
+                                    >
+                                        Ask me anything.
+                                    </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 13,
+                                            color: 'var(--d-text-3)',
+                                            lineHeight: 1.5,
+                                        }}
+                                    >
+                                        {isLuc ? (
+                                            <>
+                                                Tracker data (revenue, teams, admissions, attendance)
+                                                OR program info (DBA, MBA, BBA, Knights, SSM, Malaysia
+                                                MBA, IOSCM, OTHM). Natural language, live answers with
+                                                sources when quoting program docs.
+                                            </>
+                                        ) : skillhubBranch ? (
+                                            <>
+                                                Tracker data for {skillhubBranch} branch — admissions,
+                                                students, fees, attendance. Live data, natural
+                                                language.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Tracker data (revenue, teams, admissions, attendance)
+                                                in natural language. Live answers in seconds.
+                                            </>
+                                        )}
+                                    </Typography>
+                                </Box>
+
+                                {/* SuggestedChips — branch-flavoured for
+                                    Skillhub, full tracker + docs mix for
+                                    LUC. Server-side 403s Skillhub on
+                                    docs-RAG so routing stays safe. */}
+                                <SuggestedChips
+                                    onPick={send}
+                                    organization={user?.organization || 'luc'}
+                                />
+
+                                {/* Empty-state input sits inside the
+                                    centred cluster with a small gap from
+                                    the chips. When the user sends their
+                                    first message the cluster collapses
+                                    and the bottom-pinned input (rendered
+                                    below this scroll Box) takes over. */}
+                                <Box sx={{ mt: 1, px: 1 }}>{renderInput(false)}</Box>
                             </Box>
                         )}
-
-                        {empty && <SuggestedChips pathname={location.pathname} onPick={send} />}
 
                         {messages.map((m) => (
                             <ChatMessage
@@ -926,113 +1166,10 @@ const ChatPanel = ({ open, onClose }) => {
                         )}
                     </Box>
 
-                    {/* Input */}
-                    <Box
-                        sx={{
-                            p: 1.5,
-                            borderTop: '1px solid var(--d-border-soft, #ECE9E2)',
-                            backgroundColor: 'var(--d-surface, #FFFFFF)',
-                            flexShrink: 0,
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            gap: 1,
-                        }}
-                    >
-                        <TextField
-                            inputRef={inputRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={onKeyDown}
-                            placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Ask about revenue, team performance, attendance… or tap the mic'}
-                            fullWidth
-                            multiline
-                            maxRows={4}
-                            size="small"
-                            disabled={sending || recording || transcribing}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    backgroundColor: 'var(--d-surface, #FFFFFF)',
-                                    borderRadius: '10px',
-                                    fontSize: 14,
-                                    '& fieldset': { borderColor: 'var(--d-border, #E6E3DC)' },
-                                    '&:hover fieldset': { borderColor: 'var(--d-accent, #2383E2)' },
-                                    '&.Mui-focused fieldset': {
-                                        borderColor: 'var(--d-accent, #2383E2)',
-                                        borderWidth: '1px',
-                                    },
-                                },
-                            }}
-                        />
-
-                        {/* Mic / Stop toggle — voice input. Recording state
-                            swaps to a red stop button. Disabled while a
-                            previous transcription is in-flight or while
-                            the assistant is streaming. */}
-                        <Tooltip title={recording ? 'Stop recording' : 'Voice input'}>
-                            <span>
-                                <IconButton
-                                    onClick={recording ? stopRecording : startRecording}
-                                    disabled={sending || transcribing}
-                                    sx={{
-                                        backgroundColor: recording
-                                            ? 'var(--d-danger, #B91C1C)'
-                                            : 'var(--d-surface-muted, #F1EFEA)',
-                                        color: recording
-                                            ? '#FFFFFF'
-                                            : 'var(--d-text-2, #2A2927)',
-                                        border: '1px solid',
-                                        borderColor: recording
-                                            ? 'var(--d-danger, #B91C1C)'
-                                            : 'var(--d-border, #E6E3DC)',
-                                        borderRadius: '10px',
-                                        width: 40,
-                                        height: 40,
-                                        transition:
-                                            'background-color var(--d-dur-sm) var(--d-ease-enter), color var(--d-dur-sm) var(--d-ease-enter), border-color var(--d-dur-sm) var(--d-ease-enter)',
-                                        '&:hover': {
-                                            backgroundColor: recording
-                                                ? 'var(--d-danger-text, #B91C1C)'
-                                                : 'var(--d-surface-hover, #EFEDE8)',
-                                            borderColor: recording
-                                                ? 'var(--d-danger, #B91C1C)'
-                                                : 'var(--d-accent, #2383E2)',
-                                        },
-                                        '&.Mui-disabled': {
-                                            backgroundColor: 'var(--d-surface-muted, #F1EFEA)',
-                                            color: 'var(--d-text-muted, #8A887E)',
-                                        },
-                                    }}
-                                >
-                                    {recording ? <StopIcon fontSize="small" /> : <MicIcon fontSize="small" />}
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-
-                        <Tooltip title="Send">
-                            <span>
-                                <IconButton
-                                    onClick={() => send(input)}
-                                    disabled={sending || recording || transcribing || !input.trim()}
-                                    sx={{
-                                        backgroundColor: 'var(--d-accent, #2383E2)',
-                                        color: '#FFFFFF',
-                                        borderRadius: '10px',
-                                        width: 40,
-                                        height: 40,
-                                        '&:hover': {
-                                            backgroundColor: 'var(--d-accent-text, #1F6FBF)',
-                                        },
-                                        '&.Mui-disabled': {
-                                            backgroundColor: 'var(--d-disabled, #C9C5BB)',
-                                            color: 'var(--d-surface, #FFFFFF)',
-                                        },
-                                    }}
-                                >
-                                    <SendIcon fontSize="small" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                    </Box>
+                    {/* Bottom-pinned input — only when there are
+                        messages. Empty-state input renders inside the
+                        centered cluster above. */}
+                    {!empty && renderInput(true)}
                 </>
             )}
             </Box>

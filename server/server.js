@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
@@ -13,6 +14,15 @@ const docsRag = require('./services/docsRagService');
 connectDB();
 
 const app = express();
+
+// Security headers (plan §13.9). `crossOriginResourcePolicy` is loosened
+// because we serve auth-blob PDFs + image snippets to the same SPA origin.
+app.use(
+    helmet({
+        crossOriginResourcePolicy: { policy: 'same-site' },
+        contentSecurityPolicy: false, // CRA inline-styles + dynamic chunks; defer CSP tuning to a later pass.
+    })
+);
 
 // CORS configuration - allow all origins in development
 app.use(cors());
@@ -31,6 +41,7 @@ app.use('/api/students', require('./routes/students'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/hourly', require('./routes/hourly'));
 app.use('/api/meetings', require('./routes/meetings'));
+app.use('/api/exports', require('./routes/exports'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/docs-chat', require('./routes/docsChat'));
 
@@ -59,6 +70,20 @@ app.use(
     orgGate('luc'),
     express.static(
         path.join(__dirname, '..', 'client', 'public', 'program-docs-highlighted'),
+        { fallthrough: false, index: false }
+    )
+);
+
+// Phase 5.3 — PNG snippet crops (highlight region + context) used by
+// the split-pane preview. Same auth/org stack. Tiny compared to the
+// full-page PDFs (~40-80 KB each at 150 DPI).
+app.use(
+    '/program-docs-snippets',
+    docsRagEnabled,
+    protect,
+    orgGate('luc'),
+    express.static(
+        path.join(__dirname, '..', 'client', 'public', 'program-docs-snippets'),
         { fallthrough: false, index: false }
     )
 );

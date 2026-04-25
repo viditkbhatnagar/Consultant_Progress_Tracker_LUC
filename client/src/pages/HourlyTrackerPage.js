@@ -30,7 +30,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import hourlyService from '../services/hourlyService';
 import consultantService from '../services/consultantService';
-import { exportToExcel, exportToCSV } from '../services/exportService';
+import xlsxBuilder from '../services/xlsxBuilder';
+import { buildHourlyDailyColumns } from '../config/exportColumns/hourlyDaily';
+import { hourlyMonthlyColumns } from '../config/exportColumns/hourlyMonthly';
 import AdminOrgTabs from '../components/AdminOrgTabs';
 import { useAdminOrgScope } from '../utils/adminOrgScope';
 import { resolveViewOrg, isSkillhubOrg } from '../utils/hourlyConfig';
@@ -605,63 +607,53 @@ const LucHourlyTrackerPage = () => {
     };
 
     // ─── EXPORT ──────────────────────────────────────
+    // Row shape stays page-local because it depends on `activities` Map +
+    // getStats/getReference/getAdmission closures. Column declarations now
+    // live in `client/src/config/exportColumns/hourlyDaily.js` +
+    // `hourlyMonthly.js`, consumed by xlsxBuilder.
     const handleExport = (type) => {
         const dateStr = formatDateStr(currentDate);
         const dayLabel = currentDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 
         if (currentView === 'daily') {
-            const data = consultants.map((c, i) => {
+            const rows = consultants.map((c) => {
                 const st = getStats(c._id);
-                const row = { '#': i + 1, 'Consultant': c.name };
-                SLOTS.filter(s => !s.isLunch).forEach(s => {
+                const row = {
+                    consultantName: c.name,
+                    calls: st.calls,
+                    followups: st.followups,
+                    noshows: st.noshows,
+                    drips: st.drips,
+                    offlineMtgs: st.offlineMtgs,
+                    zoomMtgs: st.zoomMtgs,
+                    outMtgs: st.outMtgs,
+                    teamMtgs: st.teamMtgs,
+                    tlMtgs: st.tlMtgs,
+                    meetHrs: st.meetHrs,
+                    reference: getReference(c._id) || '',
+                    admissions: getAdmission(c._id) || '',
+                };
+                SLOTS.filter((s) => !s.isLunch).forEach((s) => {
                     const d = activities.get(`${c._id}_${s.id}`);
                     if (d && !d.isContinuation) {
-                        const act = ACTIVITY_TYPES.find(a => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
-                        const cntStr = d.activityType === 'call_followup' ? ` (${d.count || 1} calls + ${d.followupCount || 0} follow-ups)` : (d.count > 1 ? ` (${d.count})` : '');
-                        row[`${s.lbl}-${s.end}`] = act ? `${act.lbl}${cntStr}${d.note ? ` [${d.note}]` : ''}` : '';
+                        const act = ACTIVITY_TYPES.find((a) => a.id === d.activityType) || COMBINED_TYPES[d.activityType];
+                        const cntStr = d.activityType === 'call_followup'
+                            ? ` (${d.count || 1} calls + ${d.followupCount || 0} follow-ups)`
+                            : (d.count > 1 ? ` (${d.count})` : '');
+                        row[`slot_${s.id}`] = act ? `${act.lbl}${cntStr}${d.note ? ` [${d.note}]` : ''}` : '';
                     } else {
-                        row[`${s.lbl}-${s.end}`] = '';
+                        row[`slot_${s.id}`] = '';
                     }
                 });
-                row['Calls'] = st.calls || '';
-                row['Follow-Ups'] = st.followups || '';
-                row['Operations'] = st.noshows || '';
-                row['Drips'] = st.drips || '';
-                row['Offline Meeting'] = st.offlineMtgs || '';
-                row['Zoom'] = st.zoomMtgs || '';
-                row['Out Meeting'] = st.outMtgs || '';
-                row['Team Meeting'] = st.teamMtgs || '';
-                row["TL's Team Meeting"] = st.tlMtgs || '';
-                row['Meeting Hours'] = st.meetHrs ? `${st.meetHrs}h` : '';
-                row['Reference'] = getReference(c._id) || '';
-                row['Admissions'] = getAdmission(c._id) || '';
                 return row;
             });
-            const filename = `Hourly_Tracker_${dateStr}`;
-            type === 'xlsx' ? exportToExcel(data, filename) : exportToCSV(data, filename);
+            xlsxBuilder.exportRawSheet(rows, buildHourlyDailyColumns(SLOTS), `Hourly_Tracker_${dateStr}`, type);
             showToast(`Exported ${type.toUpperCase()} — ${dayLabel}`);
         } else {
             const { rows } = getMonthlyStats();
-            const data = rows.map((r, i) => ({
-                '#': i + 1,
-                'Consultant': r.consultant.name,
-                'Calls': r.calls || '',
-                'Follow-Ups': r.followups || '',
-                'Operations': r.noshows || '',
-                'Drips': r.drips || '',
-                'Offline Meeting': r.offlineMtgs || '',
-                'Zoom': r.zoomMtgs || '',
-                'Out Meeting': r.outMtgs || '',
-                'Team Meeting': r.teamMtgs || '',
-                "TL's Team Meeting": r.tlMtgs || '',
-                'Meeting Hours': r.meetHrs ? `${r.meetHrs}h` : '',
-                'Reference': r.references || '',
-                'Admissions': r.admissions || '',
-                'Days Active': r.days || '',
-            }));
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             const filename = `Hourly_Tracker_${monthNames[monthReport.m]}_${monthReport.y}`;
-            type === 'xlsx' ? exportToExcel(data, filename) : exportToCSV(data, filename);
+            xlsxBuilder.exportRawSheet(rows, hourlyMonthlyColumns, filename, type);
             showToast(`Exported ${type.toUpperCase()} — ${monthNames[monthReport.m]} ${monthReport.y}`);
         }
     };

@@ -156,3 +156,69 @@ from 16 LUC program PDFs (8 programs × overview + QNA).
 - **Adding a new program**: drop two PDFs in `client/public/program-docs/<new-slug>/`, extend `PROGRAMS` in `server/models/DocChunk.js`, extend `DOC_TYPE_MAP` in `server/scripts/ingestProgramDocs.js`, run `npm run ingest:docs:force`, deploy, admin clicks "Force re-ingest".
 - **Logs**: `DocsChatLog.createdAt` for time-range queries; `tier: 3` entries surface in the admin dashboard's "Refusals (last 24h)" table as corpus-gap signals.
 - **Spec**: full details live in `DOCS_RAG_FEATURE_SPEC.md` (16 sections). Deploy steps + env vars in `DEPLOYMENT.md § Docs RAG Feature — Render Deploy Cutover`.
+
+## Export Center (`/exports`)
+
+Single page where admin / team_lead / manager / skillhub users preview and download tracker data. Replaces the four scattered legacy "Export" buttons that lived inside `LucStudentDatabasePage`, `SkillhubStudentDatabasePage`, `AdminDashboard` (commitments), and `HourlyTrackerPage`. Page-level "Export visible rows" buttons on the dataset pages stay as in-context shortcuts; the dashboard menus that anchored to the old sidebar entry are gone.
+
+### Routes
+- All endpoints under `/api/exports/*` behind `protect` + `assertDatasetAccess`. Mounted in `server.js` after `/api/meetings`.
+- `POST /raw` — cursor-paginated rows. Body: `{ dataset, filters, columns?, organization?, cursor?, limit≤5000 }`. Server caps each page at 5,000; client's `exportsApi.fetchAllRawRows` loops up to a 100k client-side hard cap. The grid in `PreviewTab` further caps at 10k *rendered* rows with a "Showing first 10,000 of N — download to see all" banner.
+- `POST /pivot` — `{ dataset, filters, rowDim, colDim?, measure?, agg }` → `{ cells, rowOrder, colOrder, rowTotals, colTotals, grandTotal }`. **Rate-limited** (5 req/min/user — see below).
+- `GET /dimensions/:dataset` — legal dimensions + distinct values resolved within the user's scope (avoids hard-coding enums client-side).
+- `GET /templates` — pre-built template catalog filtered by role.
+- `POST /template/:templateId` — runs a pre-built template; returns a JSON envelope of N raw + pivot sheets the client serializes to a multi-sheet xlsx via `xlsxBuilder.buildWorkbook`. **Rate-limited.**
+- `GET / POST / DELETE /saved-templates[/:id]` — user-owned saved Pivot Builder configs. Server-side persistence; `(user, name)` is unique.
+
+### Datasets
+Four datasets, each behind a per-dataset role allowlist enforced by `assertDatasetAccess`:
+
+| Dataset | Allowed roles | Date field for filters |
+|---|---|---|
+| `students` | admin, team_lead (LUC own team), manager, skillhub (own branch) | `closingDate` (LUC) / `createdAt` (Skillhub + All) |
+| `commitments` | admin, team_lead, skillhub | `commitmentDate` |
+| `meetings` | admin, team_lead | `meetingDate` |
+| `hourly` | admin, team_lead, skillhub | `date` |
+
+Builders live in `server/services/exports/pivots/{students,commitments,meetings,hourly}.js`. Each exports `runRawQuery`, `runPivotQuery`, `dimensionCatalog(orgScope)`, `measureCatalog(orgScope)`, `resolveOrgScope(user, bodyOrg)`, `distinctValues(...)`. Shared helpers (`withSkillhubFinancials`, `normalizeHourlyActivities`, `bucketDate`, `buildAccumulator`, `pivotResultToSheet`) live in `server/services/exports/pivots/_shared.js` + `client/src/services/xlsxBuilder.js`.
+
+### `assertDatasetAccess(user, dataset, organization)` — permission gate
+At `server/controllers/exportController.js`. Hard-wired matrix that ships with one explicit carve-out: **manager Export Center exception**. Manager keeps `User.organization='luc'` everywhere else but can pick LUC / Skillhub Training / Skillhub Institute / All on `/exports → Students`. Other datasets remain hidden for manager. team_lead is locked to LUC; skillhub is locked to own branch; admin sees everything. The `'all'` org value is admin/manager only.
+
+### `SavedExportTemplate` model
+`server/models/SavedExportTemplate.js`. Fields: `user` (ref User, indexed), `name`, `dataset`, `config` (Mixed: `{ rowDim, colDim?, measure?, agg, filters?, columns? }`), `organization`. `(user, name)` unique → 409 on duplicate. 200-template cap per user (returns 429). Soft-deletable via `DELETE /saved-templates/:id` (owner-only).
+
+### Rate limits + Helmet (plan §13.9)
+- `server/middleware/exportRateLimit.js` exports `exportPivotLimiter` (5 req/min/user via `express-rate-limit`, keyed on `req.user._id` with IP fallback). Mounted on `POST /pivot` and `POST /template/:templateId` only — `/raw`, `/dimensions`, and saved-template routes are unrestricted.
+- `helmet()` mounted globally in `server.js`. CSP is currently OFF (CRA's inline styles + dynamic chunks would need a longer pass) — flagged for v2. `crossOriginResourcePolicy: 'same-site'` so the auth-blob PDFs and image snippets keep working.
+
+### `xlsxBuilder.pivotResultToSheet` — single source of truth for pivot flattening
+`client/src/services/xlsxBuilder.js`. Converts a server pivot envelope `{ cells, rowOrder, colOrder, rowTotals, colTotals, grandTotal, agg, measure, colDim }` into `{ name, rows, columns }` suitable for `xlsxBuilder.exportRawSheet(rows, columns, filename, kind)`. Used by:
+- `PreviewTab` to render pivot output in the grid.
+- `HeaderDownloadButtons` to hand the right rows + columns to the xlsx writer.
+- `TemplatesTab` for multi-sheet template downloads (one envelope per sheet).
+Money columns auto-flag when `agg=sum` AND `measure ∈ {admissionFeePaid, courseFee, closedAmount, registrationFee, emiPaid, outstandingPerStudent}`.
+
+### Business rules
+- **LUC zero-fee row hide.** `applyHideLucZeroFeeFilter(filter)` (single-arg, mutates filter, returns it) at `server/controllers/studentController.js:57–74` is applied to every Students-LUC raw + pivot query. Hides the 626 importer-bug rows where `admissionFeePaid=0`. The hide also applies in the `'all'` org scope (LUC docs in the union are filtered; Skillhub docs aren't). No toggle — see memory note `project_luc_zero_fee_hidden.md`.
+- **VAT disclaimer.** LUC sheets that surface `admissionFeePaid` (raw column or pivot measure) get a row-1 disclaimer: `Note: Admission Fee Paid in LUC mixes net-of-VAT and gross-of-VAT entries (UAE VAT 5%). Treat sums as approximate.` Sheets without admissionFeePaid → no disclaimer. Skillhub sheets → no disclaimer. Source: memory `project_admission_fee_convention.md` (348 LUC rows, ~50/50 net/gross split as of 2026-04-23 profile).
+- **Skillhub `outstandingAmount` virtual.** Mongoose virtuals don't pass through `.lean()` or `$group`. Every Skillhub builder runs `withSkillhubFinancials(pipeline)` (`_shared.js`) before grouping — emits `emiPaid` + `totalPaidPerStudent` + `outstandingPerStudent` + `overdueEmiCount` via `$addFields`. Don't bypass.
+- **HourlyActivity flat-vs-array shape.** `activities[]` is the multi-activity (Skillhub) shape; flat `activityType`/`count`/`duration` is the legacy LUC shape. `normalizeHourlyActivities(pipeline)` in `_shared.js` is the ONE place that handles both — emits `activityTypeNorm` / `countNorm` / `durationNorm` post-`$unwind`. Mirror of the JS-level `getActivityItems` helper at `hourlyController.js:88–103`. Don't write a parallel normalizer.
+- **Subjects pivot double-counting.** Skillhub `subjects` is an array. `agg=count` post-`$unwind` counts subject-enrollments, not students. UI shows a "counts each enrolled subject once" disclaimer on count/sum aggs; switching to `agg=distinct` runs `$addToSet: '$_id'` then `$size` for true student counts.
+- **`leadStage` enum source of truth.** `Commitment.js` had a duplicate definition removed in Phase 2; the surviving one (around line 158) uses the 12-value `LEAD_STAGES` enum exported as `Commitment.LEAD_STAGES`. `commitments.test.js` enforces `enumValues.length === 12` so a regression that re-introduces the dup fails loudly.
+
+### Tests
+- **Server (Jest + supertest + mongodb-memory-server)**: `server/tests/exports/*.test.js` — 48 specs across 6 suites. The 66-row anonymized fixture at `server/tests/exports/fixtures/students_2026-04-22.json` codifies the four reference-workbook pivots (Source × Month sum admFee, Source counts, University × Program counts, Campaign × Source counts). Run `npm test` from `server/`.
+- **Client (Jest + RTL + jsdom)**: `client/src/components/exports/__tests__/*.test.js` + `client/src/services/__tests__/xlsxBuilder.test.js` — 16 specs across 5 suites covering DataGrid wrapper, HeaderDownloadButtons mode-aware download, PreviewTab raw/pivot mode flip, ExportCenterPage state sync, and `pivotResultToSheet` pure function. Run `npm test` from `client/`.
+
+### Adding a new dataset
+1. Build `server/services/exports/pivots/<name>.js` exporting the standard surface (`runRawQuery`, `runPivotQuery`, `dimensionCatalog`, `measureCatalog`, `resolveOrgScope`, `distinctValues`).
+2. Register in `exportController.getBuilder()`.
+3. Add to `assertDatasetAccess`'s role matrix.
+4. Add to `client/src/components/exports/DatasetSelector.js`'s `ALL_DATASETS` + `ROLE_DATASETS`.
+5. Add a column config at `client/src/config/exportColumns/<name>.js` (or refactor an existing one).
+6. Update `PreviewTab.rawColumnsForDataset` to return the new config.
+7. Add a Jest spec at `server/tests/exports/<name>.test.js`. Target 6+ specs covering scope enforcement + pivot correctness.
+
+### Pinned dependency note
+`react-data-grid` is pinned at `7.0.0-beta.59` (no caret). Beta releases iterate fast — auto-upgrades have surprised CRA setups before. Bump deliberately when you've tested.

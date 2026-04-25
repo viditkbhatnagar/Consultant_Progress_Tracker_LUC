@@ -12,8 +12,6 @@ import {
     IconButton,
     Button,
     Alert,
-    Menu,
-    MenuItem,
 } from '@mui/material';
 import {
     CheckCircle as CheckCircleIcon,
@@ -33,7 +31,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import { getUsers } from '../services/authService';
-import exportService from '../services/exportService';
 import consultantService from '../services/consultantService';
 import { API_BASE_URL } from '../utils/constants';
 import { setAdminOrgScope, getAdminOrgScope } from '../utils/adminOrgScope';
@@ -159,7 +156,6 @@ const AdminDashboard = () => {
             setAdminOrgScope('skillhub_training');
         }
     }, [orgSection]);
-    const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
     const [addCommitmentOpen, setAddCommitmentOpen] = useState(false);
     const [filteredCommitments, setFilteredCommitments] = useState([]);
     const [filters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
@@ -310,28 +306,8 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleExportExcel = () => {
-        const periodLabel = dateRange.viewType.replace('-', '_');
-        exportService.exportCommitmentsToExcel(displayCommitments, `organization_commitments_${periodLabel}`);
-        setExportMenuAnchor(null);
-    };
-
-    const handleExportCSV = () => {
-        const csvData = displayCommitments.map(c => ({
-            Team: c.teamName,
-            Consultant: c.consultantName || 'N/A',
-            Student: c.studentName || 'N/A',
-            Commitment: c.commitmentMade,
-            'Lead Stage': c.leadStage,
-            'Achievement %': c.achievementPercentage || 0,
-            Meetings: c.meetingsDone || 0,
-            Status: c.status,
-            Week: `W${c.weekNumber}`,
-        }));
-        const periodLabel = dateRange.viewType.replace('-', '_');
-        exportService.exportToCSV(csvData, `organization_commitments_${periodLabel}`);
-        setExportMenuAnchor(null);
-    };
+    // Commitment exports now flow through Export Center (/exports) — sidebar
+    // and in-context dashboard menus removed in Phase 4 (plan §4 cleanup).
 
     const handleLogout = () => {
         logout();
@@ -502,7 +478,6 @@ const AdminDashboard = () => {
 
     const sidebar = (
         <AdminSidebar
-            onExport={setExportMenuAnchor}
             onLogout={handleLogout}
             onAIAnalysis={() => setTabValue(4)}
             onAPICosts={() => setTabValue(5)}
@@ -570,15 +545,6 @@ const AdminDashboard = () => {
 
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
-            <Menu
-                anchorEl={exportMenuAnchor}
-                open={Boolean(exportMenuAnchor)}
-                onClose={() => setExportMenuAnchor(null)}
-            >
-                <MenuItem onClick={handleExportExcel}>Export to Excel</MenuItem>
-                <MenuItem onClick={handleExportCSV}>Export to CSV</MenuItem>
-            </Menu>
-
             <DashboardHero
                 eyebrow="Administrator"
                 title="Organization Dashboard"
