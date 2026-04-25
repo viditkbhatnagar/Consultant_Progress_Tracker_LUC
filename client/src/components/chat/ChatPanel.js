@@ -793,14 +793,21 @@ const ChatPanel = ({ open, onClose }) => {
                 </Box>
             )}
 
+            {/* Phase 5.7 — chat-column wrapper. ALWAYS flex:1 + minHeight:0
+                so the body Box's `flex:1` + `justifyContent:center` has a
+                real height to centre against. Previously wrapper was
+                `flex:'unset', height:undefined` when no preview was open,
+                which gave the body Box no height — the empty-state
+                cluster collapsed to its content size and stuck to the
+                top of the drawer with the rest of the Paper showing as
+                empty space below. */}
             <Box
                 sx={{
                     display: 'flex',
                     flexDirection: 'column',
-                    flex: splitActive ? 1 : 'unset',
+                    flex: 1,
                     minWidth: 0,
-                    width: splitActive ? 'auto' : '100%',
-                    height: splitActive ? '100%' : undefined,
+                    minHeight: 0,
                 }}
             >
             {/* Header */}
@@ -972,76 +979,81 @@ const ChatPanel = ({ open, onClose }) => {
                             display: 'flex',
                             flexDirection: 'column',
                             minWidth: 0,
-                            // Phase 5.5 — when there are no messages we
-                            // vertically centre the empty-state cluster
-                            // (header + chips + input) so the drawer
-                            // doesn't show a 400 px dead zone above a
-                            // bottom-pinned input. The pinned input is
-                            // hidden in that state — see render below.
-                            justifyContent: empty ? 'center' : 'flex-start',
+                            // Allow the flex child to shrink below its
+                            // intrinsic content height so the centre
+                            // alignment below works inside an overflow
+                            // container.
+                            minHeight: 0,
+                            // Phase 5.5/5.7 — when there are messages,
+                            // we stack from the top (default flex-start)
+                            // and the bottom-pinned input takes over.
+                            // When empty the cluster sits inside an
+                            // m:'auto 0' wrapper below — safer than
+                            // justify-center which clips the top of an
+                            // overflowing container on narrow viewports.
                         }}
                     >
                         {empty && (
-                            <Box sx={{ px: 2.5, pt: 2, pb: 1 }}>
-                                <Typography
-                                    sx={{
-                                        fontSize: 15,
-                                        fontWeight: 700,
-                                        color: 'var(--d-text)',
-                                        letterSpacing: '-0.01em',
-                                        mb: 0.5,
-                                    }}
-                                >
-                                    Ask me anything.
-                                </Typography>
-                                <Typography
-                                    sx={{
-                                        fontSize: 13,
-                                        color: 'var(--d-text-3)',
-                                        lineHeight: 1.5,
-                                    }}
-                                >
-                                    {isLuc ? (
-                                        <>
-                                            Tracker data (revenue, teams, admissions, attendance)
-                                            OR program info (DBA, MBA, BBA, Knights, SSM, Malaysia
-                                            MBA, IOSCM, OTHM). Natural language, live answers with
-                                            sources when quoting program docs.
-                                        </>
-                                    ) : skillhubBranch ? (
-                                        <>
-                                            Tracker data for {skillhubBranch} branch — admissions,
-                                            students, fees, attendance. Live data, natural
-                                            language.
-                                        </>
-                                    ) : (
-                                        <>
-                                            Tracker data (revenue, teams, admissions, attendance)
-                                            in natural language. Live answers in seconds.
-                                        </>
-                                    )}
-                                </Typography>
+                            <Box sx={{ m: 'auto 0', width: '100%' }}>
+                                <Box sx={{ px: 2.5, pt: 2, pb: 1 }}>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color: 'var(--d-text)',
+                                            letterSpacing: '-0.01em',
+                                            mb: 0.5,
+                                        }}
+                                    >
+                                        Ask me anything.
+                                    </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 13,
+                                            color: 'var(--d-text-3)',
+                                            lineHeight: 1.5,
+                                        }}
+                                    >
+                                        {isLuc ? (
+                                            <>
+                                                Tracker data (revenue, teams, admissions, attendance)
+                                                OR program info (DBA, MBA, BBA, Knights, SSM, Malaysia
+                                                MBA, IOSCM, OTHM). Natural language, live answers with
+                                                sources when quoting program docs.
+                                            </>
+                                        ) : skillhubBranch ? (
+                                            <>
+                                                Tracker data for {skillhubBranch} branch — admissions,
+                                                students, fees, attendance. Live data, natural
+                                                language.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Tracker data (revenue, teams, admissions, attendance)
+                                                in natural language. Live answers in seconds.
+                                            </>
+                                        )}
+                                    </Typography>
+                                </Box>
+
+                                {/* SuggestedChips — branch-flavoured for
+                                    Skillhub, full tracker + docs mix for
+                                    LUC. Server-side 403s Skillhub on
+                                    docs-RAG so routing stays safe. */}
+                                <SuggestedChips
+                                    onPick={send}
+                                    organization={user?.organization || 'luc'}
+                                />
+
+                                {/* Empty-state input sits inside the
+                                    centred cluster with a small gap from
+                                    the chips. When the user sends their
+                                    first message the cluster collapses
+                                    and the bottom-pinned input (rendered
+                                    below this scroll Box) takes over. */}
+                                <Box sx={{ mt: 1, px: 1 }}>{renderInput(false)}</Box>
                             </Box>
                         )}
-
-                        {empty && (
-                            <SuggestedChips
-                                onPick={send}
-                                // SuggestedChips picks tracker-only,
-                                // branch-flavoured prompts for Skillhub
-                                // (training / institute) and the full
-                                // tracker + docs mix for LUC. Server-
-                                // side already 403s Skillhub on docs-RAG.
-                                organization={user?.organization || 'luc'}
-                            />
-                        )}
-
-                        {/* Phase 5.5 — empty-state input lives directly
-                            below the suggestion chips with a small gap.
-                            When the user sends their first message the
-                            cluster collapses and the bottom-pinned input
-                            (rendered below this scroll Box) takes over. */}
-                        {empty && <Box sx={{ mt: 1, px: 1 }}>{renderInput(false)}</Box>}
 
                         {messages.map((m) => (
                             <ChatMessage
