@@ -22,6 +22,14 @@
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <!--
+      react-data-grid v7-beta ships its layout via CSS cascade layers
+      (@layer rdg { ... }). CRA 5's cssnano minification strips those rules
+      from the production bundle, so the rdg's `display: grid` never lands
+      and headers fall to natural DOM order (below the rows). Loading the
+      stylesheet as a static public/ asset bypasses the PostCSS pipeline.
+    -->
+    <link rel="stylesheet" href="%PUBLIC_URL%/rdg-styles.css" />
+    <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.
       Only files inside the `public` folder can be referenced from the HTML.

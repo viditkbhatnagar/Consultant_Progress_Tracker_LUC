@@ -1,6 +1,8 @@
 import React from 'react';
 import { DataGrid as RDG } from 'react-data-grid';
-import 'react-data-grid/lib/styles.css';
+// rdg's stylesheet is loaded via <link> in client/public/index.html, not
+// imported here — CRA 5's cssnano strips its `@layer rdg { ... }` rules
+// when bundled through the PostCSS pipeline. See public/index.html.
 import { format as fmtDate } from 'date-fns';
 import { Box } from '@mui/material';
 
@@ -106,36 +108,16 @@ const DataGrid = ({
                 // the whole page wider than the viewport.
                 minWidth: 0,
                 overflow: 'hidden',
+                // Force a light color-scheme so rdg's CSS `light-dark()`
+                // tokens (--rdg-color, --rdg-header-background-color, ...)
+                // always resolve to their light values. Without this, a
+                // user whose OS is in dark mode gets light-grey header
+                // text on a light background.
+                colorScheme: 'light',
                 // Money cells right-align; the rdg cellClass hooks both the
                 // header and body cells.
                 '& .tpt-rdg-money': { textAlign: 'right', justifyContent: 'flex-end' },
                 '& .tpt-rdg-date':  { fontVariantNumeric: 'tabular-nums' },
-                // rdg ships its colors via the CSS `light-dark()` function,
-                // which keys off the OS color scheme — so a user with OS dark
-                // mode + our app in light mode gets light-grey header text on
-                // a light header background (header text invisible). Pin
-                // rdg's vars to literal values + force a light color-scheme
-                // so the header always renders dark-on-light.
-                '& .rdg': {
-                    blockSize: '100%',
-                    inlineSize: '100%',
-                    colorScheme: 'light',
-                    '--rdg-color': '#0f172a',
-                    '--rdg-background-color': '#ffffff',
-                    '--rdg-header-background-color': '#f8fafc',
-                    '--rdg-header-draggable-background-color': '#e2e8f0',
-                    '--rdg-row-hover-background-color': '#f1f5f9',
-                    '--rdg-border-color': '#e2e8f0',
-                    '--rdg-summary-border-color': '#cbd5e1',
-                },
-                '& .rdg-header-row': {
-                    color: '#0f172a',
-                    fontWeight: 600,
-                    backgroundColor: '#f8fafc',
-                },
-                '& .rdg-header-row .rdg-cell': {
-                    color: '#0f172a',
-                },
             }}
         >
             <RDG
