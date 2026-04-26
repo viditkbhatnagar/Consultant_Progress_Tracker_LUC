@@ -81,9 +81,9 @@ const LucStudentDatabasePage = () => {
     const [filters, setFilters] = useState({
         startDate: null,
         endDate: null,
-        consultant: '',
+        consultant: [],
         university: '',
-        team: '',
+        team: [],
         month: [],
         program: '',
         source: '',
@@ -146,9 +146,11 @@ const LucStudentDatabasePage = () => {
                 endDate: filters.endDate
                     ? format(filters.endDate, 'yyyy-MM-dd')
                     : undefined,
-                consultant: filters.consultant || undefined,
+                consultant: filters.consultant.length > 0
+                    ? filters.consultant.join(',')
+                    : undefined,
                 university: filters.university || undefined,
-                team: filters.team || undefined,
+                team: filters.team.length > 0 ? filters.team.join(',') : undefined,
                 month: filters.month.length > 0 ? filters.month : undefined,
                 program: filters.program || undefined,
                 source: filters.source || undefined,
@@ -171,9 +173,11 @@ const LucStudentDatabasePage = () => {
                 endDate: filters.endDate
                     ? format(filters.endDate, 'yyyy-MM-dd')
                     : undefined,
-                consultant: filters.consultant || undefined,
+                consultant: filters.consultant.length > 0
+                    ? filters.consultant.join(',')
+                    : undefined,
                 university: filters.university || undefined,
-                team: filters.team || undefined,
+                team: filters.team.length > 0 ? filters.team.join(',') : undefined,
                 month: filters.month.length > 0 ? filters.month : undefined,
                 program: filters.program || undefined,
                 source: filters.source || undefined,
@@ -239,9 +243,9 @@ const LucStudentDatabasePage = () => {
     const hasAnyFilter = !!(
         filters.startDate ||
         filters.endDate ||
-        filters.consultant ||
+        (filters.consultant && filters.consultant.length > 0) ||
         filters.university ||
-        filters.team ||
+        (filters.team && filters.team.length > 0) ||
         (filters.month && filters.month.length > 0) ||
         filters.program ||
         filters.source ||
@@ -369,35 +373,68 @@ const LucStudentDatabasePage = () => {
     // ── FILTER CHIPS ──
     const universityOptions = LUC_UNIVERSITIES.map((u) => ({ value: u, label: u }));
     const sourceOptions = LUC_SOURCES.map((s) => ({ value: s, label: s }));
-    const consultantOptions = consultants.map((c) => ({
-        value: c.name,
-        label: c.name,
-    }));
     const teamOptions = teamLeads.map((tl) => ({
         value: tl.teamName,
         label: tl.teamName,
+    }));
+    // Narrow consultants by selected teams. Match on the consultant's
+    // teamName (which is what the chip value is). When no teams are
+    // picked, show every consultant in scope. team_lead users hit this
+    // page with the team chip hidden — their consultants list is already
+    // server-scoped to their own team.
+    const teamFilterSet = new Set(filters.team);
+    const scopedConsultants =
+        teamFilterSet.size > 0
+            ? consultants.filter((c) => teamFilterSet.has(c.teamName))
+            : consultants;
+    const consultantOptions = scopedConsultants.map((c) => ({
+        value: c.name,
+        label: c.name,
     }));
     const programOptions = getFilterPrograms(filters.university).map((p) => ({
         value: p,
         label: p,
     }));
 
+    // When the team selection changes, drop consultant picks that are no
+    // longer reachable (their team is no longer selected). Keeps the
+    // consultant chip from showing stale "X selected" against an empty
+    // option list.
+    const handleTeamChange = (nextTeams) => {
+        setFilters((p) => {
+            const teamSet = new Set(nextTeams);
+            const validNames = new Set(
+                teamSet.size > 0
+                    ? consultants
+                          .filter((c) => teamSet.has(c.teamName))
+                          .map((c) => c.name)
+                    : consultants.map((c) => c.name)
+            );
+            const nextConsultant = (p.consultant || []).filter((name) =>
+                validNames.has(name)
+            );
+            return { ...p, team: nextTeams, consultant: nextConsultant };
+        });
+    };
+
     const chipRow = (
         <>
-            <FilterChip
-                label="Consultant"
-                value={filters.consultant}
-                options={consultantOptions}
-                onChange={(v) => setFilters((p) => ({ ...p, consultant: v }))}
-            />
             {isAdmin && (
                 <FilterChip
                     label="Team"
                     value={filters.team}
                     options={teamOptions}
-                    onChange={(v) => setFilters((p) => ({ ...p, team: v }))}
+                    onChange={handleTeamChange}
+                    multiple
                 />
             )}
+            <FilterChip
+                label="Consultant"
+                value={filters.consultant}
+                options={consultantOptions}
+                onChange={(v) => setFilters((p) => ({ ...p, consultant: v }))}
+                multiple
+            />
             <FilterChip
                 label="University"
                 value={filters.university}
@@ -464,9 +501,9 @@ const LucStudentDatabasePage = () => {
         setFilters({
             startDate: null,
             endDate: null,
-            consultant: '',
+            consultant: [],
             university: '',
-            team: '',
+            team: [],
             month: [],
             program: '',
             source: '',

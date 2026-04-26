@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
     Box,
     Button,
+    Checkbox,
     ToggleButton,
     ToggleButtonGroup,
     Menu,
@@ -25,16 +26,60 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 // Single filter chip — opens a Menu of values. Matches the meetings /
-// commitments toolbar chip visually.
-const FilterChip = ({ label, value, options, onChange, renderOption, width = 200 }) => {
+// commitments toolbar chip visually. Pass `multiple` to switch to a
+// multi-select checkbox menu (value becomes an array, onChange fires the
+// updated array).
+const FilterChip = ({
+    label,
+    value,
+    options,
+    onChange,
+    renderOption,
+    width = 200,
+    multiple = false,
+    disabled = false,
+}) => {
     const [anchor, setAnchor] = useState(null);
-    const active = Boolean(value);
+    const selectedValues = multiple ? (Array.isArray(value) ? value : []) : null;
+    const active = multiple ? selectedValues.length > 0 : Boolean(value);
+    const optValue = (o) => (o && typeof o === 'object' ? o.value : o);
+    const optLabel = (o) => (o && typeof o === 'object' ? o.label || o.value : o);
+
+    const summary = (() => {
+        if (!active) return null;
+        if (multiple) {
+            if (selectedValues.length === 1) {
+                const match = options.find((o) => optValue(o) === selectedValues[0]);
+                return match ? optLabel(match) : selectedValues[0];
+            }
+            return `${selectedValues.length} selected`;
+        }
+        const match = options.find((o) => optValue(o) === value);
+        return renderOption ? renderOption(match || value) : match ? optLabel(match) : value;
+    })();
+
+    const clear = () => onChange(multiple ? [] : '');
+    const isSelected = (val) =>
+        multiple ? selectedValues.includes(val) : val === value;
+    const toggle = (val) => {
+        if (multiple) {
+            const next = selectedValues.includes(val)
+                ? selectedValues.filter((v) => v !== val)
+                : [...selectedValues, val];
+            onChange(next);
+        } else {
+            onChange(val);
+            setAnchor(null);
+        }
+    };
+
     return (
         <>
             <Box
                 component="button"
                 type="button"
-                onClick={(e) => setAnchor(e.currentTarget)}
+                disabled={disabled}
+                onClick={(e) => !disabled && setAnchor(e.currentTarget)}
                 sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -48,7 +93,8 @@ const FilterChip = ({ label, value, options, onChange, renderOption, width = 200
                     color: active ? 'var(--t-accent-text)' : 'var(--t-text-3)',
                     fontSize: 12,
                     fontWeight: active ? 600 : 500,
-                    cursor: 'pointer',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.55 : 1,
                     transition: 'border-color 120ms ease, background-color 120ms ease',
                     '&:hover': {
                         borderStyle: 'solid',
@@ -60,9 +106,7 @@ const FilterChip = ({ label, value, options, onChange, renderOption, width = 200
                 <Box component="span">{label}</Box>
                 {active && (
                     <Box component="span" sx={{ fontWeight: 600 }}>
-                        {renderOption
-                            ? renderOption(options.find((o) => (o.value || o) === value) || value)
-                            : options.find((o) => (o.value || o) === value)?.label || value}
+                        {summary}
                     </Box>
                 )}
                 {active ? (
@@ -70,7 +114,7 @@ const FilterChip = ({ label, value, options, onChange, renderOption, width = 200
                         component="span"
                         onClick={(e) => {
                             e.stopPropagation();
-                            onChange('');
+                            clear();
                         }}
                         sx={{ display: 'inline-flex', alignItems: 'center', ml: 0.25 }}
                     >
@@ -98,27 +142,44 @@ const FilterChip = ({ label, value, options, onChange, renderOption, width = 200
             >
                 <MenuItem
                     onClick={() => {
-                        onChange('');
-                        setAnchor(null);
+                        clear();
+                        if (!multiple) setAnchor(null);
                     }}
                     sx={{ fontSize: 12.5, color: 'var(--t-text-3)' }}
                 >
-                    All {label.toLowerCase()}
+                    {multiple ? `Clear ${label.toLowerCase()}` : `All ${label.toLowerCase()}`}
                 </MenuItem>
                 <Divider sx={{ my: 0.5, borderColor: 'var(--t-border)' }} />
-                {options.map((opt) => (
+                {options.length === 0 ? (
                     <MenuItem
-                        key={opt.value || opt}
-                        onClick={() => {
-                            onChange(opt.value || opt);
-                            setAnchor(null);
-                        }}
-                        selected={(opt.value || opt) === value}
-                        sx={{ fontSize: 12.5, color: 'var(--t-text)' }}
+                        disabled
+                        sx={{ fontSize: 12, color: 'var(--t-text-muted)' }}
                     >
-                        {renderOption ? renderOption(opt) : opt.label || opt}
+                        No options
                     </MenuItem>
-                ))}
+                ) : (
+                    options.map((opt) => {
+                        const v = optValue(opt);
+                        const selected = isSelected(v);
+                        return (
+                            <MenuItem
+                                key={v ?? optLabel(opt)}
+                                onClick={() => toggle(v)}
+                                selected={!multiple && selected}
+                                sx={{ fontSize: 12.5, color: 'var(--t-text)' }}
+                            >
+                                {multiple && (
+                                    <Checkbox
+                                        size="small"
+                                        checked={selected}
+                                        sx={{ mr: 1, p: 0.25 }}
+                                    />
+                                )}
+                                {renderOption ? renderOption(opt) : optLabel(opt)}
+                            </MenuItem>
+                        );
+                    })
+                )}
             </Menu>
         </>
     );

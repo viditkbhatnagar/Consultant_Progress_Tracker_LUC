@@ -137,12 +137,21 @@ const ExportCenterPage = () => {
     const [pivotAnchor, setPivotAnchor] = React.useState(null);
     const [columnsAnchor, setColumnsAnchor] = React.useState(null);
 
+    // When a saved template is being loaded (Run from TemplatesTab), the
+    // dataset/org-reset effect below would otherwise wipe the pivotConfig we
+    // just set. The handler flips this ref to skip the reset exactly once.
+    const skipPivotResetOnce = React.useRef(false);
+
     // Reset column config + selection on dataset/org change.
     React.useEffect(() => {
         const cols = rawColumnsForDataset(dataset, organization);
         setAllColumns(cols);
         setSelectedKeys(cols.filter((c) => c.defaultExport).map((c) => c.key));
-        setPivotConfig({});
+        if (skipPivotResetOnce.current) {
+            skipPivotResetOnce.current = false;
+        } else {
+            setPivotConfig({});
+        }
     }, [dataset, organization]);
 
     // Fetch dimensions + measures whenever the dataset/org pair changes.
@@ -308,6 +317,25 @@ const ExportCenterPage = () => {
                             dataset={dataset}
                             organization={organization}
                             dateRange={dateRange}
+                            onLoadSavedTemplate={(t) => {
+                                // Run action on a saved template — load its
+                                // dataset/org/config into the Export Center
+                                // state and switch to the Preview tab. The
+                                // Pivot Builder picks up `pivotConfig` and
+                                // PreviewTab's effect refetches automatically.
+                                // Set the skip-flag so the dataset/org reset
+                                // effect doesn't wipe the pivotConfig we just
+                                // loaded.
+                                const datasetChanged = t.dataset && t.dataset !== dataset;
+                                const orgChanged = t.organization && t.organization !== organization;
+                                if (datasetChanged || orgChanged) {
+                                    skipPivotResetOnce.current = true;
+                                }
+                                if (datasetChanged) setDataset(t.dataset);
+                                if (orgChanged)     setOrganization(t.organization);
+                                setPivotConfig(t.config || {});
+                                setTab('preview');
+                            }}
                         />
                     </Box>
                 )}

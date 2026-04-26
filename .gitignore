@@ -47,6 +47,8 @@ Thumbs.db
 
 # Database backups
 db_backup_*/
+# Backfill / autoclose JSON snapshots produced by maintenance scripts.
+server/scripts/backups/
 
 # Build artifacts
 *.tgz

@@ -74,6 +74,17 @@ const MeetingSchema = new mongoose.Schema(
             default: '',
         },
 
+        // ── Cross-tracker link (LUC) ────────────────────────────────────
+        // FK to the Commitment row this meeting is associated with. Required
+        // at controller level when status='Admission' (LUC) so an admission
+        // meeting always pairs to a closed commitment. Optional otherwise.
+        commitmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Commitment',
+            default: null,
+            index: true,
+        },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

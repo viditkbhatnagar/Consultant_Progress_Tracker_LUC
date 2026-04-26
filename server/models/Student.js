@@ -241,6 +241,23 @@ const StudentSchema = new mongoose.Schema(
         industryType: { type: String, required: lucOnly, trim: true, default: '' },
         deptType: { type: String, required: lucOnly, trim: true, default: '' },
 
+        // ── Cross-tracker link (LUC) ────────────────────────────────────
+        // FK to the Commitment row that produced this admission. Required at
+        // the controller level for new LUC records (admin can override with
+        // manualEntry). Nullable on the schema so legacy rows pass without
+        // backfill — backfill script populates it.
+        commitmentId: {
+            type: mongoose.Schema.ObjectId,
+            ref: 'Commitment',
+            default: null,
+            index: true,
+        },
+        // Set when admin opts out of the commitment-link requirement (legacy
+        // imports, edge cases). Surfaces in the reconciliation page so
+        // someone can pair them up later.
+        manualEntry: { type: Boolean, default: false },
+        manualEntryReason: { type: String, default: '', trim: true },
+
         // ── Audit ───────────────────────────────────────────────────────
         createdBy: {
             type: mongoose.Schema.ObjectId,

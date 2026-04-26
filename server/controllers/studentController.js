@@ -2,7 +2,8 @@ const Student = require('../models/Student');
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
-const { isSkillhub } = require('../config/organizations');
+const { isSkillhub, isLuc } = require('../config/organizations');
+const Commitment = require('../models/Commitment');
 
 // Server-side data-quality guard — matches the client-side validation so
 // a direct API hit can't bypass it. Returns an error string if the
@@ -139,9 +140,11 @@ exports.getStudents = async (req, res, next) => {
             };
         }
 
-        // Consultant filter
+        // Consultant filter (single value or comma-separated multi)
         if (consultant) {
-            filter.consultantName = consultant;
+            const consultants = String(consultant).split(',').map((s) => s.trim()).filter(Boolean);
+            if (consultants.length === 1) filter.consultantName = consultants[0];
+            else if (consultants.length > 1) filter.consultantName = { $in: consultants };
         }
 
         // University filter
@@ -149,9 +152,11 @@ exports.getStudents = async (req, res, next) => {
             filter.university = university;
         }
 
-        // Team filter (for admin only)
+        // Team filter (admin only — non-admin scope is enforced by buildScopeFilter)
         if (team && req.user.role === 'admin') {
-            filter.teamName = team;
+            const teams = String(team).split(',').map((s) => s.trim()).filter(Boolean);
+            if (teams.length === 1) filter.teamName = teams[0];
+            else if (teams.length > 1) filter.teamName = { $in: teams };
         }
 
         // Month filter (supports multiple months, comma-separated)
@@ -328,6 +333,48 @@ exports.createStudent = async (req, res, next) => {
             });
         }
 
+        // ── LUC commitment-link enforcement ────────────────────────────
+        // Plan §A: every LUC Student must reference the Commitment that
+        // produced the admission, so the FK spine eliminates name-matching
+        // drift. Admin can opt out with a manualEntry+reason for legacy /
+        // edge cases — those rows surface on the reconciliation page.
+        // Skillhub bypasses this entirely (admissions there don't go
+        // through the Commitment lifecycle).
+        let linkedCommitment = null;
+        const { commitmentId, manualEntry, manualEntryReason } = req.body;
+        if (isLuc(organization)) {
+            if (commitmentId) {
+                linkedCommitment = await Commitment.findById(commitmentId);
+                if (!linkedCommitment) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Linked commitment not found',
+                    });
+                }
+                if (linkedCommitment.studentId) {
+                    return res.status(409).json({
+                        success: false,
+                        message: 'This commitment is already linked to a student',
+                    });
+                }
+            } else if (req.user.role === 'admin' && manualEntry === true) {
+                if (!manualEntryReason || !String(manualEntryReason).trim()) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Manual entry requires a reason',
+                    });
+                }
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        req.user.role === 'admin'
+                            ? 'Pick a linked commitment or set manualEntry=true with a reason'
+                            : 'Pick a linked commitment for this admission',
+                });
+            }
+        }
+
         // Get next SNO scoped by org for Skillhub, by team for LUC
         const sno = await Student.getNextSno(teamLead, organization);
 
@@ -363,8 +410,27 @@ exports.createStudent = async (req, res, next) => {
             experience,
             industryType,
             deptType,
+            // LUC link fields — null/false on Skillhub
+            commitmentId: linkedCommitment ? linkedCommitment._id : null,
+            manualEntry: manualEntry === true,
+            manualEntryReason: manualEntry === true ? String(manualEntryReason || '').trim() : '',
             createdBy: req.user.id,
         });
+
+        // Lock the link from the Commitment side. If the Commitment wasn't
+        // already closed, also flip admissionClosed=true here so the two
+        // sources stay consistent immediately (matches the auto-close
+        // semantics already wired into updateCommitment).
+        if (linkedCommitment) {
+            const update = { studentId: student._id };
+            if (!linkedCommitment.admissionClosed) {
+                update.admissionClosed = true;
+                update.admissionClosedDate = new Date();
+                update.status = 'achieved';
+                update.achievementPercentage = 100;
+            }
+            await Commitment.findByIdAndUpdate(linkedCommitment._id, update);
+        }
 
         res.status(201).json({
             success: true,
@@ -684,9 +750,17 @@ exports.getStudentStats = async (req, res, next) => {
             filter[field] = { $gte: new Date(startDate), $lte: end };
         }
 
-        if (consultant) filter.consultantName = consultant;
+        if (consultant) {
+            const consultants = String(consultant).split(',').map((s) => s.trim()).filter(Boolean);
+            if (consultants.length === 1) filter.consultantName = consultants[0];
+            else if (consultants.length > 1) filter.consultantName = { $in: consultants };
+        }
         if (university) filter.university = university;
-        if (team && req.user.role === 'admin') filter.teamName = team;
+        if (team && req.user.role === 'admin') {
+            const teams = String(team).split(',').map((s) => s.trim()).filter(Boolean);
+            if (teams.length === 1) filter.teamName = teams[0];
+            else if (teams.length > 1) filter.teamName = { $in: teams };
+        }
         if (month) {
             const months = month.split(',');
             filter.month = { $in: months };
@@ -754,7 +828,21 @@ exports.getStudentStats = async (req, res, next) => {
                     totalRevenue: { $sum: { $ifNull: ['$courseFee', 0] } },
                     totalPaid: { $sum: '$totalPaidPerStudent' },
                     totalOutstanding: { $sum: '$outstandingPerStudent' },
-                    avgConversionTime: { $avg: '$conversionTime' },
+                    // Avg conversion ignores rows with conversionTime > 90 days.
+                    // Legacy data has 700+ day outliers (importer pairing very
+                    // old enquiries with recent closings) that skew the average.
+                    // $avg drops nulls, so $cond → null effectively excludes
+                    // outlier rows from THIS aggregation only — other KPIs above
+                    // still see the full filtered set.
+                    avgConversionTime: {
+                        $avg: {
+                            $cond: [
+                                { $lte: ['$conversionTime', 90] },
+                                '$conversionTime',
+                                null,
+                            ],
+                        },
+                    },
                     // Min/max of the most meaningful date per org so the KPI
                     // strip can show a live "coverage" sub-label like
                     // "Jan 1, 2020 – today". We surface both closingDate
