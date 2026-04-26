@@ -225,6 +225,17 @@ const CommitmentSchema = new mongoose.Schema(
             default: true,
         },
 
+        // Cross-tracker link (LUC). Reverse FK back to the Student row that
+        // was created from this admission. Set in lockstep with
+        // Student.commitmentId. Nullable on the schema so old rows pass
+        // without backfill — backfill script populates it.
+        studentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Student',
+            default: null,
+            index: true,
+        },
+
         // Audit
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,

@@ -26,6 +26,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import axios from 'axios';
 import { API_BASE_URL } from '../../utils/constants';
 import xlsxBuilder from '../../services/xlsxBuilder';
+import exportsApi from '../../services/exportsApi';
 
 const API_URL = `${API_BASE_URL}/exports`;
 
@@ -52,7 +53,7 @@ function envelopeToSheet(envelope) {
     return rawEnvelopeToSheet(envelope);
 }
 
-const TemplatesTab = ({ dataset, organization, dateRange }) => {
+const TemplatesTab = ({ dataset, organization, dateRange, onLoadSavedTemplate }) => {
     const [templates, setTemplates] = React.useState([]);
     const [savedTemplates, setSavedTemplates] = React.useState([]);
     // Saved-template list sort. Plan §(g). Server returns updatedAt:-1 by
@@ -125,6 +126,61 @@ const TemplatesTab = ({ dataset, organization, dateRange }) => {
             setToast({ severity: 'success', message: 'Saved template deleted' });
         } catch (err) {
             setToast({ severity: 'error', message: err?.response?.data?.message || err.message });
+        }
+    };
+
+    // Run a saved template — bubble its config up to ExportCenterPage so
+    // dataset, org, pivotConfig, and active tab all switch to Preview with
+    // the saved layout loaded. If the parent didn't wire the callback,
+    // fall back to a friendly toast (single-tenant of TemplatesTab).
+    const handleRunSaved = (t) => {
+        if (typeof onLoadSavedTemplate === 'function') {
+            onLoadSavedTemplate(t);
+        } else {
+            setToast({ severity: 'info', message: `Loaded "${t.name}" into Pivot Builder` });
+        }
+    };
+
+    // Download a saved template directly as xlsx — runs the saved config
+    // through POST /api/exports/pivot, flattens via the same
+    // xlsxBuilder.pivotResultToSheet pipeline used by HeaderDownloadButtons,
+    // and downloads a single-sheet workbook. Date range honors the page's
+    // current selection (mirrors buildOverrideBody for pre-built templates).
+    const handleDownloadSaved = async (t) => {
+        try {
+            setDownloading(t._id);
+            const filters = { ...(t.config?.filters || {}) };
+            if (dateRange?.startDate) filters.startDate = dateRange.startDate;
+            if (dateRange?.endDate)   filters.endDate   = dateRange.endDate;
+            const body = {
+                dataset: t.dataset,
+                filters,
+                rowDim:  t.config?.rowDim,
+                colDim:  t.config?.colDim,
+                measure: t.config?.measure,
+                agg:     t.config?.agg || 'count',
+                organization: t.organization,
+            };
+            const envelope = await exportsApi.postPivot(body);
+            const sheet = xlsxBuilder.pivotResultToSheet({
+                ...envelope,
+                kind: 'pivot',
+                name: t.name,
+                agg: body.agg,
+                measure: body.measure,
+                colDim: body.colDim,
+            });
+            xlsxBuilder.exportRawSheet(sheet.rows, sheet.columns, t.name, 'xlsx');
+            setToast({ severity: 'success', message: `Downloaded "${t.name}"` });
+        } catch (err) {
+            const status = err?.response?.status;
+            const msg =
+                status === 429
+                    ? 'Rate limit hit (5 pivot/min). Wait a moment and retry.'
+                    : err?.response?.data?.message || err.message;
+            setToast({ severity: 'error', message: msg });
+        } finally {
+            setDownloading(null);
         }
     };
 
@@ -243,7 +299,7 @@ const TemplatesTab = ({ dataset, organization, dateRange }) => {
             }).map((t) => (
                 <Card key={t._id} variant="outlined" sx={{ mb: 1 }}>
                     <CardContent sx={{ pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Box>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t.name}</Typography>
                             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                 {t.dataset} · {t.organization} · {t.config?.agg || 'count'}
@@ -252,11 +308,33 @@ const TemplatesTab = ({ dataset, organization, dateRange }) => {
                                 {t.config?.measure ? ` · measure=${t.config.measure}` : ''}
                             </Typography>
                         </Box>
-                        <Tooltip title="Delete saved template">
-                            <IconButton size="small" onClick={() => handleDeleteSaved(t._id)}>
-                                <DeleteIcon fontSize="small" />
-                            </IconButton>
-                        </Tooltip>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                            <Tooltip title="Run — load into Pivot Builder">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleRunSaved(t)}
+                                    disabled={!!downloading}
+                                >
+                                    <PlayArrowIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Download xlsx">
+                                <IconButton
+                                    size="small"
+                                    onClick={() => handleDownloadSaved(t)}
+                                    disabled={!!downloading}
+                                >
+                                    {downloading === t._id
+                                        ? <CircularProgress size={14} />
+                                        : <DownloadIcon fontSize="small" />}
+                                </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete saved template">
+                                <IconButton size="small" onClick={() => handleDeleteSaved(t._id)}>
+                                    <DeleteIcon fontSize="small" />
+                                </IconButton>
+                            </Tooltip>
+                        </Stack>
                     </CardContent>
                 </Card>
             ))}

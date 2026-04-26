@@ -2,7 +2,9 @@ const Meeting = require('../models/Meeting');
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
 const AIUsage = require('../models/AIUsage');
+const Commitment = require('../models/Commitment');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
+const { isLuc } = require('../config/organizations');
 const OpenAI = require('openai');
 
 let _openai;
@@ -215,6 +217,28 @@ exports.createMeeting = async (req, res, next) => {
         const resolved = await denormalizeNames(req.body);
         if (!resolved.ok) {
             return res.status(400).json({ success: false, message: resolved.error });
+        }
+
+        // LUC + status='Admission' must reference a closed Commitment so
+        // Meeting Tracker admissions stay in lockstep with Commitment
+        // Tracker admissions (plan invariant 2). Skillhub bypasses this.
+        if (
+            isLuc(req.body.organization) &&
+            req.body.status === 'Admission'
+        ) {
+            if (!req.body.commitmentId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Pick a linked commitment when marking a meeting as Admission',
+                });
+            }
+            const commit = await Commitment.findById(req.body.commitmentId);
+            if (!commit) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Linked commitment not found',
+                });
+            }
         }
 
         const meeting = await Meeting.create(req.body);

@@ -11,6 +11,7 @@ const {
     getCommitmentsByDateRange,
     getConsultantPerformance,
     getAIAnalysis,
+    getLinkableCommitments,
 } = require('../controllers/commitmentController');
 
 const router = express.Router();
@@ -31,6 +32,10 @@ router
 
 // Date range queries (BEFORE /:id)
 router.get('/date-range', authorize('team_lead', 'admin', 'skillhub'), getCommitmentsByDateRange);
+
+// Linkable commitments — backs the StudentFormDialog "Linked Commitment"
+// picker and the reconciliation page (BEFORE /:id).
+router.get('/linkable', authorize('admin', 'team_lead'), getLinkableCommitments);
 
 // AI analysis for the Commitment Tracker page (BEFORE /:id)
 router.get('/ai-analysis', authorize('admin', 'team_lead'), getAIAnalysis);

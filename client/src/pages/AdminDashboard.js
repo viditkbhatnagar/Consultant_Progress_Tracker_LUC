@@ -646,13 +646,13 @@ const AdminDashboard = () => {
                                         <PerformerCard
                                             key={team.teamName}
                                             name={team.teamName}
-                                            subtitle={team.teamLead.name}
+                                            subtitle={`${team.teamLead.name} · ${team.consultants.length} member${team.consultants.length === 1 ? '' : 's'}`}
                                             avatarLabel={<GroupsIcon fontSize="small" />}
                                             metricLabel="Achievement"
                                             metricValue={team.rate}
                                             stats={[
                                                 { label: 'Commitments', value: team.totalCommitments },
-                                                { label: 'Members', value: team.consultants.length },
+                                                { label: 'Meetings', value: team.totalMeetings },
                                                 { label: 'Closed', value: team.closedAdmissions },
                                             ]}
                                             onClick={() => handleTeamClick(team)}

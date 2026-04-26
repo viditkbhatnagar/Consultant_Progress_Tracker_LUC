@@ -193,6 +193,19 @@ exports.createCommitment = async (req, res, next) => {
             req.body.lastUpdatedBy = req.user.id;
         }
 
+        // Auto-close: when a commitment lands at leadStage=Admission and
+        // status=achieved we treat it as a closed admission, even if the
+        // client didn't tick admissionClosed itself. closedAmount is left
+        // for the team lead/admin to fill via edit — Revenue won't reflect
+        // the auto-closed row until that's done.
+        if (
+            req.body.leadStage === 'Admission' &&
+            req.body.status === 'achieved' &&
+            req.body.admissionClosed !== true
+        ) {
+            req.body.admissionClosed = true;
+        }
+
         // Auto-set fields when admission is being closed
         if (req.body.admissionClosed === true) {
             req.body.admissionClosedDate = new Date();
@@ -242,6 +255,25 @@ exports.updateCommitment = async (req, res, next) => {
                 success: false,
                 message: 'Not authorized to update this commitment',
             });
+        }
+
+        // Auto-close: if the post-update row would be leadStage=Admission and
+        // status=achieved, flip admissionClosed=true even if the client didn't.
+        // We merge the existing doc with the incoming patch so a partial
+        // update (e.g. only flipping status to 'achieved' on a row already at
+        // leadStage='Admission') still triggers the close. closedAmount stays
+        // empty — has to be filled via edit before Revenue picks it up.
+        const nextLeadStage =
+            req.body.leadStage !== undefined ? req.body.leadStage : commitment.leadStage;
+        const nextStatus =
+            req.body.status !== undefined ? req.body.status : commitment.status;
+        if (
+            nextLeadStage === 'Admission' &&
+            nextStatus === 'achieved' &&
+            !commitment.admissionClosed &&
+            req.body.admissionClosed !== true
+        ) {
+            req.body.admissionClosed = true;
         }
 
         // Auto-set fields when closing admission (only if not already closed)
@@ -451,6 +483,53 @@ exports.getWeekCommitments = async (req, res, next) => {
     }
 };
 
+// @desc    Get LUC commitments that can be linked to a Student record.
+//          Backs the "Linked Commitment" picker in StudentFormDialog and
+//          the "Pair with commitment" picker in the reconciliation page.
+// @route   GET /api/commitments/linkable
+// @access  Private (admin, team_lead). Skillhub callers get an empty list.
+exports.getLinkableCommitments = async (req, res, next) => {
+    try {
+        const { consultantName, search, limit } = req.query;
+
+        const filter = {
+            ...buildScopeFilter(req),
+            organization: 'luc',
+            // Eligible to link: row reached the Admission stage AND no
+            // student is yet attached. We deliberately do NOT require
+            // admissionClosed=true — admin may want to link before the
+            // close action, in which case the close fires automatically.
+            leadStage: 'Admission',
+            studentId: null,
+        };
+
+        if (consultantName) {
+            filter.consultantName = consultantName;
+        }
+        if (search) {
+            filter.studentName = { $regex: String(search).trim(), $options: 'i' };
+        }
+
+        const cap = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
+        const rows = await Commitment.find(filter)
+            .select(
+                'studentName consultantName teamName commitmentDate ' +
+                'admissionClosed admissionClosedDate leadStage status'
+            )
+            .sort('-commitmentDate')
+            .limit(cap)
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            count: rows.length,
+            data: rows,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // @desc    Get commitments by date range
 // @route   GET /api/commitments/date-range
 // @access  Private
@@ -500,7 +579,9 @@ exports.getConsultantPerformance = async (req, res, next) => {
         const { consultantName } = req.params;
         const { months = 3, startDate: startParam, endDate: endParam } = req.query;
 
-        // Use explicit date range when provided, otherwise fall back to months-based calculation
+        // Use explicit date range when provided, otherwise fall back to months-based calculation.
+        // We push endDate to end-of-day so a same-day filter still includes
+        // commitments logged later that day. Matches the date-range endpoint.
         let startDate, endDate;
         if (startParam && endParam) {
             startDate = new Date(startParam);
@@ -510,21 +591,29 @@ exports.getConsultantPerformance = async (req, res, next) => {
             startDate = new Date();
             startDate.setMonth(startDate.getMonth() - parseInt(months));
         }
+        endDate.setHours(23, 59, 59, 999);
 
+        // Filter by commitmentDate (the calendar day the commitment is for),
+        // matching the team-level /date-range endpoint. weekStartDate is
+        // always a Monday, so filtering by it makes a Mon-30/Sun-Apr-5 week
+        // disappear from an "April" range and pulls a week-of-Apr-27 into
+        // it (sweeping in commitments dated up to May 3).
         const query = {
             ...buildScopeFilter(req),
             consultantName: consultantName,
-            weekStartDate: { $gte: startDate, $lte: endDate },
+            commitmentDate: { $gte: startDate, $lte: endDate },
         };
 
         const commitments = await Commitment.find(query)
             .populate('teamLead', 'name email teamName')
-            .sort('weekStartDate');
+            .sort('commitmentDate');
 
-        // Calculate monthly aggregates
+        // Calculate monthly aggregates, keyed off commitmentDate so the
+        // monthly trend matches the date-range filter above.
         const monthlyStats = {};
         commitments.forEach(c => {
-            const monthKey = `${c.year}-${String(c.weekStartDate.getMonth() + 1).padStart(2, '0')}`;
+            const d = c.commitmentDate || c.weekStartDate;
+            const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             if (!monthlyStats[monthKey]) {
                 monthlyStats[monthKey] = {
                     month: monthKey,
