@@ -14,10 +14,14 @@ import {
     CircularProgress,
     Divider,
     Autocomplete,
+    FormControlLabel,
+    Switch,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format as formatDate } from 'date-fns';
+import commitmentService from '../services/commitmentService';
 
 // Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
 // most-frequent round-hundred values actually in the LUC database (profiled
@@ -291,11 +295,22 @@ const StudentFormDialog = ({
         industryType: '',
         deptType: '',
         teamLeadId: '',
+        // LUC commitment-link spine. Mandatory for new LUC students unless
+        // admin opts into manualEntry with a reason.
+        commitmentId: '',
+        manualEntry: false,
+        manualEntryReason: '',
     });
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [availablePrograms, setAvailablePrograms] = useState([]);
+    // Linkable commitments for the picker. Loaded once on dialog open
+    // (not on every keystroke). Empty list = no orphans pending — admin
+    // gets the manualEntry switch instead.
+    const [linkableCommits, setLinkableCommits] = useState([]);
+    const [linkLoading, setLinkLoading] = useState(false);
+    const [selectedCommit, setSelectedCommit] = useState(null);
 
     useEffect(() => {
         if (student) {
@@ -327,6 +342,9 @@ const StudentFormDialog = ({
                 industryType: student.industryType || '',
                 deptType: student.deptType || '',
                 teamLeadId: student.teamLead?._id || '',
+                commitmentId: student.commitmentId || '',
+                manualEntry: !!student.manualEntry,
+                manualEntryReason: student.manualEntryReason || '',
             });
             if (student.university) {
                 setAvailablePrograms(PROGRAMS_BY_UNIVERSITY[student.university] || []);
@@ -360,11 +378,36 @@ const StudentFormDialog = ({
                 industryType: '',
                 deptType: '',
                 teamLeadId: currentUserRole === 'team_lead' ? currentUser?._id : '',
+                commitmentId: '',
+                manualEntry: false,
+                manualEntryReason: '',
             });
             setAvailablePrograms([]);
         }
+        setSelectedCommit(null);
         setError('');
     }, [student, open, currentUserRole, currentUser]);
+
+    // Load linkable LUC commitments when the dialog opens for a new
+    // student (not edit). Limited to the caller's scope by the server.
+    useEffect(() => {
+        if (!open || student) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                setLinkLoading(true);
+                const res = await commitmentService.getLinkableCommitments({ limit: 200 });
+                if (!cancelled) setLinkableCommits(res?.data || []);
+            } catch (err) {
+                // Picker is optional UX — failures don't block the form.
+                // Admin still has the Manual Entry switch.
+                if (!cancelled) setLinkableCommits([]);
+            } finally {
+                if (!cancelled) setLinkLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [open, student]);
 
     useEffect(() => {
         if (formData.university) {
@@ -448,6 +491,21 @@ const StudentFormDialog = ({
             return 'Please select a team lead';
         }
 
+        // LUC commitment-link gate. Only enforced on NEW student creation
+        // (editing existing rows is handled by the reconciliation page).
+        if (!student) {
+            if (formData.manualEntry) {
+                if (currentUserRole !== 'admin') {
+                    return 'Only an admin can create a student without a linked commitment';
+                }
+                if (!formData.manualEntryReason || !formData.manualEntryReason.trim()) {
+                    return 'Manual entry requires a reason';
+                }
+            } else if (!formData.commitmentId) {
+                return 'Pick a linked commitment for this admission (or admin can opt into Manual Entry)';
+            }
+        }
+
         // Date sanity — today as an end-of-day boundary so picking "today"
         // is still allowed but anything dated tomorrow+ is rejected.
         const todayEnd = new Date();
@@ -493,6 +551,12 @@ const StudentFormDialog = ({
                 courseFee: Number(formData.courseFee),
                 admissionFeePaid: Number(formData.admissionFeePaid) || 0,
                 experience: Number(formData.experience),
+                // Strip empty commitmentId so the server doesn't try to
+                // ObjectId-cast an empty string. Pass manualEntry only when
+                // the admin explicitly opted in.
+                commitmentId: formData.commitmentId || undefined,
+                manualEntry: formData.manualEntry === true,
+                manualEntryReason: formData.manualEntry ? formData.manualEntryReason : '',
             });
             onClose();
         } catch (err) {
@@ -500,6 +564,25 @@ const StudentFormDialog = ({
         } finally {
             setLoading(false);
         }
+    };
+
+    // Pick a commitment from the picker → auto-populate name + consultant +
+    // team lead so the rest of the form just needs program/fees/etc.
+    const handleCommitmentPick = (commit) => {
+        setSelectedCommit(commit);
+        if (!commit) {
+            setFormData((prev) => ({ ...prev, commitmentId: '' }));
+            return;
+        }
+        setFormData((prev) => ({
+            ...prev,
+            commitmentId: commit._id,
+            // Don't overwrite if user has already typed the name; otherwise
+            // pre-fill so the legal-name vs nickname mismatch surfaces here
+            // and the admin can correct on the spot.
+            studentName: prev.studentName || (commit.studentName || '').toUpperCase(),
+            consultantName: commit.consultantName || prev.consultantName,
+        }));
     };
 
     const rowStyle = { display: 'flex', gap: 2, mb: 2.5, flexWrap: 'wrap' };
@@ -563,13 +646,107 @@ const StudentFormDialog = ({
                         </Alert>
                     )}
 
+                    {/* Linked Commitment — LUC drift-prevention spine.
+                        Only shown on new-student creation; editing keeps
+                        the existing link untouched (use the reconciliation
+                        page to retroactively pair). */}
+                    {!student && (
+                        <Box sx={{ mb: 3, mt: 1 }}>
+                            <Typography variant="overline" sx={{ display: 'block', color: 'var(--t-accent)', fontWeight: 600, mb: 1 }}>
+                                Linked Commitment
+                            </Typography>
+                            <Autocomplete
+                                size="small"
+                                fullWidth
+                                options={linkableCommits}
+                                loading={linkLoading}
+                                value={selectedCommit}
+                                onChange={(_e, v) => handleCommitmentPick(v)}
+                                disabled={formData.manualEntry}
+                                getOptionLabel={(o) =>
+                                    o ? `${o.studentName || '(no name)'} — ${o.consultantName}` : ''
+                                }
+                                isOptionEqualToValue={(a, b) => a?._id === b?._id}
+                                renderOption={(props, opt) => (
+                                    <li {...props} key={opt._id}>
+                                        <Box>
+                                            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                                                {opt.studentName || '(no name)'}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)' }}>
+                                                {opt.consultantName} · {opt.teamName} ·{' '}
+                                                {opt.commitmentDate
+                                                    ? formatDate(new Date(opt.commitmentDate), 'd MMM yyyy')
+                                                    : ''}
+                                            </Typography>
+                                        </Box>
+                                    </li>
+                                )}
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder={
+                                            formData.manualEntry
+                                                ? 'Manual entry — no commitment linked'
+                                                : 'Pick the commitment this admission belongs to…'
+                                        }
+                                        helperText={
+                                            !formData.manualEntry &&
+                                            linkableCommits.length === 0 &&
+                                            !linkLoading
+                                                ? 'No open Admission-stage commitments. Log one first or enable Manual Entry (admin only).'
+                                                : ' '
+                                        }
+                                    />
+                                )}
+                            />
+                            {currentUserRole === 'admin' && (
+                                <Box sx={{ mt: 1.5 }}>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                size="small"
+                                                checked={formData.manualEntry}
+                                                onChange={(e) => {
+                                                    const next = e.target.checked;
+                                                    setFormData((p) => ({
+                                                        ...p,
+                                                        manualEntry: next,
+                                                        commitmentId: next ? '' : p.commitmentId,
+                                                    }));
+                                                    if (next) setSelectedCommit(null);
+                                                }}
+                                            />
+                                        }
+                                        label={
+                                            <Typography sx={{ fontSize: 13 }}>
+                                                Manual entry (no commitment exists for this student)
+                                            </Typography>
+                                        }
+                                    />
+                                    {formData.manualEntry && (
+                                        <TextField
+                                            fullWidth
+                                            size="small"
+                                            sx={{ mt: 1 }}
+                                            label="Reason (required)"
+                                            value={formData.manualEntryReason}
+                                            onChange={handleChange('manualEntryReason')}
+                                            placeholder="e.g. Legacy import / pre-tracker record"
+                                        />
+                                    )}
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+
                     {/* Section 1: Basic Information */}
                     <Box sx={{ mb: 4, mt: 2 }}>
                         <Typography variant="h6" sx={{ mb: 2, color: 'var(--t-accent)', fontWeight: 600 }}>
                             Basic Information
                         </Typography>
                         <Divider sx={{ mb: 3 }} />
-                        
+
                         <Box sx={rowStyle}>
                             <TextField
                                 sx={{ flex: 2, minWidth: 250 }}

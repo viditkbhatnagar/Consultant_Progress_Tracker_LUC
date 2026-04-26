@@ -27,7 +27,9 @@ import { useAuth } from '../context/AuthContext';
 import studentService from '../services/studentService';
 import consultantService from '../services/consultantService';
 import userService from '../services/userService';
+import commitmentService from '../services/commitmentService';
 import StatusPill from './meetings/StatusPill';
+import { format as formatDate } from 'date-fns';
 
 const blankForm = {
     meetingDate: new Date(),
@@ -38,6 +40,8 @@ const blankForm = {
     teamLead: '',
     status: '',
     remarks: '',
+    // LUC drift-prevention spine — required when status='Admission'.
+    commitmentId: '',
 };
 
 const Label = ({ children }) => (
@@ -69,6 +73,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     const [programs, setPrograms] = useState([]);
     const [teamLeads, setTeamLeads] = useState([]);
     const [consultants, setConsultants] = useState([]);
+    // Linkable commitments for the picker — only fetched when the user
+    // moves status to 'Admission' (LUC). Empty otherwise to keep the
+    // dialog snappy on the common path.
+    const [linkableCommits, setLinkableCommits] = useState([]);
+    const [selectedCommit, setSelectedCommit] = useState(null);
 
     // Seed from initialData or reset to blank (+ auto-teamLead for TL role).
     useEffect(() => {
@@ -90,6 +99,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 teamLead: tlId,
                 status: initialData.status || '',
                 remarks: initialData.remarks || '',
+                commitmentId: initialData.commitmentId || '',
             });
         } else {
             setFormData({
@@ -198,6 +208,39 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
     };
 
+    // Load linkable commitments when status switches to 'Admission'.
+    // The server filters to LUC + leadStage='Admission' + studentId IS NULL.
+    useEffect(() => {
+        if (!open) return;
+        if (formData.status !== 'Admission') {
+            setLinkableCommits([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await commitmentService.getLinkableCommitments({
+                    consultantName: formData.consultantName,
+                    limit: 200,
+                });
+                if (!cancelled) setLinkableCommits(res?.data || []);
+            } catch (_) {
+                if (!cancelled) setLinkableCommits([]);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [open, formData.status, formData.consultantName]);
+
+    // When the user changes commitmentId out from under us, sync selectedCommit.
+    useEffect(() => {
+        if (!formData.commitmentId) {
+            setSelectedCommit(null);
+            return;
+        }
+        const match = linkableCommits.find((c) => c._id === formData.commitmentId);
+        if (match) setSelectedCommit(match);
+    }, [formData.commitmentId, linkableCommits]);
+
     const validate = () => {
         const e = {};
         if (!formData.meetingDate) e.meetingDate = 'Date is required';
@@ -207,6 +250,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         if (!formData.consultant) e.consultant = 'Consultant is required';
         if (!formData.teamLead) e.teamLead = 'Team lead is required';
         if (!formData.status) e.status = 'Status is required';
+        // Drift-prevention: a meeting marked Admission must reference the
+        // closed commitment that produced it.
+        if (formData.status === 'Admission' && !formData.commitmentId) {
+            e.commitmentId = 'Pick the commitment this admission belongs to';
+        }
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -233,6 +281,10 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 consultant: consultantId,
                 consultantName,
                 meetingDate: formData.meetingDate.toISOString(),
+                // Strip empty commitmentId so the server doesn't try to
+                // ObjectId-cast an empty string. Only sent when status
+                // was Admission and the picker fired.
+                commitmentId: formData.commitmentId || undefined,
             });
             onClose();
         } catch (err) {
@@ -510,6 +562,67 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 </Typography>
                             )}
                         </Box>
+
+                        {/* Linked Commitment — only shown when status is Admission.
+                            LUC drift-prevention spine: an admission meeting must
+                            reference the closed commitment that produced it. */}
+                        {formData.status === 'Admission' && (
+                            <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                                <Label>Linked Commitment</Label>
+                                <Autocomplete
+                                    size="small"
+                                    fullWidth
+                                    options={linkableCommits}
+                                    value={selectedCommit}
+                                    onChange={(_e, v) => {
+                                        setSelectedCommit(v);
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            commitmentId: v?._id || '',
+                                        }));
+                                        if (errors.commitmentId) {
+                                            setErrors((prev) => ({ ...prev, commitmentId: '' }));
+                                        }
+                                    }}
+                                    getOptionLabel={(o) =>
+                                        o ? `${o.studentName || '(no name)'} — ${o.consultantName}` : ''
+                                    }
+                                    isOptionEqualToValue={(a, b) => a?._id === b?._id}
+                                    renderOption={(props, opt) => (
+                                        <li {...props} key={opt._id}>
+                                            <Box>
+                                                <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                                                    {opt.studentName || '(no name)'}
+                                                </Typography>
+                                                <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)' }}>
+                                                    {opt.consultantName} · {opt.teamName} ·{' '}
+                                                    {opt.commitmentDate
+                                                        ? formatDate(new Date(opt.commitmentDate), 'd MMM yyyy')
+                                                        : ''}
+                                                </Typography>
+                                            </Box>
+                                        </li>
+                                    )}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            placeholder="Pick the commitment this admission belongs to…"
+                                            error={!!errors.commitmentId}
+                                        />
+                                    )}
+                                />
+                                {errors.commitmentId && (
+                                    <Typography sx={{ fontSize: 11, color: 'var(--t-danger-text)', mt: 0.5 }}>
+                                        {errors.commitmentId}
+                                    </Typography>
+                                )}
+                                {linkableCommits.length === 0 && (
+                                    <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)', mt: 0.5 }}>
+                                        No open Admission-stage commitments. Log one from the Commitment Tracker first.
+                                    </Typography>
+                                )}
+                            </Box>
+                        )}
 
                         {/* Remarks */}
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
