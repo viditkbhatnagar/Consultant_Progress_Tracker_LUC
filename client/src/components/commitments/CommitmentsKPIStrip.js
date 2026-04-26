@@ -109,10 +109,24 @@ const KpiCard = ({ label, value, sub, trend, sparkColor, sparkPoints, sx }) => (
 
 const FunnelCard = ({ rows }) => {
     const total = rows.length || 1;
+    // Bucket every row exactly once. Closed admissions always land under
+    // "Admission" — even if their leadStage was later moved to CIF or
+    // somewhere else. Open rows go in their leadStage bucket.
+    // Two consequences:
+    //   • the Admission chip count == admissionClosed=true count == the
+    //     "X closed" sub-label on the COMMITMENTS card == Student DB total.
+    //   • no row is double-counted across chips (closed rows used to show
+    //     under both their stage AND any "Admission/CIF" tally upstream).
     const counts = useMemo(() => {
         const out = {};
         for (const s of ALL_LEAD_STAGES) out[s] = 0;
-        for (const r of rows) if (r.leadStage && out[r.leadStage] != null) out[r.leadStage]++;
+        for (const r of rows) {
+            if (r.admissionClosed) {
+                out['Admission'] = (out['Admission'] || 0) + 1;
+            } else if (r.leadStage && out[r.leadStage] != null) {
+                out[r.leadStage]++;
+            }
+        }
         return out;
     }, [rows]);
 
