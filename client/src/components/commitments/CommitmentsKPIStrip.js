@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 import { ArrowUpward, ArrowDownward } from '@mui/icons-material';
 import {
-    ADMISSION_STAGES,
     FOLLOW_UP_STAGES,
     ALL_LEAD_STAGES,
     getStagePalette,
@@ -122,7 +121,7 @@ const FunnelCard = ({ rows }) => {
 
     return (
         <Box sx={{ ...CARD_SX }}>
-            <Typography sx={KPI_LABEL_SX}>Pipeline this period</Typography>
+            <Typography sx={KPI_LABEL_SX}>Lead stages</Typography>
             <Box
                 sx={{
                     display: 'grid',
@@ -215,9 +214,11 @@ function pctTrend(rows, predicate) {
 
 const CommitmentsKPIStrip = ({ rows = [] }) => {
     const total = rows.length;
-    const admissions = rows.filter(
-        (r) => ADMISSION_STAGES.includes(r.leadStage) || r.admissionClosed
-    ).length;
+    // "Admissions" on the Commitments KPI = strictly admissionClosed=true.
+    // This matches the Student DB definition, so the two views can be
+    // compared apples-to-apples. Funnel-stage counts (Admission, CIF, etc.)
+    // are surfaced separately by the Lead stages card below.
+    const closed = rows.filter((r) => r.admissionClosed).length;
     const achieved = rows.filter((r) => r.status === 'achieved' || r.admissionClosed).length;
     const achievementPct = total ? Math.round((achieved / total) * 100) : 0;
     const followUps = rows.filter((r) => FOLLOW_UP_STAGES.includes(r.leadStage)).length;
@@ -257,7 +258,7 @@ const CommitmentsKPIStrip = ({ rows = [] }) => {
             <KpiCard
                 label="Commitments"
                 value={total}
-                sub={`${admissions} admissions`}
+                sub={`${closed} closed`}
                 trend={trendAll}
                 sparkColor="#1976d2"
                 sparkPoints={sparkAll}
