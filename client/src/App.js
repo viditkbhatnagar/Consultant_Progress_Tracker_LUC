@@ -13,6 +13,7 @@ import MeetingTrackerPage from './pages/MeetingTrackerPage';
 import CommitmentsPage from './pages/CommitmentsPage';
 import SkillhubDashboard from './pages/SkillhubDashboard';
 import ExportCenterPage from './pages/ExportCenterPage';
+import AdminReconciliationPage from './pages/AdminReconciliationPage';
 import PdfViewer from './pages/PdfViewer';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
@@ -132,6 +133,18 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead', 'manager', 'skillhub']}>
                   <ExportCenterPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Reconciliation page — admin-only. Pairs LUC closed
+                commitments with their student records to keep the two
+                sources aligned (per the FK spine added in fix/admission-tracker-consistency). */}
+            <Route
+              path="/admin/reconciliation"
+              element={
+                <PrivateRoute allowedRoles={['admin']}>
+                  <AdminReconciliationPage />
                 </PrivateRoute>
               }
             />

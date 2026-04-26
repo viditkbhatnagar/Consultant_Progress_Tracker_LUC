@@ -41,6 +41,7 @@ app.use('/api/students', require('./routes/students'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/hourly', require('./routes/hourly'));
 app.use('/api/meetings', require('./routes/meetings'));
+app.use('/api/reconciliation', require('./routes/reconciliation'));
 app.use('/api/exports', require('./routes/exports'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/docs-chat', require('./routes/docsChat'));
@@ -131,6 +132,14 @@ docsRag
     .catch((err) =>
         console.error(`Docs RAG: failed to load chunks — ${err.message}`)
     );
+
+// Daily drift monitor — bell admins when LUC closed commitments older
+// than 7 days are still missing a linked Student record. Runs once on
+// boot (delayed) and every 24h. Skipped in test mode.
+if (process.env.NODE_ENV !== 'test') {
+    const { startDriftMonitor } = require('./services/driftMonitor');
+    startDriftMonitor();
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {

@@ -120,6 +120,18 @@ const getConsultantPerformance = async (consultantId, { months = 3, startDate, e
     return response.data;
 };
 
+// Linkable LUC commitments — backs the StudentFormDialog "Linked
+// Commitment" picker and the MeetingFormDialog Admission picker.
+// Returns Admission-stage rows with no studentId yet.
+const getLinkableCommitments = async ({ consultantName, search, limit } = {}) => {
+    const params = {};
+    if (consultantName) params.consultantName = consultantName;
+    if (search) params.search = search;
+    if (limit) params.limit = limit;
+    const response = await axios.get(`${API_URL}/linkable`, { params });
+    return response.data;
+};
+
 // Focused AI analysis of commitments in the current filter window.
 const getAIAnalysis = async (filters = {}) => {
     const params = new URLSearchParams();
@@ -145,6 +157,7 @@ const commitmentService = {
     getCurrentWeekCommitments,
     getCommitmentsByDateRange,
     getConsultantPerformance,
+    getLinkableCommitments,
     getAIAnalysis,
 };
 

@@ -24,6 +24,7 @@ import {
     FactCheck as CommitmentsIcon,
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
+    Link as LinkIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -310,6 +311,13 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                     <ListItemButton onClick={() => navigate('/exports')} sx={navItemSx}>
                         <ListItemIcon><ExportCenterIcon /></ListItemIcon>
                         <ListItemText primary="Export Center" />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/admin/reconciliation')} sx={navItemSx}>
+                        <ListItemIcon><LinkIcon /></ListItemIcon>
+                        <ListItemText primary="Reconciliation" />
                     </ListItemButton>
                 </ListItem>
             </List>
