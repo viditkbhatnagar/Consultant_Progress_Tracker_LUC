@@ -506,11 +506,13 @@ exports.getLinkableCommitments = async (req, res, next) => {
         const filter = {
             ...buildScopeFilter(req),
             organization: 'luc',
-            // Eligible to link: any unlinked LUC commit in scope. We used
-            // to restrict to leadStage='Admission' but that hid older
-            // commits the TL/admin actually wanted to pair (the deal
-            // sometimes closes before the leadStage was bumped). The
-            // server still flips leadStage/admissionClosed on link.
+            // Eligible to link: row reached Admission stage AND no Student
+            // is yet attached. Earlier stages (Cold/Hot/Awaiting Confirm/
+            // etc.) are in-progress — the deal hasn't closed, so there's
+            // nothing to pair a Student/Meeting record against yet. If a
+            // TL needs to pair an older commit, they should bump it to
+            // Admission first.
+            leadStage: 'Admission',
             studentId: null,
         };
 

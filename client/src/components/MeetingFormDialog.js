@@ -718,7 +718,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 )}
                                 {linkableCommits.length === 0 && !quickOpen && (
                                     <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)', mt: 0.5 }}>
-                                        No unlinked commitments in your scope — log one inline below.
+                                        No unlinked Admission-stage commitments in your scope — log one inline below.
                                     </Typography>
                                 )}
                                 {(() => {

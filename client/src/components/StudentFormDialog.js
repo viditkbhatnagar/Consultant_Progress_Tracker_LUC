@@ -692,7 +692,7 @@ const StudentFormDialog = ({
                                             !formData.manualEntry &&
                                             linkableCommits.length === 0 &&
                                             !linkLoading
-                                                ? 'No unlinked commitments in your scope. Log one first or enable Manual Entry.'
+                                                ? 'No unlinked Admission-stage commitments in your scope. Log one first or enable Manual Entry.'
                                                 : ' '
                                         }
                                     />
