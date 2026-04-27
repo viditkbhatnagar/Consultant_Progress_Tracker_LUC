@@ -14,6 +14,8 @@ import {
     ToggleButtonGroup,
     IconButton,
     Stack,
+    FormControlLabel,
+    Switch,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -43,6 +45,8 @@ const blankForm = {
     remarks: '',
     // LUC drift-prevention spine — required when status='Admission'.
     commitmentId: '',
+    manualEntry: false,
+    manualEntryReason: '',
 };
 
 const Label = ({ children }) => (
@@ -107,6 +111,8 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 status: initialData.status || '',
                 remarks: initialData.remarks || '',
                 commitmentId: initialData.commitmentId || '',
+                manualEntry: !!initialData.manualEntry,
+                manualEntryReason: initialData.manualEntryReason || '',
             });
         } else {
             setFormData({
@@ -334,9 +340,18 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         if (!formData.teamLead) e.teamLead = 'Team lead is required';
         if (!formData.status) e.status = 'Status is required';
         // Drift-prevention: a meeting marked Admission must reference the
-        // closed commitment that produced it.
+        // closed commitment that produced it. Admin can opt out via the
+        // Manual Entry switch + reason (mirrors Student form pattern).
         if (formData.status === 'Admission' && !formData.commitmentId) {
-            e.commitmentId = 'Pick the commitment this admission belongs to';
+            if (formData.manualEntry) {
+                if (!isAdmin) {
+                    e.commitmentId = 'Only admin can save without a linked commitment';
+                } else if (!formData.manualEntryReason || !formData.manualEntryReason.trim()) {
+                    e.manualEntryReason = 'Reason required for manual entry';
+                }
+            } else {
+                e.commitmentId = 'Pick a linked commitment, or enable Manual Entry';
+            }
         }
         setErrors(e);
         return Object.keys(e).length === 0;
@@ -365,9 +380,12 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 consultantName,
                 meetingDate: formData.meetingDate.toISOString(),
                 // Strip empty commitmentId so the server doesn't try to
-                // ObjectId-cast an empty string. Only sent when status
-                // was Admission and the picker fired.
+                // ObjectId-cast an empty string. Only sent when the
+                // picker fired. Manual Entry only carries through when
+                // the admin actually opted in.
                 commitmentId: formData.commitmentId || undefined,
+                manualEntry: formData.manualEntry === true,
+                manualEntryReason: formData.manualEntry ? formData.manualEntryReason : '',
             });
             onClose();
         } catch (err) {
@@ -774,6 +792,60 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                                 Cancel
                                             </Button>
                                         </Stack>
+                                    </Box>
+                                )}
+
+                                {/* Admin escape hatch — saves an Admission
+                                    meeting without a linked commit (with
+                                    a reason). Mirrors the Student form's
+                                    manual-entry pattern. Surfaces on the
+                                    reconciliation page so admin can
+                                    re-link later if needed. */}
+                                {isAdmin && !quickOpen && (
+                                    <Box sx={{ mt: 1.5 }}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    size="small"
+                                                    checked={!!formData.manualEntry}
+                                                    onChange={(e) => {
+                                                        const next = e.target.checked;
+                                                        setFormData((p) => ({
+                                                            ...p,
+                                                            manualEntry: next,
+                                                            // Clear commit selection when opting into manual.
+                                                            commitmentId: next ? '' : p.commitmentId,
+                                                        }));
+                                                        if (next) setSelectedCommit(null);
+                                                        if (errors.commitmentId) {
+                                                            setErrors((prev) => ({ ...prev, commitmentId: '' }));
+                                                        }
+                                                    }}
+                                                />
+                                            }
+                                            label={
+                                                <Typography sx={{ fontSize: 12.5 }}>
+                                                    Manual entry (no commitment to link)
+                                                </Typography>
+                                            }
+                                        />
+                                        {formData.manualEntry && (
+                                            <Box sx={{ mt: 0.5 }}>
+                                                <TextField
+                                                    fullWidth
+                                                    size="small"
+                                                    placeholder="Reason (required) — e.g. legacy admission, no commitment row"
+                                                    value={formData.manualEntryReason}
+                                                    onChange={handleField('manualEntryReason')}
+                                                    error={!!errors.manualEntryReason}
+                                                />
+                                                {errors.manualEntryReason && (
+                                                    <Typography sx={{ fontSize: 11, color: 'var(--t-danger-text)', mt: 0.5 }}>
+                                                        {errors.manualEntryReason}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        )}
                                     </Box>
                                 )}
                             </Box>

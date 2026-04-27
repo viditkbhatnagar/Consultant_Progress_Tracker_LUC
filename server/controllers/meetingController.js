@@ -222,21 +222,38 @@ exports.createMeeting = async (req, res, next) => {
         // LUC + status='Admission' must reference a closed Commitment so
         // Meeting Tracker admissions stay in lockstep with Commitment
         // Tracker admissions (plan invariant 2). Skillhub bypasses this.
+        // Admin can opt out via manualEntry=true with a reason — mirrors
+        // the Student form's manual-entry escape hatch. Manual rows
+        // surface on the reconciliation page.
         if (
             isLuc(req.body.organization) &&
             req.body.status === 'Admission'
         ) {
-            if (!req.body.commitmentId) {
+            if (req.body.commitmentId) {
+                const commit = await Commitment.findById(req.body.commitmentId);
+                if (!commit) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Linked commitment not found',
+                    });
+                }
+                // Picked path — clear any stale manualEntry from the body.
+                req.body.manualEntry = false;
+                req.body.manualEntryReason = '';
+            } else if (req.user.role === 'admin' && req.body.manualEntry === true) {
+                if (!req.body.manualEntryReason || !String(req.body.manualEntryReason).trim()) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Manual entry requires a reason',
+                    });
+                }
+            } else {
                 return res.status(400).json({
                     success: false,
-                    message: 'Pick a linked commitment when marking a meeting as Admission',
-                });
-            }
-            const commit = await Commitment.findById(req.body.commitmentId);
-            if (!commit) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Linked commitment not found',
+                    message:
+                        req.user.role === 'admin'
+                            ? 'Pick a linked commitment or set manualEntry=true with a reason'
+                            : 'Pick a linked commitment when marking a meeting as Admission',
                 });
             }
         }
