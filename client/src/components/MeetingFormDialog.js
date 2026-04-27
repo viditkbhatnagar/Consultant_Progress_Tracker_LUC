@@ -32,6 +32,7 @@ import consultantService from '../services/consultantService';
 import userService from '../services/userService';
 import commitmentService from '../services/commitmentService';
 import StatusPill from './meetings/StatusPill';
+import { compareNames } from '../utils/nameSimilarity';
 import { format as formatDate, startOfWeek, endOfWeek, getWeek, getYear } from 'date-fns';
 
 const blankForm = {
@@ -717,9 +718,19 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 )}
                                 {linkableCommits.length === 0 && !quickOpen && (
                                     <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)', mt: 0.5 }}>
-                                        No open Admission-stage commitments yet — log one inline below.
+                                        No unlinked commitments in your scope — log one inline below.
                                     </Typography>
                                 )}
+                                {(() => {
+                                    if (formData.manualEntry || !selectedCommit || !formData.studentName) return null;
+                                    const { score, warn } = compareNames(formData.studentName, selectedCommit.studentName);
+                                    if (!warn) return null;
+                                    return (
+                                        <Alert severity="warning" sx={{ mt: 1, py: 0.25, fontSize: 12 }}>
+                                            Student name on the form ("{formData.studentName.trim()}") doesn't closely match the linked commitment ("{selectedCommit.studentName || '(no name)'}"). Similarity {Math.round(score * 100)}%. Double-check this is the right commitment.
+                                        </Alert>
+                                    );
+                                })()}
 
                                 {/* Quick-create — keeps consultants in this dialog
                                     instead of bouncing to the Commitment Tracker. */}
