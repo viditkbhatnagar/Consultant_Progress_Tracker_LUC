@@ -22,6 +22,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate } from 'date-fns';
 import commitmentService from '../services/commitmentService';
+import { compareNames } from '../utils/nameSimilarity';
 
 // Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
 // most-frequent round-hundred values actually in the LUC database (profiled
@@ -697,6 +698,16 @@ const StudentFormDialog = ({
                                     />
                                 )}
                             />
+                            {(() => {
+                                if (formData.manualEntry || !selectedCommit || !formData.studentName) return null;
+                                const { score, warn } = compareNames(formData.studentName, selectedCommit.studentName);
+                                if (!warn) return null;
+                                return (
+                                    <Alert severity="warning" sx={{ mt: 1, py: 0.25, fontSize: 12 }}>
+                                        Student name on the form ("{formData.studentName.trim()}") doesn't closely match the linked commitment ("{selectedCommit.studentName || '(no name)'}"). Similarity {Math.round(score * 100)}%. Double-check this is the right commitment.
+                                    </Alert>
+                                );
+                            })()}
                             <Box sx={{ mt: 1.5 }}>
                                 <FormControlLabel
                                     control={
