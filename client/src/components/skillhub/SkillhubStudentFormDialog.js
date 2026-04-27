@@ -224,18 +224,18 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
             fullWidth
             PaperProps={{
                 sx: {
-                    backgroundColor: 'var(--d-surface)',
-                    color: 'var(--d-text)',
-                    border: '1px solid var(--d-border)',
+                    backgroundColor: 'var(--d-surface, var(--t-surface, #FFFFFF))',
+                    color: 'var(--d-text, var(--t-text, #1F2937))',
+                    border: '1px solid var(--d-border, var(--t-border, #E5E7EB))',
                 },
             }}
         >
             <DialogTitle
                 sx={{
-                    backgroundColor: 'var(--d-accent-bg)',
-                    color: 'var(--d-accent-text)',
+                    backgroundColor: 'var(--d-accent-bg, var(--t-accent-bg, #EFF6FF))',
+                    color: 'var(--d-accent-text, var(--t-accent-text, #1976D2))',
                     fontWeight: 700,
-                    borderBottom: '1px solid var(--d-border-soft)',
+                    borderBottom: '1px solid var(--d-border-soft, var(--t-border-soft, var(--t-border, #E5E7EB)))',
                 }}
             >
                 {student
@@ -249,18 +249,18 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
             <DialogContent
                 dividers
                 sx={{
-                    backgroundColor: 'var(--d-surface-muted)',
-                    color: 'var(--d-text)',
-                    borderColor: 'var(--d-border)',
-                    '& .MuiInputBase-input': { color: 'var(--d-text)' },
-                    '& .MuiInputLabel-root': { color: 'var(--d-text-muted)' },
-                    '& .MuiOutlinedInput-root': { backgroundColor: 'var(--d-surface)' },
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--d-border)' },
+                    backgroundColor: 'var(--d-surface-muted, var(--t-surface-muted, #F7F9FC))',
+                    color: 'var(--d-text, var(--t-text, #1F2937))',
+                    borderColor: 'var(--d-border, var(--t-border, #E5E7EB))',
+                    '& .MuiInputBase-input': { color: 'var(--d-text, var(--t-text, #1F2937))' },
+                    '& .MuiInputLabel-root': { color: 'var(--d-text-muted, var(--t-text-muted, #6B7280))' },
+                    '& .MuiOutlinedInput-root': { backgroundColor: 'var(--d-surface, var(--t-surface, #FFFFFF))' },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--d-border, var(--t-border, #E5E7EB))' },
                     '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'var(--d-text-muted)',
+                        borderColor: 'var(--d-text-muted, var(--t-text-muted, #6B7280))',
                     },
-                    '& .MuiTypography-root': { color: 'var(--d-text)' },
-                    '& .MuiDivider-root': { borderColor: 'var(--d-border)' },
+                    '& .MuiTypography-root': { color: 'var(--d-text, var(--t-text, #1F2937))' },
+                    '& .MuiDivider-root': { borderColor: 'var(--d-border, var(--t-border, #E5E7EB))' },
                 }}
             >
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -648,8 +648,8 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
             </DialogContent>
             <DialogActions
                 sx={{
-                    backgroundColor: 'var(--d-surface-elev)',
-                    borderTop: '1px solid var(--d-border)',
+                    backgroundColor: 'var(--d-surface-elev, var(--t-surface-elev, #FDFEFF))',
+                    borderTop: '1px solid var(--d-border, var(--t-border, #E5E7EB))',
                 }}
             >
                 <Button onClick={onClose} sx={{ color: 'var(--d-text-3)' }}>Cancel</Button>
