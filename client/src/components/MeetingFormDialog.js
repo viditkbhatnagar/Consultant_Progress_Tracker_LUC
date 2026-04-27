@@ -340,13 +340,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         if (!formData.teamLead) e.teamLead = 'Team lead is required';
         if (!formData.status) e.status = 'Status is required';
         // Drift-prevention: a meeting marked Admission must reference the
-        // closed commitment that produced it. Admin can opt out via the
-        // Manual Entry switch + reason (mirrors Student form pattern).
+        // closed commitment that produced it. Either role can opt out via
+        // the Manual Entry switch + reason (mirrors Student form pattern).
         if (formData.status === 'Admission' && !formData.commitmentId) {
             if (formData.manualEntry) {
-                if (!isAdmin) {
-                    e.commitmentId = 'Only admin can save without a linked commitment';
-                } else if (!formData.manualEntryReason || !formData.manualEntryReason.trim()) {
+                if (!formData.manualEntryReason || !formData.manualEntryReason.trim()) {
                     e.manualEntryReason = 'Reason required for manual entry';
                 }
             } else {
@@ -795,13 +793,13 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                     </Box>
                                 )}
 
-                                {/* Admin escape hatch — saves an Admission
-                                    meeting without a linked commit (with
-                                    a reason). Mirrors the Student form's
+                                {/* Escape hatch — admin/team_lead can save an
+                                    Admission meeting without a linked commit
+                                    (with a reason). Mirrors the Student form's
                                     manual-entry pattern. Surfaces on the
-                                    reconciliation page so admin can
-                                    re-link later if needed. */}
-                                {isAdmin && !quickOpen && (
+                                    reconciliation page so admin can re-link
+                                    later if needed. */}
+                                {!quickOpen && (
                                     <Box sx={{ mt: 1.5 }}>
                                         <FormControlLabel
                                             control={

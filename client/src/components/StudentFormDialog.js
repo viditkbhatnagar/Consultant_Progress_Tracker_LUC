@@ -495,9 +495,6 @@ const StudentFormDialog = ({
         // (editing existing rows is handled by the reconciliation page).
         if (!student) {
             if (formData.manualEntry) {
-                if (currentUserRole !== 'admin') {
-                    return 'Only an admin can create a student without a linked commitment';
-                }
                 if (!formData.manualEntryReason || !formData.manualEntryReason.trim()) {
                     return 'Manual entry requires a reason';
                 }
@@ -694,49 +691,47 @@ const StudentFormDialog = ({
                                             !formData.manualEntry &&
                                             linkableCommits.length === 0 &&
                                             !linkLoading
-                                                ? 'No open Admission-stage commitments. Log one first or enable Manual Entry (admin only).'
+                                                ? 'No unlinked commitments in your scope. Log one first or enable Manual Entry.'
                                                 : ' '
                                         }
                                     />
                                 )}
                             />
-                            {currentUserRole === 'admin' && (
-                                <Box sx={{ mt: 1.5 }}>
-                                    <FormControlLabel
-                                        control={
-                                            <Switch
-                                                size="small"
-                                                checked={formData.manualEntry}
-                                                onChange={(e) => {
-                                                    const next = e.target.checked;
-                                                    setFormData((p) => ({
-                                                        ...p,
-                                                        manualEntry: next,
-                                                        commitmentId: next ? '' : p.commitmentId,
-                                                    }));
-                                                    if (next) setSelectedCommit(null);
-                                                }}
-                                            />
-                                        }
-                                        label={
-                                            <Typography sx={{ fontSize: 13 }}>
-                                                Manual entry (no commitment exists for this student)
-                                            </Typography>
-                                        }
-                                    />
-                                    {formData.manualEntry && (
-                                        <TextField
-                                            fullWidth
+                            <Box sx={{ mt: 1.5 }}>
+                                <FormControlLabel
+                                    control={
+                                        <Switch
                                             size="small"
-                                            sx={{ mt: 1 }}
-                                            label="Reason (required)"
-                                            value={formData.manualEntryReason}
-                                            onChange={handleChange('manualEntryReason')}
-                                            placeholder="e.g. Legacy import / pre-tracker record"
+                                            checked={formData.manualEntry}
+                                            onChange={(e) => {
+                                                const next = e.target.checked;
+                                                setFormData((p) => ({
+                                                    ...p,
+                                                    manualEntry: next,
+                                                    commitmentId: next ? '' : p.commitmentId,
+                                                }));
+                                                if (next) setSelectedCommit(null);
+                                            }}
                                         />
-                                    )}
-                                </Box>
-                            )}
+                                    }
+                                    label={
+                                        <Typography sx={{ fontSize: 13 }}>
+                                            Manual entry (no commitment exists for this student)
+                                        </Typography>
+                                    }
+                                />
+                                {formData.manualEntry && (
+                                    <TextField
+                                        fullWidth
+                                        size="small"
+                                        sx={{ mt: 1 }}
+                                        label="Reason (required)"
+                                        value={formData.manualEntryReason}
+                                        onChange={handleChange('manualEntryReason')}
+                                        placeholder="e.g. Legacy import / pre-tracker record"
+                                    />
+                                )}
+                            </Box>
                         </Box>
                     )}
 

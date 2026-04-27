@@ -506,11 +506,11 @@ exports.getLinkableCommitments = async (req, res, next) => {
         const filter = {
             ...buildScopeFilter(req),
             organization: 'luc',
-            // Eligible to link: row reached the Admission stage AND no
-            // student is yet attached. We deliberately do NOT require
-            // admissionClosed=true — admin may want to link before the
-            // close action, in which case the close fires automatically.
-            leadStage: 'Admission',
+            // Eligible to link: any unlinked LUC commit in scope. We used
+            // to restrict to leadStage='Admission' but that hid older
+            // commits the TL/admin actually wanted to pair (the deal
+            // sometimes closes before the leadStage was bumped). The
+            // server still flips leadStage/admissionClosed on link.
             studentId: null,
         };
 
@@ -521,7 +521,7 @@ exports.getLinkableCommitments = async (req, res, next) => {
             filter.studentName = { $regex: String(search).trim(), $options: 'i' };
         }
 
-        const cap = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
+        const cap = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
         const rows = await Commitment.find(filter)
             .select(
                 'studentName consultantName teamName commitmentDate ' +

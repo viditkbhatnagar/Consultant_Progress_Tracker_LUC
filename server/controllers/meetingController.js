@@ -222,9 +222,9 @@ exports.createMeeting = async (req, res, next) => {
         // LUC + status='Admission' must reference a closed Commitment so
         // Meeting Tracker admissions stay in lockstep with Commitment
         // Tracker admissions (plan invariant 2). Skillhub bypasses this.
-        // Admin can opt out via manualEntry=true with a reason — mirrors
-        // the Student form's manual-entry escape hatch. Manual rows
-        // surface on the reconciliation page.
+        // Admin or team_lead can opt out via manualEntry=true with a
+        // reason — mirrors the Student form's manual-entry escape hatch.
+        // Manual rows surface on the reconciliation page.
         if (
             isLuc(req.body.organization) &&
             req.body.status === 'Admission'
@@ -240,7 +240,7 @@ exports.createMeeting = async (req, res, next) => {
                 // Picked path — clear any stale manualEntry from the body.
                 req.body.manualEntry = false;
                 req.body.manualEntryReason = '';
-            } else if (req.user.role === 'admin' && req.body.manualEntry === true) {
+            } else if (req.body.manualEntry === true) {
                 if (!req.body.manualEntryReason || !String(req.body.manualEntryReason).trim()) {
                     return res.status(400).json({
                         success: false,
@@ -250,10 +250,7 @@ exports.createMeeting = async (req, res, next) => {
             } else {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        req.user.role === 'admin'
-                            ? 'Pick a linked commitment or set manualEntry=true with a reason'
-                            : 'Pick a linked commitment when marking a meeting as Admission',
+                    message: 'Pick a linked commitment or enable Manual Entry with a reason',
                 });
             }
         }
