@@ -24,17 +24,6 @@ import { LEAD_STAGES_LIST } from '../../utils/constants';
 import { getWeekInfo } from '../../utils/weekUtils';
 import { format, startOfWeek, endOfWeek, getWeek } from 'date-fns';
 
-// Bound the commitment date picker to the selected week's Mon–Sun range.
-function weekBoundsFor(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
-    const start = startOfWeek(d, { weekStartsOn: 1 });
-    const end = endOfWeek(d, { weekStartsOn: 1 });
-    return {
-        min: format(start, 'yyyy-MM-dd'),
-        max: format(end, 'yyyy-MM-dd'),
-    };
-}
-
 const DEMO_SLOTS = ['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'];
 
 const blankDemos = () =>
@@ -302,34 +291,33 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             </Select>
                         </FormControl>
                     </Grid>
-                    {/* Commitment Date — bounded to the week it belongs to.
-                        To log for a different week, pick a date in that week. */}
+                    {/* Commitment Date — Skillhub branch logins are the
+                        admin of their branch, so they can backdate freely
+                        (e.g. to fill in pre-rollout April entries).
+                        Capped only at "today" so future-dating isn't
+                        allowed. weekStartDate/weekEndDate/weekNumber are
+                        re-derived from whatever date is picked. */}
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        {(() => {
-                            const { min, max } = weekBoundsFor(formData.selectedDate);
-                            return (
-                                <TextField
-                                    fullWidth type="date" label="Commitment Date" required
-                                    InputLabelProps={{ shrink: true }}
-                                    inputProps={{ min, max }}
-                                    value={formData.selectedDate}
-                                    onChange={(e) => {
-                                        const v = e.target.value;
-                                        // Clamp so typing a date outside the week snaps inside it.
-                                        const clamped = v < min ? min : v > max ? max : v;
-                                        const day = format(new Date(clamped + 'T00:00:00'), 'EEEE');
-                                        const wkNum = getWeek(new Date(clamped + 'T00:00:00'), { weekStartsOn: 1 });
-                                        setFormData((f) => ({
-                                            ...f,
-                                            selectedDate: clamped,
-                                            dayOfWeek: day,
-                                            weekNumber: wkNum,
-                                        }));
-                                    }}
-                                    helperText={`Pick any day in ${min} – ${max}`}
-                                />
-                            );
-                        })()}
+                        <TextField
+                            fullWidth type="date" label="Commitment Date" required
+                            InputLabelProps={{ shrink: true }}
+                            inputProps={{ max: format(new Date(), 'yyyy-MM-dd') }}
+                            value={formData.selectedDate}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (!v) return;
+                                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                                const clamped = v > todayStr ? todayStr : v;
+                                const dt = new Date(clamped + 'T00:00:00');
+                                setFormData((f) => ({
+                                    ...f,
+                                    selectedDate: clamped,
+                                    dayOfWeek: format(dt, 'EEEE'),
+                                    weekNumber: getWeek(dt, { weekStartsOn: 1 }),
+                                }));
+                            }}
+                            helperText="Pick any past date — the week / month roll-up is computed automatically."
+                        />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
