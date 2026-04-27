@@ -357,7 +357,7 @@ exports.createStudent = async (req, res, next) => {
                         message: 'This commitment is already linked to a student',
                     });
                 }
-            } else if (req.user.role === 'admin' && manualEntry === true) {
+            } else if (manualEntry === true) {
                 if (!manualEntryReason || !String(manualEntryReason).trim()) {
                     return res.status(400).json({
                         success: false,
@@ -367,10 +367,7 @@ exports.createStudent = async (req, res, next) => {
             } else {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        req.user.role === 'admin'
-                            ? 'Pick a linked commitment or set manualEntry=true with a reason'
-                            : 'Pick a linked commitment for this admission',
+                    message: 'Pick a linked commitment or enable Manual Entry with a reason',
                 });
             }
         }
