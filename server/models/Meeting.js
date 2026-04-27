@@ -85,6 +85,13 @@ const MeetingSchema = new mongoose.Schema(
             index: true,
         },
 
+        // Set when admin creates an Admission-status meeting without
+        // picking a Commitment FK. Mirrors Student.manualEntry — admin
+        // opts out of the linkage with a reason; surfaced on the
+        // reconciliation page.
+        manualEntry: { type: Boolean, default: false },
+        manualEntryReason: { type: String, default: '', trim: true },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
