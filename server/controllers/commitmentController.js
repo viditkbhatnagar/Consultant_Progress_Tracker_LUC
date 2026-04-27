@@ -177,9 +177,16 @@ exports.createCommitment = async (req, res, next) => {
             req.body.createdBy = req.user.id;
             req.body.lastUpdatedBy = req.user.id;
 
-            const err = validateCommitmentDateInWeek(req.body);
-            if (err) {
-                return res.status(400).json({ success: false, message: err });
+            // Skillhub branch logins are the admin of their branch (per
+            // CLAUDE.md) — let them backdate freely so they can fill in
+            // historical entries that predate the app rollout. The
+            // commitment-date-in-week guardrail still applies to LUC
+            // team leads (they should be entering for the current week).
+            if (req.user.role !== 'skillhub') {
+                const err = validateCommitmentDateInWeek(req.body);
+                if (err) {
+                    return res.status(400).json({ success: false, message: err });
+                }
             }
         } else if (req.user.role === 'admin') {
             if (!req.body.teamLead || !req.body.teamName) {
@@ -303,9 +310,13 @@ exports.updateCommitment = async (req, res, next) => {
         }
 
         // Non-admin edits must keep commitmentDate inside the (possibly
-        // updated) week range. Fall back to the stored week bounds when the
-        // client didn't resend them.
-        if (req.user.role !== 'admin' && req.body.commitmentDate) {
+        // updated) week range. Skillhub branch logins (branch admins) and
+        // platform admins both bypass — they can re-date freely.
+        if (
+            req.user.role !== 'admin' &&
+            req.user.role !== 'skillhub' &&
+            req.body.commitmentDate
+        ) {
             const err = validateCommitmentDateInWeek({
                 commitmentDate: req.body.commitmentDate,
                 weekStartDate: req.body.weekStartDate || commitment.weekStartDate,
