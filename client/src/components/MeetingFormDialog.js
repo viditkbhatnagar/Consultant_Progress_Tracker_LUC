@@ -13,6 +13,7 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     IconButton,
+    Stack,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -29,7 +30,7 @@ import consultantService from '../services/consultantService';
 import userService from '../services/userService';
 import commitmentService from '../services/commitmentService';
 import StatusPill from './meetings/StatusPill';
-import { format as formatDate } from 'date-fns';
+import { format as formatDate, startOfWeek, endOfWeek, getWeek, getYear } from 'date-fns';
 
 const blankForm = {
     meetingDate: new Date(),
@@ -78,6 +79,12 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     // dialog snappy on the common path.
     const [linkableCommits, setLinkableCommits] = useState([]);
     const [selectedCommit, setSelectedCommit] = useState(null);
+    // Inline quick-create panel state. Lets a consultant log the missing
+    // Admission-stage commitment without leaving the meeting dialog.
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [quickText, setQuickText] = useState('');
+    const [quickSaving, setQuickSaving] = useState(false);
+    const [quickError, setQuickError] = useState('');
 
     // Seed from initialData or reset to blank (+ auto-teamLead for TL role).
     useEffect(() => {
@@ -240,6 +247,82 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         const match = linkableCommits.find((c) => c._id === formData.commitmentId);
         if (match) setSelectedCommit(match);
     }, [formData.commitmentId, linkableCommits]);
+
+    // Quick-create an Admission-stage commitment from the meeting context.
+    // Server's auto-close logic flips admissionClosed=true on save (because
+    // leadStage='Admission' AND status='achieved'). Then we refresh the
+    // linkable list and auto-select the new row in the picker.
+    const handleQuickCreateCommit = async () => {
+        if (!formData.studentName.trim()) {
+            setQuickError('Student name is required (set it on the meeting first)');
+            return;
+        }
+        const consultantOpt = consultantOptions.find((o) => o.value === formData.consultant);
+        const consultantName = consultantOpt?.label
+            || (typeof formData.consultant === 'string' && formData.consultant.startsWith('tl:')
+                ? activeTeamLead?.name || currentTeamLeadName
+                : '');
+        if (!consultantName) {
+            setQuickError('Pick a consultant on the meeting first');
+            return;
+        }
+        if (!formData.teamLead) {
+            setQuickError('Pick a team lead on the meeting first');
+            return;
+        }
+        const tlObj = teamLeads.find((t) => t._id === formData.teamLead);
+        const teamName = tlObj?.teamName || activeTeamLead?.teamName || '';
+        const teamLeadName = tlObj?.name || activeTeamLead?.name || currentTeamLeadName || '';
+        if (!teamName) {
+            setQuickError('Could not resolve team name for the selected team lead');
+            return;
+        }
+
+        const dt = formData.meetingDate || new Date();
+        const payload = {
+            commitmentDate: dt.toISOString(),
+            weekStartDate: startOfWeek(dt, { weekStartsOn: 1 }).toISOString(),
+            weekEndDate: endOfWeek(dt, { weekStartsOn: 1 }).toISOString(),
+            weekNumber: getWeek(dt, { weekStartsOn: 1 }),
+            year: getYear(dt),
+            dayCommitted: dt.toLocaleDateString('en-US', { weekday: 'long' }),
+            studentName: formData.studentName.trim(),
+            commitmentMade: quickText.trim() || `Admission — ${formData.studentName.trim()}`,
+            leadStage: 'Admission',
+            status: 'achieved',
+            achievementPercentage: 100,
+            consultantName,
+            // Admin role requires explicit teamLead/teamName in the body.
+            // team_lead role auto-sets these server-side, but passing them
+            // is harmless.
+            teamLead: formData.teamLead,
+            teamName,
+            teamLeadName,
+        };
+
+        setQuickError('');
+        setQuickSaving(true);
+        try {
+            const res = await commitmentService.createCommitment(payload);
+            const newCommit = res?.data || res;
+            // Refresh linkable list and auto-select the new commit.
+            const refreshed = await commitmentService.getLinkableCommitments({
+                consultantName,
+                limit: 200,
+            });
+            const list = refreshed?.data || [];
+            setLinkableCommits(list);
+            const picked = list.find((c) => String(c._id) === String(newCommit._id)) || newCommit;
+            setSelectedCommit(picked);
+            setFormData((prev) => ({ ...prev, commitmentId: picked._id }));
+            setQuickOpen(false);
+            setQuickText('');
+        } catch (err) {
+            setQuickError(err?.response?.data?.message || err.message || 'Failed to create commitment');
+        } finally {
+            setQuickSaving(false);
+        }
+    };
 
     const validate = () => {
         const e = {};
@@ -616,10 +699,82 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                         {errors.commitmentId}
                                     </Typography>
                                 )}
-                                {linkableCommits.length === 0 && (
+                                {linkableCommits.length === 0 && !quickOpen && (
                                     <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)', mt: 0.5 }}>
-                                        No open Admission-stage commitments. Log one from the Commitment Tracker first.
+                                        No open Admission-stage commitments yet — log one inline below.
                                     </Typography>
+                                )}
+
+                                {/* Quick-create — keeps consultants in this dialog
+                                    instead of bouncing to the Commitment Tracker. */}
+                                {!quickOpen && (
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() => {
+                                            setQuickOpen(true);
+                                            setQuickError('');
+                                            setQuickText('');
+                                        }}
+                                        sx={{ mt: 0.5, textTransform: 'none', fontWeight: 600 }}
+                                    >
+                                        + Log new commitment
+                                    </Button>
+                                )}
+
+                                {quickOpen && (
+                                    <Box
+                                        sx={{
+                                            mt: 1,
+                                            p: 1.5,
+                                            border: '1px dashed var(--t-border)',
+                                            borderRadius: '8px',
+                                            backgroundColor: 'var(--t-surface-muted)',
+                                        }}
+                                    >
+                                        <Typography sx={{ fontSize: 12, fontWeight: 600, color: 'var(--t-text-2)', mb: 0.75 }}>
+                                            Quick admission commitment for "{formData.studentName || '(set student name above)'}"
+                                        </Typography>
+                                        <TextField
+                                            fullWidth
+                                            multiline
+                                            minRows={2}
+                                            size="small"
+                                            placeholder="Commitment description (e.g. 'Admission - OTHM L5 + BBA paid')"
+                                            value={quickText}
+                                            onChange={(e) => setQuickText(e.target.value)}
+                                            disabled={quickSaving}
+                                        />
+                                        <Typography sx={{ fontSize: 11, color: 'var(--t-text-muted)', mt: 0.5 }}>
+                                            Will be created as Lead Stage = Admission, Status = achieved
+                                            (auto-closes on save). Date defaults to the meeting date.
+                                        </Typography>
+                                        {quickError && (
+                                            <Typography sx={{ fontSize: 11, color: 'var(--t-danger-text)', mt: 0.5 }}>
+                                                {quickError}
+                                            </Typography>
+                                        )}
+                                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                            <Button
+                                                size="small"
+                                                variant="contained"
+                                                onClick={handleQuickCreateCommit}
+                                                disabled={quickSaving}
+                                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                                            >
+                                                {quickSaving ? 'Saving…' : 'Save commitment & link'}
+                                            </Button>
+                                            <Button
+                                                size="small"
+                                                variant="text"
+                                                onClick={() => { setQuickOpen(false); setQuickText(''); setQuickError(''); }}
+                                                disabled={quickSaving}
+                                                sx={{ textTransform: 'none' }}
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </Stack>
+                                    </Box>
                                 )}
                             </Box>
                         )}
