@@ -364,13 +364,63 @@ const SkillhubStudentDatabasePage = () => {
     };
 
     // ── EXPORT ──
-    // Delegates to xlsxBuilder against the canonical Students column config
-    // (Skillhub variant). The legacy inline 17-column array moved into
-    // `client/src/config/exportColumns/students.js`.
-    const doExport = (kind) => {
-        const filename = `skillhub_${curriculum}_${statusTab}`;
-        xlsxBuilder.exportRawSheet(displayed, skillhubColumns, filename, kind);
-        showToast(`Exported ${kind.toUpperCase()}`);
+    // Earlier version exported only `displayed` rows (the current page).
+    // Admin reported the download was always "first page only". Now we
+    // fetch every page that matches the server-side filters, then apply
+    // the client-side search predicate, then hand the full set to
+    // xlsxBuilder.
+    const [exporting, setExporting] = useState(false);
+    const doExport = async (kind) => {
+        if (exporting) return;
+        setExporting(true);
+        const EXPORT_PAGE_SIZE = 500;
+        const baseFilters = {
+            studentStatus: statusTab,
+            curriculumSlug: curriculum,
+            startDate: filters.startDate
+                ? format(filters.startDate, 'yyyy-MM-dd')
+                : undefined,
+            endDate: filters.endDate
+                ? format(filters.endDate, 'yyyy-MM-dd')
+                : undefined,
+            consultant: filters.consultant || undefined,
+            organization: scopeOrg,
+            limit: EXPORT_PAGE_SIZE,
+        };
+        try {
+            showToast('Preparing export…');
+            const all = [];
+            let p = 1;
+            const MAX_PAGES = 100;
+            while (p <= MAX_PAGES) {
+                const res = await studentService.getStudents({ ...baseFilters, page: p });
+                const rows = res?.data || [];
+                all.push(...rows);
+                const pages = res?.pagination?.pages ?? 1;
+                if (p >= pages || rows.length === 0) break;
+                p++;
+            }
+            const q = search.trim().toLowerCase();
+            const exportRows = q
+                ? all.filter((s) => [
+                    s.studentName,
+                    s.enrollmentNumber,
+                    s.school,
+                    s.consultantName,
+                    s.phones?.student,
+                ]
+                    .filter(Boolean)
+                    .some((f) => String(f).toLowerCase().includes(q))
+                )
+                : all;
+            const filename = `skillhub_${curriculum}_${statusTab}`;
+            xlsxBuilder.exportRawSheet(exportRows, skillhubColumns, filename, kind);
+            showToast(`Exported ${exportRows.length} rows (${kind.toUpperCase()})`);
+        } catch (err) {
+            showToast(err?.response?.data?.message || 'Export failed', 'error');
+        } finally {
+            setExporting(false);
+        }
     };
 
     const counselorOptions = counselors.map((c) => ({

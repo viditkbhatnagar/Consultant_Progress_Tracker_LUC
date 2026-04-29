@@ -361,13 +361,69 @@ const LucStudentDatabasePage = () => {
     };
 
     // ── EXPORT ──
-    // Delegates to xlsxBuilder against the canonical Students column config
-    // (LUC variant). The legacy `buildExportRows` and inline date/money
-    // shaping moved into xlsxBuilder + the column config; this handler now
-    // just hands the displayed rows over.
-    const doExport = (kind) => {
-        xlsxBuilder.exportRawSheet(displayed, lucColumns, 'student_database', kind);
-        showToast(`Exported ${kind.toUpperCase()}`);
+    // Earlier version exported only `displayed` rows, which were the
+    // currently-rendered page (50 in table view). Admin reported the
+    // download was always "first page only". Now we fetch every page that
+    // matches the server-side filters, then apply the client-side search
+    // predicate, then hand the full set to xlsxBuilder.
+    const [exporting, setExporting] = useState(false);
+    const doExport = async (kind) => {
+        if (exporting) return;
+        setExporting(true);
+        const EXPORT_PAGE_SIZE = 500; // server hard cap
+        const baseFilters = {
+            startDate: filters.startDate
+                ? format(filters.startDate, 'yyyy-MM-dd')
+                : undefined,
+            endDate: filters.endDate
+                ? format(filters.endDate, 'yyyy-MM-dd')
+                : undefined,
+            consultant: filters.consultant.length > 0
+                ? filters.consultant.join(',')
+                : undefined,
+            university: filters.university || undefined,
+            team: filters.team.length > 0 ? filters.team.join(',') : undefined,
+            month: filters.month.length > 0 ? filters.month : undefined,
+            program: filters.program || undefined,
+            source: filters.source || undefined,
+            organization: isAdmin ? getAdminOrgScope() : undefined,
+            limit: EXPORT_PAGE_SIZE,
+        };
+        try {
+            showToast('Preparing export…');
+            const all = [];
+            let page = 1;
+            // Hard ceiling to stop a runaway loop if the server lies about
+            // the page count. 50k rows is more than the LUC dataset will
+            // ever realistically reach.
+            const MAX_PAGES = 100;
+            while (page <= MAX_PAGES) {
+                const res = await studentService.getStudents({ ...baseFilters, page });
+                const rows = res?.data || [];
+                all.push(...rows);
+                const pages = res?.pagination?.pages ?? 1;
+                if (page >= pages || rows.length === 0) break;
+                page++;
+            }
+            // Apply the client-side search filter so the export matches what
+            // the user is currently looking at on screen.
+            const q = filters.search?.toLowerCase();
+            const exportRows = q
+                ? all.filter((s) =>
+                    s.studentName?.toLowerCase().includes(q) ||
+                    s.consultantName?.toLowerCase().includes(q) ||
+                    s.university?.toLowerCase().includes(q) ||
+                    s.program?.toLowerCase().includes(q) ||
+                    s.campaignName?.toLowerCase().includes(q)
+                )
+                : all;
+            xlsxBuilder.exportRawSheet(exportRows, lucColumns, 'student_database', kind);
+            showToast(`Exported ${exportRows.length} rows (${kind.toUpperCase()})`);
+        } catch (err) {
+            showToast(err?.response?.data?.message || 'Export failed', 'error');
+        } finally {
+            setExporting(false);
+        }
     };
 
     // ── FILTER CHIPS ──
