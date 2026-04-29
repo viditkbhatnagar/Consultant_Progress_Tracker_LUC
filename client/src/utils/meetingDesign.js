@@ -92,4 +92,9 @@ export const FOLLOW_UP_STATUSES = [
 ];
 
 // Statuses counted as successful conversions for the Conversion KPI.
-export const CONVERSION_STATUSES = ['Admission', 'CIF'];
+// CIF is post-admission paperwork, not a fresh closed admission, so it's
+// excluded — admin verified that "X admissions" should only count rows at
+// status='Admission'. Bundling them inflated the conversion rate (a TL
+// with 4 CIFs and 1 Admission across 10 meetings was showing 50%/5
+// admissions when it should be 10%/1 admission).
+export const CONVERSION_STATUSES = ['Admission'];

@@ -405,7 +405,11 @@ exports.getAIAnalysis = async (req, res, next) => {
             byConsultant[cons] = (byConsultant[cons] || 0) + 1;
         }
 
-        const admissions = (byStatus.Admission || 0) + (byStatus.CIF || 0);
+        // Admissions = real closed admissions only. CIF is post-admission
+        // paperwork and is tracked separately so the conversion rate
+        // matches the dashboard KPI.
+        const admissions = byStatus.Admission || 0;
+        const cifs = byStatus.CIF || 0;
         const lost = (byStatus.Lost || 0) + (byStatus.Dead || 0);
         const conversionPct = meetings.length
             ? Math.round((admissions / meetings.length) * 100)
@@ -439,9 +443,10 @@ exports.getAIAnalysis = async (req, res, next) => {
 
 Totals
 - Total meetings: ${meetings.length}
-- Admissions (Admission + CIF): ${admissions}
+- Admissions (status='Admission'): ${admissions}
+- CIFs (post-admission paperwork): ${cifs}
 - Lost (Lost + Dead): ${lost}
-- Conversion rate: ${conversionPct}%
+- Conversion rate (admissions / meetings): ${conversionPct}%
 
 Status distribution: ${topStatuses}
 Mode distribution: ${topModes}
