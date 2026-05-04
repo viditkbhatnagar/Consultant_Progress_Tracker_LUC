@@ -139,6 +139,10 @@ const SkillhubStudentsTableView = ({
                             <TableCell sx={headerCell}>Year/Grade</TableCell>
                             <TableCell sx={headerCell}>Acad. Year</TableCell>
                             <TableCell sx={headerCell}>Counselor</TableCell>
+                            <TableCell sx={headerCell}>Source</TableCell>
+                            <TableCell sx={headerCell}>Campaign</TableCell>
+                            <TableCell sx={headerCell}>Enquiry</TableCell>
+                            <TableCell sx={headerCell}>Closing</TableCell>
                             <TableCell sx={headerCell}>Mode</TableCell>
                             <TableCell sx={headerCell}>Enrolled</TableCell>
                             <TableCell sx={{ ...headerCell, textAlign: 'right' }}>Course Fee</TableCell>
@@ -207,6 +211,26 @@ const SkillhubStudentsTableView = ({
                                     <TableCell sx={bodyCell}>{s.yearOrGrade || '—'}</TableCell>
                                     <TableCell sx={bodyCell}>{s.academicYear || '—'}</TableCell>
                                     <TableCell sx={bodyCell}>{s.consultantName || '—'}</TableCell>
+                                    <TableCell sx={bodyCell}>{s.source || '—'}</TableCell>
+                                    <TableCell sx={bodyCell}>{s.campaignName || '—'}</TableCell>
+                                    <TableCell sx={bodyCell}>
+                                        {s.enquiryDate
+                                            ? new Date(s.enquiryDate).toLocaleDateString([], {
+                                                  year: '2-digit',
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                              })
+                                            : '—'}
+                                    </TableCell>
+                                    <TableCell sx={bodyCell}>
+                                        {s.closingDate
+                                            ? new Date(s.closingDate).toLocaleDateString([], {
+                                                  year: '2-digit',
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                              })
+                                            : '—'}
+                                    </TableCell>
                                     <TableCell sx={bodyCell}>{s.mode || '—'}</TableCell>
                                     <TableCell sx={bodyCell}>
                                         {s.dateOfEnrollment

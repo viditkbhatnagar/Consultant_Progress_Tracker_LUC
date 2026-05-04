@@ -37,6 +37,7 @@ import {
     getCurrentAcademicYear,
     toTitleCase,
 } from '../../utils/constants';
+import { LUC_SOURCES } from '../../utils/studentDesign';
 
 const emptyEmi = () => ({ dueDate: '', amount: 0, paidOn: '', paidAmount: 0 });
 
@@ -62,6 +63,7 @@ const blankForm = {
     registrationFee: 0,
     emis: [],
     leadSource: 'Google',
+    source: '',
     referredBy: '',
     campaignName: '',
     enquiryDate: '',
@@ -150,6 +152,14 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
         if (!formData.yearOrGrade) return setError('Year / Grade is required');
         if (!formData.mode) return setError('Mode is required');
         if (!formData.courseDuration) return setError('Course duration is required');
+        // Skillhub now mirrors LUC for these four lead-tracking fields:
+        // every new student should be tagged with a source, the campaign
+        // they came in on, and the enquiry/closing dates so reporting and
+        // exports line up with LUC.
+        if (!formData.source) return setError('Source is required');
+        if (!formData.campaignName.trim()) return setError('Campaign name is required');
+        if (!formData.enquiryDate) return setError('Enquiry date is required');
+        if (!formData.closingDate) return setError('Closing date is required');
 
         // Date sanity — same rules as LUC. Dates are stored as YYYY-MM-DD
         // strings in this form (HTML date input); comparing against an
@@ -597,9 +607,20 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Lead Source & Dates</Typography>
                 <Grid container spacing={2}>
                     <Grid size={{ xs: 12, sm: 4 }}>
+                        <FormControl fullWidth required>
+                            <InputLabel>Source</InputLabel>
+                            <Select label="Source" value={formData.source}
+                                onChange={(e) => set('source', e.target.value)}>
+                                {LUC_SOURCES.map((s) => (
+                                    <MenuItem key={s} value={s}>{s}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}>
                         <FormControl fullWidth>
-                            <InputLabel>Lead Source</InputLabel>
-                            <Select label="Lead Source" value={formData.leadSource}
+                            <InputLabel>Lead Source (legacy)</InputLabel>
+                            <Select label="Lead Source (legacy)" value={formData.leadSource}
                                 onChange={(e) => set('leadSource', e.target.value)}>
                                 {SKILLHUB_LEAD_SOURCES.map((s) => (
                                     <MenuItem key={s} value={s}>{s}</MenuItem>
@@ -613,18 +634,18 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             {...capProps('referredBy')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth label="Campaign Name" value={formData.campaignName}
+                        <TextField fullWidth required label="Campaign Name" value={formData.campaignName}
                             onChange={(e) => set('campaignName', e.target.value)}
                             {...capProps('campaignName')} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth type="date" label="Enquiry Date" InputLabelProps={{ shrink: true }}
+                        <TextField fullWidth required type="date" label="Enquiry Date" InputLabelProps={{ shrink: true }}
                             value={formData.enquiryDate}
                             onChange={(e) => set('enquiryDate', e.target.value)}
                             inputProps={{ max: new Date().toISOString().slice(0, 10) }} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth type="date" label="Closing Date" InputLabelProps={{ shrink: true }}
+                        <TextField fullWidth required type="date" label="Closing Date" InputLabelProps={{ shrink: true }}
                             value={formData.closingDate}
                             onChange={(e) => set('closingDate', e.target.value)}
                             inputProps={{
