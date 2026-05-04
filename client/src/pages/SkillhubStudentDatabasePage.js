@@ -35,6 +35,7 @@ import {
 } from '../utils/trackerTheme';
 import {
     SKILLHUB_STATUS_META,
+    LUC_SOURCES,
 } from '../utils/studentDesign';
 import StudentsToolbar, {
     FilterChip,
@@ -66,6 +67,7 @@ const SkillhubStudentDatabasePage = () => {
         startDate: null,
         endDate: null,
         consultant: '',
+        source: '',
     });
 
     const [counselors, setCounselors] = useState([]);
@@ -132,6 +134,7 @@ const SkillhubStudentDatabasePage = () => {
                     ? format(filters.endDate, 'yyyy-MM-dd')
                     : undefined,
                 consultant: filters.consultant || undefined,
+                source: filters.source || undefined,
                 organization: scopeOrg,
             });
             setStats(res.data?.overview || null);
@@ -153,6 +156,7 @@ const SkillhubStudentDatabasePage = () => {
                     ? format(filters.endDate, 'yyyy-MM-dd')
                     : undefined,
                 consultant: filters.consultant || undefined,
+                source: filters.source || undefined,
                 organization: scopeOrg,
                 page: view === 'table' ? page : 1,
                 limit: view === 'table' ? PAGE_SIZE : CARDS_LIMIT,
@@ -181,7 +185,7 @@ const SkillhubStudentDatabasePage = () => {
 
     useEffect(() => {
         setPage(1);
-    }, [statusTab, curriculum, filters.startDate, filters.endDate, filters.consultant]);
+    }, [statusTab, curriculum, filters.startDate, filters.endDate, filters.consultant, filters.source]);
 
     // ── CLIENT-SIDE SEARCH ──
     const displayed = students.filter((s) => {
@@ -384,6 +388,7 @@ const SkillhubStudentDatabasePage = () => {
                 ? format(filters.endDate, 'yyyy-MM-dd')
                 : undefined,
             consultant: filters.consultant || undefined,
+            source: filters.source || undefined,
             organization: scopeOrg,
             limit: EXPORT_PAGE_SIZE,
         };
@@ -427,14 +432,23 @@ const SkillhubStudentDatabasePage = () => {
         value: c.name,
         label: c.name,
     }));
+    const sourceOptions = LUC_SOURCES.map((s) => ({ value: s, label: s }));
 
     const chipRow = (
-        <FilterChip
-            label="Counselor"
-            value={filters.consultant}
-            options={counselorOptions}
-            onChange={(v) => setFilters((p) => ({ ...p, consultant: v }))}
-        />
+        <>
+            <FilterChip
+                label="Counselor"
+                value={filters.consultant}
+                options={counselorOptions}
+                onChange={(v) => setFilters((p) => ({ ...p, consultant: v }))}
+            />
+            <FilterChip
+                label="Source"
+                value={filters.source}
+                options={sourceOptions}
+                onChange={(v) => setFilters((p) => ({ ...p, source: v }))}
+            />
+        </>
     );
 
     // Extra toolbar content: curriculum + status tabs go in `renderViewExtra`
@@ -655,7 +669,7 @@ const SkillhubStudentDatabasePage = () => {
                             chipRow={chipRow}
                             renderViewExtra={renderViewExtra}
                             onClearFilters={() =>
-                                setFilters({ startDate: null, endDate: null, consultant: '' })
+                                setFilters({ startDate: null, endDate: null, consultant: '', source: '' })
                             }
                         />
 

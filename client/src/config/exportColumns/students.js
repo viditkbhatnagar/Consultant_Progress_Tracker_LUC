@@ -42,7 +42,11 @@ export const skillhubColumns = [
     format: (row) => SKILLHUB_STATUS_META[row.studentStatus]?.lbl || row.studentStatus || '',
     defaultExport: true,
   },
-  { key: 'leadSource',        lbl: 'Lead Source',                                     defaultExport: true },
+  { key: 'source',            lbl: 'Source',                                          defaultExport: true },
+  { key: 'campaignName',      lbl: 'Campaign',                                        defaultExport: true },
+  { key: 'enquiryDate',       lbl: 'Enquiry Date',       date: true,                  defaultExport: true },
+  { key: 'closingDate',       lbl: 'Closing Date',       date: true,                  defaultExport: true },
+  { key: 'leadSource',        lbl: 'Lead Source (legacy)',                            defaultExport: true },
   {
     key: 'studentPhone',
     lbl: 'Student Phone',

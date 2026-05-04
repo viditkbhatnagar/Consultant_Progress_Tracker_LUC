@@ -361,9 +361,30 @@ const SkillhubStudentDetailDrawer = ({
                     <Field label="Address Emirate" value={student.addressEmirate} full />
                 </Section>
 
+                <Section title="Lead">
+                    <Field label="Source" value={student.source} />
+                    <Field label="Campaign" value={student.campaignName} />
+                    <Field
+                        label="Enquiry Date"
+                        value={
+                            student.enquiryDate
+                                ? new Date(student.enquiryDate).toLocaleDateString()
+                                : null
+                        }
+                    />
+                    <Field
+                        label="Closing Date"
+                        value={
+                            student.closingDate
+                                ? new Date(student.closingDate).toLocaleDateString()
+                                : null
+                        }
+                    />
+                </Section>
+
                 <Section title="Ownership">
                     <Field label="Counselor" value={student.consultantName} />
-                    <Field label="Lead Source" value={student.leadSource} />
+                    <Field label="Lead Source (legacy)" value={student.leadSource} />
                     <Field label="Team" value={student.teamName} full />
                 </Section>
             </Box>
