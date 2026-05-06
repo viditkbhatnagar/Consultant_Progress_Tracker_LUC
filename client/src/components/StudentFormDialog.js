@@ -533,6 +533,21 @@ const StudentFormDialog = ({
         return null;
     };
 
+    // The MUI DatePicker hands us Date objects in the user's local timezone.
+    // JSON.stringify -> toISOString() shifts those to UTC, so a user picking
+    // "1 May 2026" in UAE (UTC+4) ends up persisted as 2026-04-30T20:00:00Z.
+    // The server's pre-validate hook then computes month via getMonth() and
+    // labels the row "April" — and any closingDate filter `>= 2026-05-01Z`
+    // wrongly excludes the row. We normalize to UTC midnight of the user's
+    // intended day so the stored instant matches what they see in the picker
+    // regardless of timezone.
+    const toUtcMidnight = (d) => {
+        if (!d) return d;
+        const date = d instanceof Date ? d : new Date(d);
+        if (Number.isNaN(date.getTime())) return d;
+        return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    };
+
     const handleSubmit = async () => {
         const validationError = validateForm();
         if (validationError) {
@@ -546,6 +561,9 @@ const StudentFormDialog = ({
         try {
             await onSave({
                 ...formData,
+                enquiryDate: toUtcMidnight(formData.enquiryDate),
+                closingDate: toUtcMidnight(formData.closingDate),
+                dateOfEnrollment: toUtcMidnight(formData.dateOfEnrollment),
                 courseFee: Number(formData.courseFee),
                 admissionFeePaid: Number(formData.admissionFeePaid) || 0,
                 experience: Number(formData.experience),

@@ -284,7 +284,10 @@ StudentSchema.pre('validate', async function () {
                 'January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December',
             ];
-            this.month = months[new Date(this.closingDate).getMonth()];
+            // getUTCMonth so a closingDate stored as UTC midnight (which is
+            // what the form now sends after the timezone normalization fix)
+            // produces the correct label regardless of where the server runs.
+            this.month = months[new Date(this.closingDate).getUTCMonth()];
         }
     }
 
