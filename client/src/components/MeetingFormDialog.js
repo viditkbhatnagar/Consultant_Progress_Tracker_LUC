@@ -16,6 +16,8 @@ import {
     Stack,
     FormControlLabel,
     Switch,
+    Checkbox,
+    Chip,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -23,6 +25,8 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import {
     Close as CloseIcon,
     Add as AddIcon,
+    CheckBox as CheckBoxIcon,
+    CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
 } from '@mui/icons-material';
 import { MEETING_MODES } from '../utils/constants';
 import { ALL_STATUSES, MODE_META } from '../utils/meetingDesign';
@@ -451,7 +455,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 scroll="paper"
                 PaperProps={{
                     sx: {
-                        maxWidth: 620,
+                        maxWidth: 800,
                         borderRadius: '14px',
                         boxShadow: '0 12px 40px rgba(15,23,42,0.18)',
                         overflow: 'hidden',
@@ -902,7 +906,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                             </Box>
                         )}
 
-                        {/* Meeting taken by — multi-select across the org. */}
+                        {/* Meeting taken by — multi-select across the org.
+                            Checkbox in each option makes the multi-select
+                            affordance obvious; selected names render as
+                            chips inline so the user can see + remove them
+                            at a glance. */}
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
                             <Label>Meeting taken by</Label>
                             <Autocomplete
@@ -919,11 +927,44 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 onChange={(_e, v) =>
                                     setFormData((prev) => ({ ...prev, meetingTakenBy: v }))
                                 }
+                                renderOption={(props, option, { selected }) => {
+                                    const { key, ...rest } = props;
+                                    return (
+                                        <li key={key} {...rest} style={{ paddingLeft: 8 }}>
+                                            <Checkbox
+                                                size="small"
+                                                icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
+                                                checkedIcon={<CheckBoxIcon fontSize="small" />}
+                                                checked={selected}
+                                                sx={{ mr: 1, p: 0.5 }}
+                                            />
+                                            {option}
+                                        </li>
+                                    );
+                                }}
+                                renderTags={(value, getTagProps) =>
+                                    value.map((option, index) => {
+                                        const { key, ...tagProps } = getTagProps({ index });
+                                        return (
+                                            <Chip
+                                                key={key}
+                                                {...tagProps}
+                                                size="small"
+                                                label={option}
+                                            />
+                                        );
+                                    })
+                                }
+                                ListboxProps={{ style: { maxHeight: 360 } }}
                                 renderInput={(params) => (
                                     <TextField
                                         {...params}
-                                        placeholder="Pick everyone who took this meeting…"
-                                        helperText="Search by name. Optional — leave empty if only the consultant above attended."
+                                        placeholder={
+                                            (formData.meetingTakenBy || []).length
+                                                ? ''
+                                                : 'Pick everyone who took this meeting…'
+                                        }
+                                        helperText="Multi-select. Tick all who attended; leave empty if only the consultant above did."
                                     />
                                 )}
                             />
