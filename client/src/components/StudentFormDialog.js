@@ -439,12 +439,12 @@ const StudentFormDialog = ({
 
     const handleChange = (field) => (event) => {
         let value = event.target.value;
-        
+
         // Auto-capitalize text fields
         if (textFieldsToCapitalize.includes(field)) {
             value = value.toUpperCase();
         }
-        
+
         setFormData(prev => ({ ...prev, [field]: value }));
 
         if (field === 'consultantName') {
@@ -454,6 +454,30 @@ const StudentFormDialog = ({
                     ...prev,
                     consultantName: value,
                     consultantId: selectedConsultant._id,
+                }));
+            }
+        }
+
+        // Switching TL invalidates the previously-picked consultant if they
+        // belong to the old team. Clearing avoids saving a row with a
+        // consultant who isn't actually on the new TL's team.
+        if (field === 'teamLeadId' && value) {
+            const stillValid =
+                !formData.consultantName ||
+                (() => {
+                    const tl = teamLeads?.find((t) => t._id === value);
+                    if (tl && tl.name === formData.consultantName) return true;
+                    const c = consultants.find((c) => c.name === formData.consultantName);
+                    if (!c) return false;
+                    const t = c.teamLead?._id || c.teamLead;
+                    return t && String(t) === String(value);
+                })();
+            if (!stillValid) {
+                setFormData(prev => ({
+                    ...prev,
+                    teamLeadId: value,
+                    consultantName: '',
+                    consultantId: '',
                 }));
             }
         }
@@ -1148,53 +1172,81 @@ const StudentFormDialog = ({
                         <Divider sx={{ mb: 3 }} />
                         
                         <Box sx={rowStyle}>
-                            <TextField
-                                sx={fieldStyle}
-                                select
-                                label="Consultant"
-                                value={formData.consultantName}
-                                onChange={(e) => {
-                                    const selectedName = e.target.value;
-                                    const selectedConsultant = consultants.find(c => c.name === selectedName);
-                                    const selectedTeamLead = teamLeads?.find(tl => tl.name === selectedName);
+                            {(() => {
+                                // Scope the consultant picker to the selected TL's team.
+                                // Admin sees a global consultant list; without scoping the
+                                // dropdown surfaces every consultant in the org which made
+                                // it easy to pick someone from a different team. Team Leads
+                                // already arrive here scoped to their own team via the
+                                // server, so the filter is a no-op for them.
+                                const tlId = formData.teamLeadId;
+                                const teamConsultants = tlId
+                                    ? consultants.filter((c) => {
+                                        const t = c.teamLead?._id || c.teamLead;
+                                        return t && String(t) === String(tlId);
+                                    })
+                                    : consultants;
+                                // Surface the selected TL in the same dropdown — TLs sometimes
+                                // close their own admissions and need to appear as the
+                                // "consultant" on the row. Mirrors the Meeting form pattern.
+                                const selectedTl = tlId
+                                    ? (teamLeads || []).find((t) => t._id === tlId)
+                                    : null;
 
-                                    if (selectedTeamLead) {
-                                        // If a team lead is selected, auto-fill teamLeadId, consultant stays null
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            consultantName: selectedName,
-                                            consultantId: '', // TL is not a consultant, so no consultantId
-                                            teamLeadId: selectedTeamLead._id,
-                                        }));
-                                    } else if (selectedConsultant) {
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            consultantName: selectedName,
-                                            consultantId: selectedConsultant._id,
-                                        }));
-                                    } else {
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            consultantName: selectedName,
-                                            consultantId: '',
-                                        }));
-                                    }
-                                }}
-                                required
-                                InputLabelProps={{ shrink: true }}
-                                SelectProps={{ native: true }}
-                            >
-                                <option value="">Select Consultant</option>
-                                {consultants.map(c => (
-                                    <option key={c._id || c.name} value={c.name}>{c.name}</option>
-                                ))}
-                                {teamLeads?.length > 0 && (
-                                    <option disabled>── Team Leads ──</option>
-                                )}
-                                {teamLeads?.map(tl => (
-                                    <option key={`tl-${tl._id}`} value={tl.name}>{tl.name} (TL)</option>
-                                ))}
-                            </TextField>
+                                return (
+                                    <TextField
+                                        sx={fieldStyle}
+                                        select
+                                        label="Consultant"
+                                        value={formData.consultantName}
+                                        onChange={(e) => {
+                                            const selectedName = e.target.value;
+                                            const selectedConsultant = teamConsultants.find(c => c.name === selectedName);
+                                            const tlMatch = selectedTl && selectedTl.name === selectedName;
+
+                                            if (tlMatch) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    consultantName: selectedName,
+                                                    consultantId: '',
+                                                    teamLeadId: selectedTl._id,
+                                                }));
+                                            } else if (selectedConsultant) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    consultantName: selectedName,
+                                                    consultantId: selectedConsultant._id,
+                                                }));
+                                            } else {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    consultantName: selectedName,
+                                                    consultantId: '',
+                                                }));
+                                            }
+                                        }}
+                                        required
+                                        InputLabelProps={{ shrink: true }}
+                                        SelectProps={{ native: true }}
+                                        helperText={
+                                            currentUserRole === 'admin' && !tlId
+                                                ? 'Pick a team lead first'
+                                                : ' '
+                                        }
+                                        disabled={currentUserRole === 'admin' && !tlId}
+                                    >
+                                        <option value="">Select Consultant</option>
+                                        {selectedTl && (
+                                            <option key={`tl-${selectedTl._id}`} value={selectedTl.name}>
+                                                {selectedTl.name} (Team Lead)
+                                            </option>
+                                        )}
+                                        {teamConsultants.map(c => (
+                                            <option key={c._id || c.name} value={c.name}>{c.name}</option>
+                                        ))}
+                                    </TextField>
+                                );
+                            })()}
 
                             {currentUserRole === 'admin' && (
                                 <TextField
