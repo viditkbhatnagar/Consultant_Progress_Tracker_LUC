@@ -48,6 +48,11 @@ const blankForm = {
     commitmentId: '',
     manualEntry: false,
     manualEntryReason: '',
+    // Multi-select "Meeting taken by" — names of every TL/consultant who
+    // co-led this meeting. Stored as an array of denormalized name
+    // strings so the row carries a stable label even if a referenced
+    // consultant/TL is later deleted. Optional; defaults empty.
+    meetingTakenBy: [],
 };
 
 const Label = ({ children }) => (
@@ -79,6 +84,11 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
     const [programs, setPrograms] = useState([]);
     const [teamLeads, setTeamLeads] = useState([]);
     const [consultants, setConsultants] = useState([]);
+    // Org-wide rosters for the "Meeting taken by" multi-select. Always
+    // populated (regardless of role / selected TL) so a meeting that
+    // was co-led across teams can record everyone.
+    const [allTeamLeads, setAllTeamLeads] = useState([]);
+    const [allConsultants, setAllConsultants] = useState([]);
     // Linkable commitments for the picker — only fetched when the user
     // moves status to 'Admission' (LUC). Empty otherwise to keep the
     // dialog snappy on the common path.
@@ -114,6 +124,9 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 commitmentId: initialData.commitmentId || '',
                 manualEntry: !!initialData.manualEntry,
                 manualEntryReason: initialData.manualEntryReason || '',
+                meetingTakenBy: Array.isArray(initialData.meetingTakenBy)
+                    ? initialData.meetingTakenBy
+                    : [],
             });
         } else {
             setFormData({
@@ -150,6 +163,32 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
             .catch(() => { if (!cancelled) setTeamLeads([]); });
         return () => { cancelled = true; };
     }, [open, isAdmin]);
+
+    // Org-wide rosters for the "Meeting taken by" multi-select. Same
+    // queries as above but unconditional on role — TLs also need to see
+    // every TL and every consultant when they log a co-led meeting.
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        userService
+            .getUsers({ organization: 'luc' })
+            .then((res) => {
+                const all = res.data || res || [];
+                const tls = all.filter(
+                    (u) => u.role === 'team_lead' && (u.organization || 'luc') === 'luc' && u.isActive !== false
+                );
+                if (!cancelled) setAllTeamLeads(tls);
+            })
+            .catch(() => { if (!cancelled) setAllTeamLeads([]); });
+        consultantService
+            .getConsultants({ organization: 'luc' })
+            .then((res) => {
+                const list = res.data || res || [];
+                if (!cancelled) setAllConsultants(list.filter((c) => c.isActive !== false));
+            })
+            .catch(() => { if (!cancelled) setAllConsultants([]); });
+        return () => { cancelled = true; };
+    }, [open]);
 
     useEffect(() => {
         if (!open) return;
@@ -385,6 +424,9 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 commitmentId: formData.commitmentId || undefined,
                 manualEntry: formData.manualEntry === true,
                 manualEntryReason: formData.manualEntry ? formData.manualEntryReason : '',
+                meetingTakenBy: Array.isArray(formData.meetingTakenBy)
+                    ? formData.meetingTakenBy
+                    : [],
             });
             onClose();
         } catch (err) {
@@ -859,6 +901,33 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                                 )}
                             </Box>
                         )}
+
+                        {/* Meeting taken by — multi-select across the org. */}
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                            <Label>Meeting taken by</Label>
+                            <Autocomplete
+                                multiple
+                                size="small"
+                                fullWidth
+                                disableCloseOnSelect
+                                options={(() => {
+                                    const tlNames = (allTeamLeads || []).map((t) => `${t.name} (Team Lead)`);
+                                    const cNames = (allConsultants || []).map((c) => c.name);
+                                    return [...tlNames, ...cNames];
+                                })()}
+                                value={formData.meetingTakenBy || []}
+                                onChange={(_e, v) =>
+                                    setFormData((prev) => ({ ...prev, meetingTakenBy: v }))
+                                }
+                                renderInput={(params) => (
+                                    <TextField
+                                        {...params}
+                                        placeholder="Pick everyone who took this meeting…"
+                                        helperText="Search by name. Optional — leave empty if only the consultant above attended."
+                                    />
+                                )}
+                            />
+                        </Box>
 
                         {/* Remarks */}
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>

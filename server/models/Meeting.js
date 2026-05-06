@@ -92,6 +92,16 @@ const MeetingSchema = new mongoose.Schema(
         manualEntry: { type: Boolean, default: false },
         manualEntryReason: { type: String, default: '', trim: true },
 
+        // Multi-select "Meeting taken by" — denormalized name strings of
+        // every TL or consultant who participated in conducting the
+        // meeting. Independent of the single `consultant` ref above, which
+        // remains the primary owner for scoping/reporting. Surfaced on the
+        // form so a meeting that was co-led can record everyone involved.
+        meetingTakenBy: {
+            type: [String],
+            default: [],
+        },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

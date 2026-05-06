@@ -124,20 +124,25 @@ exports.getStudents = async (req, res, next) => {
         // or explicit skillhub organization scope) we filter by createdAt —
         // Skillhub admissions don't always carry a closingDate. LUC keeps
         // its existing closingDate semantics. endDate is pushed to end-of-day
-        // so records created later on that date are still included.
-        if (startDate && endDate) {
+        // so records created later on that date are still included. Either
+        // bound is now optional so "from 1 May" alone narrows correctly
+        // (previous behaviour silently dropped the filter when only one
+        // bound was set).
+        if (startDate || endDate) {
             const orgScope = filter.organization || req.query.organization;
             const isSkillhubScope =
                 curriculumSlug ||
                 orgScope === 'skillhub_training' ||
                 orgScope === 'skillhub_institute';
             const field = isSkillhubScope ? 'createdAt' : 'closingDate';
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            filter[field] = {
-                $gte: new Date(startDate),
-                $lte: end,
-            };
+            const range = {};
+            if (startDate) range.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                range.$lte = end;
+            }
+            filter[field] = range;
         }
 
         // Consultant filter (single value or comma-separated multi)
@@ -735,16 +740,21 @@ exports.getStudentStats = async (req, res, next) => {
             ];
         }
 
-        if (startDate && endDate) {
+        if (startDate || endDate) {
             const orgScope = filter.organization || req.query.organization;
             const isSkillhubScope =
                 curriculumSlug ||
                 orgScope === 'skillhub_training' ||
                 orgScope === 'skillhub_institute';
             const field = isSkillhubScope ? 'createdAt' : 'closingDate';
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            filter[field] = { $gte: new Date(startDate), $lte: end };
+            const range = {};
+            if (startDate) range.$gte = new Date(startDate);
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                range.$lte = end;
+            }
+            filter[field] = range;
         }
 
         if (consultant) {
