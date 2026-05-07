@@ -109,6 +109,7 @@ const MeetingsTableView = ({
                             <th>Consultant</th>
                             {isAdmin && <th>Team Lead</th>}
                             <th>Status</th>
+                            <th>Taken By</th>
                             <th>Remarks</th>
                             <th style={{ textAlign: 'right' }}>Actions</th>
                         </tr>
@@ -116,14 +117,14 @@ const MeetingsTableView = ({
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={isAdmin ? 9 : 8} style={{ textAlign: 'center', padding: '48px 0' }}>
+                                <td colSpan={isAdmin ? 10 : 9} style={{ textAlign: 'center', padding: '48px 0' }}>
                                     <CircularProgress size={22} />
                                 </td>
                             </tr>
                         ) : rows.length === 0 ? (
                             <tr>
                                 <td
-                                    colSpan={isAdmin ? 9 : 8}
+                                    colSpan={isAdmin ? 10 : 9}
                                     style={{ textAlign: 'center', padding: '40px 0', color: 'var(--t-text-muted)' }}
                                 >
                                     No meetings match your filters.
@@ -198,6 +199,23 @@ const MeetingsTableView = ({
                                     )}
                                     <td>
                                         <StatusPill status={r.status} onClick={(e) => openStatusMenu(e, r)} />
+                                    </td>
+                                    <td
+                                        style={{
+                                            maxWidth: 220,
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            color: 'var(--t-text-3)',
+                                        }}
+                                    >
+                                        {Array.isArray(r.meetingTakenBy) && r.meetingTakenBy.length > 0 ? (
+                                            <Tooltip title={r.meetingTakenBy.join(', ')} arrow placement="top">
+                                                <span>{r.meetingTakenBy.join(', ')}</span>
+                                            </Tooltip>
+                                        ) : (
+                                            <span style={{ color: 'var(--t-text-faint)' }}>—</span>
+                                        )}
                                     </td>
                                     <td
                                         style={{

@@ -253,6 +253,29 @@ const MeetingDetailDrawer = ({
                                 <span>{row.teamLeadName || '—'}</span>
                             </Box>
                         </FieldTile>
+                        {Array.isArray(row.meetingTakenBy) && row.meetingTakenBy.length > 0 && (
+                            <FieldTile label="Taken by">
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                    {row.meetingTakenBy.map((n) => (
+                                        <Box
+                                            key={n}
+                                            component="span"
+                                            sx={{
+                                                fontSize: 12,
+                                                px: 0.75,
+                                                py: 0.25,
+                                                borderRadius: '6px',
+                                                backgroundColor: 'var(--t-surface-muted)',
+                                                color: 'var(--t-text-2)',
+                                                border: '1px solid var(--t-border)',
+                                            }}
+                                        >
+                                            {n}
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </FieldTile>
+                        )}
                     </Box>
 
                     <Box sx={{ mb: 2.5 }}>
