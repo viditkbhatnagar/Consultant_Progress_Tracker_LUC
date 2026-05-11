@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import MountainVistaParallax from '../components/MountainVistaParallax';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -73,154 +74,106 @@ const Login = () => {
         <Box
             sx={{
                 minHeight: '100vh',
-                background: 'linear-gradient(135deg, #FFF8E7 0%, #F5E6D3 50%, #FFF8E7 100%)',
+                position: 'relative',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'center',
-                p: { xs: 2, sm: 3, md: 4 },
+                px: { xs: 2, sm: 3, md: 4 },
+                pt: { xs: 4, md: '5vh' },
+                pb: { xs: 2, md: 4 },
+                overflow: 'hidden',
             }}
         >
-            <Container maxWidth="lg">
-                <Grid container spacing={0} alignItems="center" sx={{ minHeight: '600px' }}>
-                    {/* Logo Side - Left */}
-                    <Grid
-                        size={{ xs: 12, md: 6 }}
+            {/* Animated mountain parallax background */}
+            <MountainVistaParallax />
+
+            {/* Soft readability overlay — lighter at top, slightly warmer at bottom */}
+            <Box
+                aria-hidden="true"
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    background:
+                        'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 35%, rgba(255,248,231,0.28) 100%)',
+                    pointerEvents: 'none',
+                    zIndex: 6,
+                }}
+            />
+
+            <Container maxWidth="sm" sx={{ position: 'relative', zIndex: 10 }}>
+                <Box
+                    sx={{
+                        width: '100%',
+                        maxWidth: '460px',
+                        mx: 'auto',
+                        p: { xs: 3, sm: 4 },
+                        borderRadius: '20px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.82)',
+                        backdropFilter: 'blur(18px)',
+                        WebkitBackdropFilter: 'blur(18px)',
+                        border: '1px solid rgba(255, 255, 255, 0.85)',
+                        boxShadow: '0 20px 50px rgba(40, 50, 90, 0.18)',
+                    }}
+                >
+                    {/* Integrated logos — small, side-by-side at the top of the card */}
+                    <Box
                         sx={{
                             display: 'flex',
-                            flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            p: { xs: 3, md: 6 },
+                            gap: { xs: 2, sm: 2.5 },
+                            mb: 3.5,
                         }}
                     >
-                        <Box sx={{ textAlign: 'center', width: '100%' }}>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: { xs: 3, md: 5 },
-                                    mb: '2.5rem',
-                                    flexWrap: 'nowrap',
-                                }}
-                            >
-                                <Box
-                                    sx={{
-                                        flex: '0 0 auto',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <img
-                                        src="/LUC-new-logo-svg-1.svg"
-                                        alt="LUC Logo"
-                                        style={{
-                                            height: 'auto',
-                                            width: 'clamp(210px, 28vw, 400px)',
-                                            objectFit: 'contain',
-                                            filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.1))',
-                                        }}
-                                    />
-                                </Box>
-                                <Box
-                                    sx={{
-                                        width: '1px',
-                                        alignSelf: 'stretch',
-                                        minHeight: { xs: 80, md: 120 },
-                                        bgcolor: 'rgba(0,0,0,0.12)',
-                                        display: { xs: 'none', sm: 'block' },
-                                    }}
-                                />
-                                <Box
-                                    sx={{
-                                        flex: '0 0 auto',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <img
-                                        src="/skillhub-logo.jpeg"
-                                        alt="Skillhub Logo"
-                                        style={{
-                                            height: 'auto',
-                                            width: 'clamp(140px, 18vw, 220px)',
-                                            objectFit: 'contain',
-                                            borderRadius: '16px',
-                                            filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.1))',
-                                        }}
-                                    />
-                                </Box>
-                            </Box>
-                            <Typography
-                                variant="h3"
-                                sx={{
-                                    fontWeight: 700,
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    backgroundClip: 'text',
-                                    WebkitBackgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    mb: 2,
-                                    display: { xs: 'none', md: 'block' },
-                                }}
-                            >
-                                Team Progress Tracker
-                            </Typography>
-                            <Typography
-                                variant="h6"
-                                sx={{
-                                    color: '#666',
-                                    fontWeight: 400,
-                                    maxWidth: '450px',
-                                    mx: 'auto',
-                                    lineHeight: 1.6,
-                                    display: { xs: 'none', md: 'block' },
-                                }}
-                            >
-                                Track, manage, and optimize your team's commitments and progress efficiently
-                            </Typography>
-                        </Box>
-                    </Grid>
-
-                    {/* Login Form Side - Right */}
-                    <Grid
-                        size={{ xs: 12, md: 6 }}
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            pt: { xs: 3, md: 6 },
-                            pb: { xs: 3, md: 6 },
-                            pl: { xs: 3, md: 6 },
-                            pr: { xs: 3, md: 0 },
-                        }}
-                    >
+                        <img
+                            src="/LUC-new-logo-svg-1.svg"
+                            alt="LUC Logo"
+                            style={{
+                                height: 'auto',
+                                width: 130,
+                                objectFit: 'contain',
+                                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.08))',
+                            }}
+                        />
                         <Box
                             sx={{
-                                maxWidth: '450px',
-                                width: '100%',
-                                mr: { xs: 'auto', md: 0 },
-                                ml: { xs: 'auto', md: 'auto' },
+                                width: '1px',
+                                minHeight: 48,
+                                bgcolor: 'rgba(0,0,0,0.14)',
+                            }}
+                        />
+                        <img
+                            src="/skillhub-logo.jpeg"
+                            alt="Skillhub Logo"
+                            style={{
+                                height: 'auto',
+                                width: 60,
+                                objectFit: 'contain',
+                                borderRadius: '10px',
+                                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.08))',
+                            }}
+                        />
+                    </Box>
+
+                    <Box sx={{ mb: 3.5, textAlign: 'center' }}>
+                        <Typography
+                            variant="h4"
+                            component="h1"
+                            gutterBottom
+                            sx={{
+                                fontWeight: 700,
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                backgroundClip: 'text',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
                             }}
                         >
-                            <Box sx={{ mb: 4 }}>
-                                <Typography
-                                    variant="h4"
-                                    component="h1"
-                                    gutterBottom
-                                    sx={{
-                                        fontWeight: 700,
-                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                        backgroundClip: 'text',
-                                        WebkitBackgroundClip: 'text',
-                                        WebkitTextFillColor: 'transparent',
-                                    }}
-                                >
-                                    Welcome Back
-                                </Typography>
-                                <Typography variant="body1" sx={{ color: '#666' }}>
-                                    Sign in to your account to continue
-                                </Typography>
-                            </Box>
+                            Team Progress Tracker
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#4a4f6b' }}>
+                            Sign in to your account to continue
+                        </Typography>
+                    </Box>
 
                             {error && (
                                 <Alert severity="error" sx={{ mb: 3 }}>
@@ -324,10 +277,8 @@ const Login = () => {
                                         'Sign In'
                                     )}
                                 </Button>
-                            </form>
-                        </Box>
-                    </Grid>
-                </Grid>
+                    </form>
+                </Box>
             </Container>
         </Box>
     );
