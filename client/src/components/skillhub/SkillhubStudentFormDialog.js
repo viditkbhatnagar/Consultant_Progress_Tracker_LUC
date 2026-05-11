@@ -38,6 +38,7 @@ import {
     toTitleCase,
 } from '../../utils/constants';
 import { LUC_SOURCES } from '../../utils/studentDesign';
+import PhoneFieldWithCode from '../PhoneFieldWithCode';
 
 const emptyEmi = () => ({ dueDate: '', amount: 0, paidOn: '', paidAmount: 0 });
 
@@ -301,16 +302,25 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     </Grid>
 
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth label="Student Phone" value={formData.phones.student}
-                            onChange={(e) => setContact('phones', 'student', e.target.value)} />
+                        <PhoneFieldWithCode
+                            label="Student Phone"
+                            value={formData.phones.student}
+                            onChange={(v) => setContact('phones', 'student', v)}
+                        />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth label="Mother's Phone" value={formData.phones.mother}
-                            onChange={(e) => setContact('phones', 'mother', e.target.value)} />
+                        <PhoneFieldWithCode
+                            label="Mother's Phone"
+                            value={formData.phones.mother}
+                            onChange={(v) => setContact('phones', 'mother', v)}
+                        />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
-                        <TextField fullWidth label="Father's Phone" value={formData.phones.father}
-                            onChange={(e) => setContact('phones', 'father', e.target.value)} />
+                        <PhoneFieldWithCode
+                            label="Father's Phone"
+                            value={formData.phones.father}
+                            onChange={(v) => setContact('phones', 'father', v)}
+                        />
                     </Grid>
 
                     <Grid size={{ xs: 12, sm: 4 }}>
