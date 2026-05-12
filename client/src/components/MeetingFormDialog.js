@@ -399,6 +399,18 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
         return Object.keys(e).length === 0;
     };
 
+    // Same pattern as StudentFormDialog (PR #27). The DatePicker emits a
+    // local-midnight Date; toISOString() shifts that into UTC and silently
+    // moves the calendar day backwards for users east of UTC. Pinning to
+    // UTC-midnight of the picked calendar date keeps the stored instant
+    // aligned with what the user typed regardless of timezone.
+    const toUtcMidnight = (d) => {
+        if (!d) return d;
+        const date = d instanceof Date ? d : new Date(d);
+        if (Number.isNaN(date.getTime())) return d;
+        return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    };
+
     const handleSubmit = async () => {
         if (!validate()) return;
         setSubmitError('');
@@ -420,7 +432,7 @@ const MeetingFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
                 ...formData,
                 consultant: consultantId,
                 consultantName,
-                meetingDate: formData.meetingDate.toISOString(),
+                meetingDate: toUtcMidnight(formData.meetingDate)?.toISOString(),
                 // Strip empty commitmentId so the server doesn't try to
                 // ObjectId-cast an empty string. Only sent when the
                 // picker fired. Manual Entry only carries through when
