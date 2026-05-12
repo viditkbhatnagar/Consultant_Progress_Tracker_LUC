@@ -158,11 +158,26 @@ const MeetingTrackerPage = () => {
         return () => { cancelled = true; };
     }, [isAdmin]);
 
+    // PR #27 pattern (mirrors the student fix). Raw .toISOString() shifts a
+    // local-midnight DatePicker value into UTC and silently moves the
+    // calendar day for users east of UTC — that's the bug behind "I entered
+    // it today but the current-month filter hides it". Pinning to UTC
+    // midnight of the picked calendar date keeps filter bounds aligned with
+    // the UTC-midnight meetingDate values now written by MeetingFormDialog.
+    const toUtcMidnightIso = (d) => {
+        if (!d) return undefined;
+        const date = d instanceof Date ? d : new Date(d);
+        if (Number.isNaN(date.getTime())) return undefined;
+        return new Date(
+            Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+        ).toISOString();
+    };
+
     const commonFilterParams = useMemo(
         () => ({
             organization: 'luc',
-            startDate: filters.startDate ? filters.startDate.toISOString() : undefined,
-            endDate: filters.endDate ? filters.endDate.toISOString() : undefined,
+            startDate: toUtcMidnightIso(filters.startDate),
+            endDate: toUtcMidnightIso(filters.endDate),
             teamLead: filters.teamLead || undefined,
             consultant: filters.consultant || undefined,
             status: filters.status || undefined,
