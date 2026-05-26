@@ -45,6 +45,8 @@ app.use('/api/reconciliation', require('./routes/reconciliation'));
 app.use('/api/exports', require('./routes/exports'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/docs-chat', require('./routes/docsChat'));
+app.use('/api/exec-overview', require('./routes/execOverview'));
+app.use('/api/monthly-targets', require('./routes/monthlyTargets'));
 
 // Auth-gated static PDFs (spec §7). Must sit before the SPA catch-all so
 // that /program-docs/* never falls through to index.html. JWT + LUC-only.
