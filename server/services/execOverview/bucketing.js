@@ -28,7 +28,39 @@ const AGI_BUCKETS = ['AGI', 'AGI Standalone'];
 
 const ALL_BUCKETS = [...PROGRAM_BUCKETS, ...AGI_BUCKETS];
 
+// Stable slugs for use as Mongoose field names + JSON keys. Several of
+// the display names contain characters (space, +, comma) that don't
+// play nicely as object keys, so we maintain a fixed mapping.
+const BUCKET_SLUGS = {
+    'SSM MBA': 'ssm_mba',
+    'SSM BBA': 'ssm_bba',
+    'OTHM+MBA': 'othm_mba',
+    'IOSCM+MBA': 'ioscm_mba',
+    'KNIGHTS MBA': 'knights_mba',
+    'KNIGHTS BBA': 'knights_bba',
+    'MUST': 'must',
+    'OTHM-7': 'othm_7',
+    'IOSCM-7': 'ioscm_7',
+    'OTHM-3': 'othm_3',
+    'DBA': 'dba',
+    'OTHM Ext L5': 'othm_ext_l5',
+    'OTHM-4,5': 'othm_4_5',
+    'OTHM-6': 'othm_6',
+    'AGI': 'agi',
+    'AGI Standalone': 'agi_standalone',
+};
+const SLUG_TO_BUCKET = Object.fromEntries(
+    Object.entries(BUCKET_SLUGS).map(([k, v]) => [v, k])
+);
+const PROGRAM_SLUGS = PROGRAM_BUCKETS.map((b) => BUCKET_SLUGS[b]);
+const AGI_SLUGS = AGI_BUCKETS.map((b) => BUCKET_SLUGS[b]);
+const ALL_SLUGS = [...PROGRAM_SLUGS, ...AGI_SLUGS];
+
+const bucketToSlug = (bucket) => BUCKET_SLUGS[bucket] || null;
+const slugToBucket = (slug) => SLUG_TO_BUCKET[slug] || null;
+
 const isAgiBucket = (bucket) => AGI_BUCKETS.includes(bucket);
+const isAgiSlug = (slug) => AGI_SLUGS.includes(slug);
 
 // Lowercase normalization helper. Trims, collapses whitespace, removes the
 // "diploma" word so "OTHM Diploma Level 7" and "Level 7" both reduce to
@@ -101,6 +133,13 @@ module.exports = {
     PROGRAM_BUCKETS,
     AGI_BUCKETS,
     ALL_BUCKETS,
+    BUCKET_SLUGS,
+    PROGRAM_SLUGS,
+    AGI_SLUGS,
+    ALL_SLUGS,
+    bucketToSlug,
+    slugToBucket,
     isAgiBucket,
+    isAgiSlug,
     bucketProgram,
 };

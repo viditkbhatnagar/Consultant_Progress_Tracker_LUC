@@ -2,7 +2,14 @@ const {
     PROGRAM_BUCKETS,
     AGI_BUCKETS,
     ALL_BUCKETS,
+    BUCKET_SLUGS,
+    PROGRAM_SLUGS,
+    AGI_SLUGS,
+    ALL_SLUGS,
+    bucketToSlug,
+    slugToBucket,
     isAgiBucket,
+    isAgiSlug,
     bucketProgram,
 } = require('../../services/execOverview/bucketing');
 
@@ -18,6 +25,34 @@ describe('execOverview bucketing', () => {
         expect(isAgiBucket('AGI Standalone')).toBe(true);
         expect(isAgiBucket('SSM MBA')).toBe(false);
         expect(isAgiBucket('MUST')).toBe(false);
+    });
+
+    describe('bucket slugs (safe DB field names)', () => {
+        test('every bucket has a slug', () => {
+            for (const b of ALL_BUCKETS) {
+                expect(typeof BUCKET_SLUGS[b]).toBe('string');
+                expect(BUCKET_SLUGS[b]).toMatch(/^[a-z0-9_]+$/);
+            }
+        });
+        test('PROGRAM_SLUGS + AGI_SLUGS = ALL_SLUGS, no dupes', () => {
+            expect(PROGRAM_SLUGS).toHaveLength(14);
+            expect(AGI_SLUGS).toEqual(['agi', 'agi_standalone']);
+            expect(new Set(ALL_SLUGS).size).toBe(16);
+        });
+        test('bucketToSlug / slugToBucket round-trip', () => {
+            for (const b of ALL_BUCKETS) {
+                expect(slugToBucket(bucketToSlug(b))).toBe(b);
+            }
+        });
+        test('isAgiSlug agrees with isAgiBucket', () => {
+            expect(isAgiSlug('agi')).toBe(true);
+            expect(isAgiSlug('agi_standalone')).toBe(true);
+            expect(isAgiSlug('knights_mba')).toBe(false);
+        });
+        test('unknown inputs return null', () => {
+            expect(bucketToSlug('Bogus')).toBeNull();
+            expect(slugToBucket('bogus')).toBeNull();
+        });
     });
 
     describe('university-driven buckets (university wins)', () => {

@@ -1,8 +1,10 @@
-// Integration specs for the Executive Overview aggregation service.
+// Integration specs for the manual-entry Executive Overview aggregator.
 // Uses mongodb-memory-server (same setup pattern as Export Center tests).
 //
-// Verifies: total YTD/MTD roll-up, AGI exclusion, LUC zero-fee filter,
-// team-detail per-month structure, and team_lead scope enforcement.
+// Verifies: team-detail per-month structure with auto totals + % Rev,
+// Executive Overview KPI/team/consultant/program roll-ups, AGI is
+// excluded from Total Admissions but tracked in its own column,
+// and team_lead scope guard on getTeamDetail.
 
 const mongoose = require('mongoose');
 const {
@@ -12,10 +14,9 @@ const {
     insertRaw,
 } = require('../exports/_setup');
 
-require('../../models/Student');
 require('../../models/User');
 require('../../models/Consultant');
-require('../../models/MonthlyTarget');
+require('../../models/TeamMonthlyEntry');
 
 const {
     getExecutiveOverview,
@@ -30,7 +31,7 @@ const tonyId = new mongoose.Types.ObjectId();
 const elizabethId = new mongoose.Types.ObjectId();
 const sweethaId = new mongoose.Types.ObjectId();
 
-async function seedTinyDataset() {
+async function seed() {
     await insertRaw('User', [
         {
             _id: tonyId,
@@ -47,135 +48,94 @@ async function seedTinyDataset() {
         { _id: elizabethId, name: 'Elizabeth', teamLead: tonyId, organization: 'luc', isActive: true },
         { _id: sweethaId, name: 'Swetha', teamLead: tonyId, organization: 'luc', isActive: true },
     ]);
-    // 4 students: 2 LUC with admissionFeePaid > 0, 1 LUC with 0 (filtered),
-    // 1 AGI (excluded from totalAdmissions count).
-    await insertRaw('Student', [
+    // Two months entered:
+    //  Jan — Elizabeth target=110k achieved=208k, knights_mba=4, dba=3
+    //        Swetha   target=130k achieved=209k, ssm_mba=2, ssm_bba=2, knights_mba=3, dba=1
+    //  Feb — Elizabeth target=110k achieved=100k, agi=4, knights_mba=2, knights_bba=2
+    await insertRaw('TeamMonthlyEntry', [
         {
-            organization: 'luc',
-            consultant: elizabethId,
-            consultantName: 'Elizabeth',
-            teamLead: tonyId,
-            studentName: 'Stu A',
-            program: 'MBA',
-            university: 'Knights College',
-            admissionFeePaid: 50000,
-            closingDate: '2025-01-15',
+            organization: 'luc', teamLead: tonyId, consultant: elizabethId,
+            consultantName: 'Elizabeth', year: 2025, month: 1,
+            monthlyTarget: 110000, achievedRevenue: 208000,
+            knights_mba: 4, dba: 3,
         },
         {
-            organization: 'luc',
-            consultant: sweethaId,
-            consultantName: 'Swetha',
-            teamLead: tonyId,
-            studentName: 'Stu B',
-            program: 'BBA',
-            university: 'Knights College',
-            admissionFeePaid: 30000,
-            closingDate: '2025-01-20',
+            organization: 'luc', teamLead: tonyId, consultant: sweethaId,
+            consultantName: 'Swetha', year: 2025, month: 1,
+            monthlyTarget: 130000, achievedRevenue: 209000,
+            ssm_mba: 2, ssm_bba: 2, knights_mba: 3, dba: 1,
         },
         {
-            organization: 'luc',
-            consultant: elizabethId,
-            consultantName: 'Elizabeth',
-            teamLead: tonyId,
-            studentName: 'Stu C zero',
-            program: 'MBA',
-            university: 'Knights College',
-            admissionFeePaid: 0, // hidden by applyHideLucZeroFeeFilter
-            closingDate: '2025-02-10',
+            organization: 'luc', teamLead: tonyId, consultant: elizabethId,
+            consultantName: 'Elizabeth', year: 2025, month: 2,
+            monthlyTarget: 110000, achievedRevenue: 100000,
+            agi: 4, knights_mba: 2, knights_bba: 2,
         },
-        {
-            organization: 'luc',
-            consultant: elizabethId,
-            consultantName: 'Elizabeth',
-            teamLead: tonyId,
-            studentName: 'Stu D AGI',
-            program: 'Pathway Program Certification',
-            university: 'AGI – American Global Institute (Certifications)',
-            admissionFeePaid: 12000,
-            closingDate: '2025-02-15',
-        },
-    ]);
-    await insertRaw('MonthlyTarget', [
-        { organization: 'luc', teamLead: tonyId, consultant: elizabethId, consultantName: 'Elizabeth', year: 2025, month: 1, targetAmount: 100000 },
-        { organization: 'luc', teamLead: tonyId, consultant: sweethaId, consultantName: 'Swetha', year: 2025, month: 1, targetAmount: 50000 },
-        { organization: 'luc', teamLead: tonyId, consultant: elizabethId, consultantName: 'Elizabeth', year: 2025, month: 2, targetAmount: 80000 },
     ]);
 }
 
-describe('getExecutiveOverview', () => {
-    test('rolls up KPIs across the year', async () => {
-        await seedTinyDataset();
-        const out = await getExecutiveOverview({ year: 2025 });
-
-        expect(out.year).toBe(2025);
-        // KPIs: 1 team Tony — Jan: target 150k, achieved 80k. Feb: target
-        // 80k, achieved 12k (the AGI student still contributes revenue;
-        // it's only excluded from totalAdmissions count).
-        // Since the test runs in 2025 + later, currentMonth = 12 path
-        // ensures full-year YTD = sum of all months.
-        expect(out.kpi.ytdTarget).toBe(150000 + 80000);
-        expect(out.kpi.ytdAchieved).toBe(50000 + 30000 + 12000);
-    });
-
-    test('LUC zero-fee students are excluded from revenue + program counts', async () => {
-        await seedTinyDataset();
-        const out = await getExecutiveOverview({ year: 2025 });
-        // Knights MBA program count must NOT include "Stu C zero" (filtered).
-        const knightsMba = out.programs.find((p) => p.program === 'KNIGHTS MBA');
-        expect(knightsMba.ytdTotal).toBe(1); // only Stu A
-    });
-
-    test('AGI is reported separately and excluded from grand total', async () => {
-        await seedTinyDataset();
-        const out = await getExecutiveOverview({ year: 2025 });
-        const agi = out.programs.find((p) => p.program === 'AGI');
-        expect(agi.isAgi).toBe(true);
-        expect(agi.ytdTotal).toBe(1); // the Pathway Program student
-        expect(agi.share).toBeNull();
-        // Grand total = Knights MBA (1) + Knights BBA (1) = 2; AGI excluded.
-        expect(out.programGrandTotal.ytdTotal).toBe(2);
-    });
-
-    test('teamsMtd marks teams Behind when MTD% < 80%', async () => {
-        await seedTinyDataset();
-        const out = await getExecutiveOverview({ year: 2025 });
-        const tony = out.teamsMtd.find((t) => String(t.id) === String(tonyId));
-        expect(tony).toBeTruthy();
-        expect(['On Track', 'Behind']).toContain(tony.status);
-    });
-});
-
 describe('getTeamDetail', () => {
-    test('returns 12 monthly blocks each with the team members', async () => {
-        await seedTinyDataset();
+    test('returns 12 monthly blocks with members + computed totals', async () => {
+        await seed();
         const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
         expect(out.months).toHaveLength(12);
         expect(out.teamLead.name).toBe('Tony');
+
+        // January: both consultants present, totals sum correctly.
         const jan = out.months[0];
         expect(jan.members.map((m) => m.consultantName).sort()).toEqual(['Elizabeth', 'Swetha']);
-        // Jan team total achieved = 50000 + 30000 = 80000 (zero-fee filtered).
-        expect(jan.teamTotal.achievedRevenue).toBe(80000);
-        expect(jan.teamTotal.monthlyTarget).toBe(150000);
+
+        const elizabethJan = jan.members.find((m) => m.consultantName === 'Elizabeth');
+        // % Rev = 208000 / 110000.
+        expect(elizabethJan.percentRevenue).toBeCloseTo(208000 / 110000, 4);
+        // Total Admissions = sum of program columns = 4 (knights_mba) + 3 (dba) = 7.
+        expect(elizabethJan.totalAdmissions).toBe(7);
+
+        expect(jan.teamTotal.monthlyTarget).toBe(110000 + 130000);
+        expect(jan.teamTotal.achievedRevenue).toBe(208000 + 209000);
+        expect(jan.teamTotal.totalAdmissions).toBe(7 + 8); // Swetha: 2+2+3+1=8
     });
 
-    test('AGI students count in AGI bucket but NOT in totalAdmissions', async () => {
-        await seedTinyDataset();
+    test('AGI counts in its column but never in totalAdmissions', async () => {
+        await seed();
         const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
-        const feb = out.months[1]; // index 1 = February
-        const elizabeth = feb.members.find((m) => m.consultantName === 'Elizabeth');
-        // Elizabeth's Feb: 1 AGI student (counts toward AGI bucket), 0 toward totalAdmissions.
-        expect(elizabeth.buckets['AGI']).toBe(1);
-        expect(elizabeth.totalAdmissions).toBe(0);
-        expect(elizabeth.achievedRevenue).toBe(12000); // AGI still contributes revenue
+        const feb = out.months[1];
+        const elizabethFeb = feb.members.find((m) => m.consultantName === 'Elizabeth');
+        // Feb: knights_mba=2 + knights_bba=2 = 4 (agi=4 stays out of total).
+        expect(elizabethFeb.totalAdmissions).toBe(4);
+        expect(elizabethFeb.buckets['AGI']).toBe(4);
+        expect(elizabethFeb.buckets['KNIGHTS MBA']).toBe(2);
     });
 
-    test('throws 404 for unknown team lead', async () => {
+    test('months without entries show zero-valued placeholder rows', async () => {
+        await seed();
+        const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
+        const may = out.months[4]; // index 4 = May
+        // Both consultants still listed.
+        expect(may.members.map((m) => m.consultantName).sort()).toEqual(['Elizabeth', 'Swetha']);
+        // Everything zero.
+        expect(may.teamTotal.monthlyTarget).toBe(0);
+        expect(may.teamTotal.achievedRevenue).toBe(0);
+        expect(may.teamTotal.totalAdmissions).toBe(0);
+    });
+
+    test('YTD strip sums all months', async () => {
+        await seed();
+        const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
+        // Jan target=240k + Feb target=110k = 350k.
+        expect(out.ytd.target).toBe(350000);
+        // Jan achieved=417k + Feb achieved=100k = 517k.
+        expect(out.ytd.achieved).toBe(517000);
+        expect(out.ytd.percent).toBeCloseTo(517000 / 350000, 4);
+    });
+
+    test('404 on unknown team lead', async () => {
         await expect(
             getTeamDetail({ teamLeadId: new mongoose.Types.ObjectId(), year: 2025 })
         ).rejects.toMatchObject({ statusCode: 404 });
     });
 
-    test('throws 403 when team lead is not a LUC user', async () => {
+    test('403 when team lead is not LUC', async () => {
         const shId = new mongoose.Types.ObjectId();
         await insertRaw('User', [
             {
@@ -191,5 +151,38 @@ describe('getTeamDetail', () => {
         await expect(
             getTeamDetail({ teamLeadId: shId, year: 2025 })
         ).rejects.toMatchObject({ statusCode: 403 });
+    });
+});
+
+describe('getExecutiveOverview', () => {
+    test('rolls up KPI totals across all teams', async () => {
+        await seed();
+        const out = await getExecutiveOverview({ year: 2025 });
+        expect(out.year).toBe(2025);
+        expect(out.kpi.ytdTarget).toBe(240000 + 110000);
+        expect(out.kpi.ytdAchieved).toBe(417000 + 100000);
+    });
+
+    test('program × month matrix uses bucket slugs server-side and excludes AGI from grand total', async () => {
+        await seed();
+        const out = await getExecutiveOverview({ year: 2025 });
+        const agi = out.programs.find((p) => p.program === 'AGI');
+        expect(agi.isAgi).toBe(true);
+        expect(agi.ytdTotal).toBe(4);
+        expect(agi.share).toBeNull();
+
+        // Grand total YTD = sum of all program buckets (excluding AGI/AGI Std).
+        // Jan: knights_mba=4+3=7, dba=3+1=4, ssm_mba=2, ssm_bba=2 → 15
+        // Feb: knights_mba=2, knights_bba=2 → 4
+        // Grand = 19.
+        expect(out.programGrandTotal.ytdTotal).toBe(19);
+    });
+
+    test('teamsMtd assigns status based on threshold', async () => {
+        await seed();
+        const out = await getExecutiveOverview({ year: 2025 });
+        const tony = out.teamsMtd.find((t) => String(t.id) === String(tonyId));
+        expect(tony).toBeTruthy();
+        expect(['On Track', 'Behind']).toContain(tony.status);
     });
 });

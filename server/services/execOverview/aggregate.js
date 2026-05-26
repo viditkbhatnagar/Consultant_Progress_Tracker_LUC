@@ -1,33 +1,23 @@
 // Aggregation logic for the Executive Overview + Team Detail dashboards.
 //
-// Two public entry points:
-//   • getTeamDetail({ teamLeadId, year }) — per-team Excel-mirror payload.
-//     One block per calendar month. Each block lists every consultant on
-//     the team with their monthly target, achieved revenue, % progress,
-//     total admissions, AGI counts, and per-bucket program counts.
-//
-//   • getExecutiveOverview({ year }) — org-wide rollup for the new tab.
-//     KPI strip + MTD/YTD team tables + consultant snapshot + the
-//     consolidated Program × Month admissions matrix.
-//
-// Both queries:
-//   • are LUC-only (organization: 'luc')
-//   • respect the studentController's applyHideLucZeroFeeFilter (the 626
-//     importer-bug rows stay hidden — see project_luc_zero_fee_hidden.md)
-//   • exclude AGI students from "totalAdmissions" sums (they're tracked
-//     in AGI/AGI Standalone columns separately, matching the Excel)
+// Data source: TeamMonthlyEntry (one row per consultant × month).
+// Everything is manually entered to match the Excel exactly — no auto
+// derivation from Student records. Total Admissions, % Revenue, team
+// totals and YTD strips are computed in this module from the entered
+// values, mirroring the Excel formulas.
 
-const Student = require('../../models/Student');
 const User = require('../../models/User');
 const Consultant = require('../../models/Consultant');
-const MonthlyTarget = require('../../models/MonthlyTarget');
-const { applyHideLucZeroFeeFilter } = require('../../controllers/studentController');
+const TeamMonthlyEntry = require('../../models/TeamMonthlyEntry');
 const {
     PROGRAM_BUCKETS,
     AGI_BUCKETS,
     ALL_BUCKETS,
-    isAgiBucket,
-    bucketProgram,
+    PROGRAM_SLUGS,
+    AGI_SLUGS,
+    ALL_SLUGS,
+    BUCKET_SLUGS,
+    isAgiSlug,
 } = require('./bucketing');
 
 const MONTH_NAMES = [
@@ -37,70 +27,58 @@ const MONTH_NAMES = [
 
 const ON_TRACK_THRESHOLD = 0.8;
 
-// Status label derived from MTD%. Threshold lives in one place so the UI
-// doesn't drift from the backend.
 function statusFor(pct) {
-    if (pct >= ON_TRACK_THRESHOLD) return 'On Track';
-    return 'Behind';
+    return pct >= ON_TRACK_THRESHOLD ? 'On Track' : 'Behind';
 }
 
-// safeDivide for percentages where the denominator can be 0/null/undefined.
 function pct(num, den) {
     if (!den || den <= 0) return 0;
     return (num || 0) / den;
 }
 
-// Bounds for the calendar year in UTC. We use UTC midnight to match the
-// rest of the tracker (see fix/meeting-date-timezone — a99eb36).
-function yearBounds(year) {
-    return {
-        start: new Date(Date.UTC(year, 0, 1)),
-        end: new Date(Date.UTC(year + 1, 0, 1)),
-    };
+// Total admissions for a row excludes AGI columns (matches Excel
+// formula SUM(H:U), where AGI is columns F-G).
+function rowTotalAdmissions(entry) {
+    let n = 0;
+    for (const slug of PROGRAM_SLUGS) n += entry[slug] || 0;
+    return n;
 }
 
-// Pull every LUC student closed in the year, scoped by (optional) teamLead.
-// Returns lean docs with just the fields the aggregators need.
-async function loadStudents({ year, teamLeadId }) {
-    const { start, end } = yearBounds(year);
-    const filter = {
-        organization: 'luc',
-        closingDate: { $gte: start, $lt: end },
-    };
-    if (teamLeadId) filter.teamLead = teamLeadId;
-    applyHideLucZeroFeeFilter(filter);
-
-    return Student.find(filter)
-        .select('consultant consultantName teamLead university program admissionFeePaid closingDate')
-        .lean();
-}
-
-// Pull MonthlyTarget rows for the year, scoped by (optional) teamLead.
-async function loadTargets({ year, teamLeadId }) {
-    const filter = { organization: 'luc', year };
-    if (teamLeadId) filter.teamLead = teamLeadId;
-    return MonthlyTarget.find(filter).lean();
-}
-
-// Group key for (consultant id || consultantName fallback). Older Students
-// may have a null consultant ref so we fall back to the denormalized name.
-function consultantKey(student) {
-    if (student.consultant) return String(student.consultant);
-    return `name:${(student.consultantName || '').trim().toLowerCase()}`;
-}
-
-// Build the per-(consultant, month) accumulator.
-function emptyConsultantMonth() {
+// Convert a TeamMonthlyEntry doc into the per-row shape the UI consumes.
+function shapeRow(entry, consultantMeta) {
     const buckets = {};
-    for (const b of ALL_BUCKETS) buckets[b] = 0;
+    for (const bucket of ALL_BUCKETS) {
+        buckets[bucket] = entry[BUCKET_SLUGS[bucket]] || 0;
+    }
     return {
-        achievedRevenue: 0,
-        totalAdmissions: 0, // excludes AGI buckets
+        consultantId: entry.consultant,
+        consultantName: entry.consultantName || consultantMeta?.name || 'Unknown',
+        isActive: consultantMeta?.isActive ?? true,
+        monthlyTarget: entry.monthlyTarget || 0,
+        achievedRevenue: entry.achievedRevenue || 0,
+        percentRevenue: pct(entry.achievedRevenue, entry.monthlyTarget),
+        totalAdmissions: rowTotalAdmissions(entry),
         buckets,
     };
 }
 
-// Build per-team payload matching the Excel team sheet structure.
+// Build an empty placeholder row for a consultant who has no entry yet
+// for a given month — keeps the table shape stable.
+function placeholderRow(consultant) {
+    const buckets = {};
+    for (const bucket of ALL_BUCKETS) buckets[bucket] = 0;
+    return {
+        consultantId: consultant._id,
+        consultantName: consultant.name,
+        isActive: consultant.isActive ?? true,
+        monthlyTarget: 0,
+        achievedRevenue: 0,
+        percentRevenue: 0,
+        totalAdmissions: 0,
+        buckets,
+    };
+}
+
 async function getTeamDetail({ teamLeadId, year }) {
     const teamLead = await User.findById(teamLeadId).select('name teamName organization role').lean();
     if (!teamLead) {
@@ -114,121 +92,72 @@ async function getTeamDetail({ teamLeadId, year }) {
         throw err;
     }
 
-    // All consultants under this team lead (active OR inactive — historical
-    // data for inactive consultants should still appear).
     const consultants = await Consultant.find({ teamLead: teamLeadId })
         .select('name email isActive')
         .lean();
 
-    const [students, targets] = await Promise.all([
-        loadStudents({ year, teamLeadId }),
-        loadTargets({ year, teamLeadId }),
-    ]);
+    const entries = await TeamMonthlyEntry.find({
+        organization: 'luc',
+        teamLead: teamLeadId,
+        year,
+    }).lean();
 
-    // Index: consultantKey -> month (1..12) -> accumulator
-    const index = new Map();
-    const consultantById = new Map();
-    for (const c of consultants) {
-        consultantById.set(String(c._id), c);
-    }
-
-    // Seed all known consultants for all 12 months so the UI shows zeros
-    // for rows with no admissions yet.
-    for (const c of consultants) {
-        const key = String(c._id);
-        const months = {};
-        for (let m = 1; m <= 12; m++) months[m] = emptyConsultantMonth();
-        index.set(key, { meta: { name: c.name, id: c._id, isActive: c.isActive }, months });
-    }
-
-    // Walk students once and accumulate.
-    for (const s of students) {
-        const key = consultantKey(s);
-        if (!index.has(key)) {
-            // Historical consultant — show the row labeled with the name
-            // we have on the student doc.
-            const months = {};
-            for (let m = 1; m <= 12; m++) months[m] = emptyConsultantMonth();
-            index.set(key, {
-                meta: { name: s.consultantName || 'Unknown', id: null, isActive: false },
-                months,
+    // Build (consultantId -> month -> entry) index.
+    const idx = new Map();
+    for (const c of consultants) idx.set(String(c._id), { meta: c, months: {} });
+    for (const e of entries) {
+        const key = String(e.consultant);
+        if (!idx.has(key)) {
+            idx.set(key, {
+                meta: { _id: e.consultant, name: e.consultantName, isActive: false },
+                months: {},
             });
         }
-        const month = new Date(s.closingDate).getUTCMonth() + 1;
-        const slot = index.get(key).months[month];
-        const bucket = bucketProgram({ university: s.university, program: s.program });
-        if (bucket) {
-            slot.buckets[bucket] += 1;
-            if (!isAgiBucket(bucket)) slot.totalAdmissions += 1;
-        } else {
-            // Still count toward total admissions even if bucketing failed —
-            // the row exists, the dashboard just can't column-place it.
-            slot.totalAdmissions += 1;
-        }
-        slot.achievedRevenue += s.admissionFeePaid || 0;
+        idx.get(key).months[e.month] = e;
     }
 
-    // Targets index: consultantKey -> month -> targetAmount
-    const targetIndex = new Map();
-    for (const t of targets) {
-        const key = String(t.consultant);
-        if (!targetIndex.has(key)) targetIndex.set(key, {});
-        targetIndex.get(key)[t.month] = t.targetAmount;
-    }
-
-    // Shape monthly blocks for the UI.
     const months = [];
     for (let m = 1; m <= 12; m++) {
-        const memberRows = [];
-        let teamTotal = emptyConsultantMonth();
-        let teamTarget = 0;
-
-        for (const [key, entry] of index.entries()) {
-            const slot = entry.months[m];
-            const target = (targetIndex.get(key) || {})[m] || 0;
-            const achieved = slot.achievedRevenue;
-
-            memberRows.push({
-                consultantId: entry.meta.id,
-                consultantName: entry.meta.name,
-                isActive: entry.meta.isActive,
-                monthlyTarget: target,
-                achievedRevenue: achieved,
-                percentRevenue: pct(achieved, target),
-                totalAdmissions: slot.totalAdmissions,
-                buckets: { ...slot.buckets },
-            });
-
-            teamTotal.achievedRevenue += achieved;
-            teamTotal.totalAdmissions += slot.totalAdmissions;
-            for (const b of ALL_BUCKETS) teamTotal.buckets[b] += slot.buckets[b];
-            teamTarget += target;
+        let memberRows = [];
+        for (const [, ctx] of idx.entries()) {
+            const entry = ctx.months[m];
+            memberRows.push(entry ? shapeRow(entry, ctx.meta) : placeholderRow(ctx.meta));
         }
+        memberRows.sort((a, b) => a.consultantName.localeCompare(b.consultantName));
 
+        // TEAM TOTAL row = column-sum over members.
+        const teamBuckets = {};
+        for (const b of ALL_BUCKETS) teamBuckets[b] = 0;
+        let teamTarget = 0;
+        let teamAchieved = 0;
+        for (const row of memberRows) {
+            teamTarget += row.monthlyTarget;
+            teamAchieved += row.achievedRevenue;
+            for (const b of ALL_BUCKETS) teamBuckets[b] += row.buckets[b];
+        }
+        const teamAdmissions = PROGRAM_BUCKETS.reduce((acc, b) => acc + teamBuckets[b], 0);
         months.push({
             month: m,
             monthName: MONTH_NAMES[m - 1],
-            members: memberRows.sort((a, b) =>
-                a.consultantName.localeCompare(b.consultantName)
-            ),
+            members: memberRows,
             teamTotal: {
                 monthlyTarget: teamTarget,
-                achievedRevenue: teamTotal.achievedRevenue,
-                percentRevenue: pct(teamTotal.achievedRevenue, teamTarget),
-                totalAdmissions: teamTotal.totalAdmissions,
-                buckets: teamTotal.buckets,
+                achievedRevenue: teamAchieved,
+                percentRevenue: pct(teamAchieved, teamTarget),
+                totalAdmissions: teamAdmissions,
+                buckets: teamBuckets,
             },
         });
     }
 
-    // YTD = months 1..currentMonth (only when viewing the current year).
-    const now = new Date();
-    const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() + 1 : 12;
+    // YTD strip: sum every month — for past years that's a full year, for
+    // the current year it naturally ends at the last entered month
+    // (months past TODAY simply have no entries → zeros).
     let ytdTarget = 0;
     let ytdAchieved = 0;
-    for (let m = 1; m <= currentMonth; m++) {
-        ytdTarget += months[m - 1].teamTotal.monthlyTarget;
-        ytdAchieved += months[m - 1].teamTotal.achievedRevenue;
+    for (const b of months) {
+        ytdTarget += b.teamTotal.monthlyTarget;
+        ytdAchieved += b.teamTotal.achievedRevenue;
     }
 
     return {
@@ -241,6 +170,7 @@ async function getTeamDetail({ teamLeadId, year }) {
         buckets: ALL_BUCKETS,
         programBuckets: PROGRAM_BUCKETS,
         agiBuckets: AGI_BUCKETS,
+        bucketSlugs: BUCKET_SLUGS,
         ytd: {
             target: ytdTarget,
             achieved: ytdAchieved,
@@ -251,30 +181,21 @@ async function getTeamDetail({ teamLeadId, year }) {
     };
 }
 
-// Build the executive aggregate payload.
 async function getExecutiveOverview({ year }) {
-    const teamLeads = await User.find({
-        role: 'team_lead',
-        organization: 'luc',
-        isActive: true,
-    })
-        .select('name teamName')
-        .lean();
-
-    const consultants = await Consultant.find({ organization: 'luc' })
-        .select('name teamLead isActive')
-        .lean();
-    const consultantById = new Map(consultants.map((c) => [String(c._id), c]));
-
-    const [students, targets] = await Promise.all([
-        loadStudents({ year }),
-        loadTargets({ year }),
+    const [teamLeads, consultants, entries] = await Promise.all([
+        User.find({ role: 'team_lead', organization: 'luc', isActive: true })
+            .select('name teamName')
+            .lean(),
+        Consultant.find({ organization: 'luc' })
+            .select('name teamLead isActive')
+            .lean(),
+        TeamMonthlyEntry.find({ organization: 'luc', year }).lean(),
     ]);
 
     const now = new Date();
     const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() + 1 : 12;
+    const mtdMonth = currentMonth;
 
-    // Per-team accumulators: targets per month, achieved per month.
     const teamIdx = new Map();
     for (const tl of teamLeads) {
         teamIdx.set(String(tl._id), {
@@ -285,7 +206,6 @@ async function getExecutiveOverview({ year }) {
         });
     }
 
-    // Per-consultant accumulators (for the Consultant Performance snapshot).
     const consIdx = new Map();
     for (const c of consultants) {
         consIdx.set(String(c._id), {
@@ -296,39 +216,31 @@ async function getExecutiveOverview({ year }) {
         });
     }
 
-    // Distribute targets.
-    for (const t of targets) {
-        const cKey = String(t.consultant);
-        const tlKey = String(t.teamLead);
-        if (consIdx.has(cKey)) consIdx.get(cKey).monthly[t.month].target += t.targetAmount;
-        if (teamIdx.has(tlKey)) teamIdx.get(tlKey).monthly[t.month].target += t.targetAmount;
-    }
-
-    // Distribute achieved + program buckets.
     const programMatrix = {};
-    for (const b of ALL_BUCKETS) programMatrix[b] = Array.from({ length: 13 }, () => 0);
+    for (const slug of ALL_SLUGS) programMatrix[slug] = Array.from({ length: 13 }, () => 0);
 
-    for (const s of students) {
-        const month = new Date(s.closingDate).getUTCMonth() + 1;
-        const cKey = s.consultant ? String(s.consultant) : null;
-        const tlKey = s.teamLead ? String(s.teamLead) : null;
-        const amount = s.admissionFeePaid || 0;
-        if (cKey && consIdx.has(cKey)) consIdx.get(cKey).monthly[month].achieved += amount;
-        if (tlKey && teamIdx.has(tlKey)) teamIdx.get(tlKey).monthly[month].achieved += amount;
-
-        const bucket = bucketProgram({ university: s.university, program: s.program });
-        if (bucket) programMatrix[bucket][month] += 1;
+    for (const e of entries) {
+        const cKey = String(e.consultant);
+        const tlKey = String(e.teamLead);
+        if (consIdx.has(cKey)) {
+            consIdx.get(cKey).monthly[e.month].target += e.monthlyTarget || 0;
+            consIdx.get(cKey).monthly[e.month].achieved += e.achievedRevenue || 0;
+        }
+        if (teamIdx.has(tlKey)) {
+            teamIdx.get(tlKey).monthly[e.month].target += e.monthlyTarget || 0;
+            teamIdx.get(tlKey).monthly[e.month].achieved += e.achievedRevenue || 0;
+        }
+        for (const slug of ALL_SLUGS) {
+            programMatrix[slug][e.month] += e[slug] || 0;
+        }
     }
 
-    // MTD / YTD team tables.
-    const mtdMonth = currentMonth;
     const teamsMtd = [];
     const teamsYtd = [];
-    let totalYtdTarget = 0;
-    let totalYtdAchieved = 0;
     let totalMtdTarget = 0;
     let totalMtdAchieved = 0;
-
+    let totalYtdTarget = 0;
+    let totalYtdAchieved = 0;
     for (const team of teamIdx.values()) {
         let ytdTarget = 0;
         let ytdAchieved = 0;
@@ -364,7 +276,6 @@ async function getExecutiveOverview({ year }) {
         totalYtdAchieved += ytdAchieved;
     }
 
-    // Consultant Performance snapshot.
     const consultantsSnapshot = [];
     for (const c of consIdx.values()) {
         let ytdTarget = 0;
@@ -383,20 +294,17 @@ async function getExecutiveOverview({ year }) {
         });
     }
 
-    // Program × Month matrix in the order the Excel uses, with YTD totals
-    // and the AGI exclusion rule baked in.
     const programRows = ALL_BUCKETS.map((bucket) => {
+        const slug = BUCKET_SLUGS[bucket];
         const counts = [];
         let ytd = 0;
         for (let m = 1; m <= 12; m++) {
-            counts.push(programMatrix[bucket][m]);
-            ytd += programMatrix[bucket][m];
+            counts.push(programMatrix[slug][m]);
+            ytd += programMatrix[slug][m];
         }
-        return { program: bucket, monthly: counts, ytdTotal: ytd, isAgi: isAgiBucket(bucket) };
+        return { program: bucket, slug, monthly: counts, ytdTotal: ytd, isAgi: isAgiSlug(slug) };
     });
 
-    // Grand total ROW excludes AGI buckets (the Excel labels AGI as
-    // "(excl. from total)" and tallies the rest).
     const grandTotalRow = Array.from({ length: 12 }, () => 0);
     let grandYtd = 0;
     for (const row of programRows) {
@@ -404,9 +312,9 @@ async function getExecutiveOverview({ year }) {
         for (let m = 0; m < 12; m++) grandTotalRow[m] += row.monthly[m];
         grandYtd += row.ytdTotal;
     }
-    const totalForShare = grandYtd || 1;
+    const denom = grandYtd || 1;
     for (const row of programRows) {
-        row.share = row.isAgi ? null : row.ytdTotal / totalForShare;
+        row.share = row.isAgi ? null : row.ytdTotal / denom;
     }
 
     return {
@@ -429,6 +337,7 @@ async function getExecutiveOverview({ year }) {
         buckets: ALL_BUCKETS,
         programBuckets: PROGRAM_BUCKETS,
         agiBuckets: AGI_BUCKETS,
+        bucketSlugs: BUCKET_SLUGS,
         monthNames: MONTH_NAMES,
     };
 }
