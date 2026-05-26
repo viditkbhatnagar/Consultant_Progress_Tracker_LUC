@@ -29,7 +29,7 @@ import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import consultantService from '../services/consultantService';
-import { listTargets, bulkUpsertTargets } from '../services/monthlyTargetService';
+import { listEntries, bulkUpsertEntries } from '../services/teamEntryService';
 import { getTeams } from '../services/execOverviewService';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -82,17 +82,17 @@ const MonthlyTargetsPage = () => {
         setError(null);
         Promise.all([
             consultantService.getConsultants({ organization: 'luc' }),
-            listTargets({ year, teamLeadId }),
+            listEntries({ year, teamLeadId }),
         ])
-            .then(([cRes, tRes]) => {
+            .then(([cRes, eRes]) => {
                 if (cancelled) return;
                 const filtered = (cRes.data || []).filter((c) => String(c.teamLead) === String(teamLeadId));
                 setConsultants(filtered);
                 const g = {};
                 for (const c of filtered) g[c._id] = {};
-                for (const t of (tRes.data || [])) {
-                    if (!g[t.consultant]) g[t.consultant] = {};
-                    g[t.consultant][t.month] = t.targetAmount;
+                for (const e of (eRes.data || [])) {
+                    if (!g[e.consultant]) g[e.consultant] = {};
+                    g[e.consultant][e.month] = e.monthlyTarget;
                 }
                 setGrid(g);
                 setLoading(false);
@@ -161,12 +161,12 @@ const MonthlyTargetsPage = () => {
                     teamLead: teamLeadId,
                     year,
                     month: m,
-                    targetAmount: amount,
+                    monthlyTarget: amount,
                 });
             }
         }
         try {
-            const res = await bulkUpsertTargets(rows);
+            const res = await bulkUpsertEntries(rows);
             const errs = res.data?.errors || [];
             setToast({
                 severity: errs.length ? 'warning' : 'success',

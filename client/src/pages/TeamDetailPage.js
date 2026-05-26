@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Box,
     Paper,
@@ -18,7 +18,11 @@ import {
     Grid,
     Chip,
     Stack,
+    TextField,
+    Snackbar,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircleOutline';
+import SyncIcon from '@mui/icons-material/Sync';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
@@ -27,17 +31,18 @@ import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import { getTeamDetail, getTeams } from '../services/execOverviewService';
+import { listEntries, upsertEntry, bulkUpsertEntries } from '../services/teamEntryService';
+import consultantService from '../services/consultantService';
+
+// Display + formatting helpers ----------------------------------------------
 
 const fmtCurrency = (n) => {
     if (n == null) return '—';
     return new Intl.NumberFormat('en-AE', {
-        style: 'currency',
-        currency: 'AED',
-        maximumFractionDigits: 0,
+        style: 'currency', currency: 'AED', maximumFractionDigits: 0,
     }).format(n);
 };
 const fmtPct = (n) => (n == null || Number.isNaN(n) ? '0.0%' : `${(n * 100).toFixed(1)}%`);
-const fmtCount = (n) => (n == null ? '0' : Number(n).toLocaleString('en-US'));
 
 const yearOptions = () => {
     const now = new Date().getUTCFullYear();
@@ -46,75 +51,192 @@ const yearOptions = () => {
     return out;
 };
 
-const MonthBlock = ({ block, buckets, agiBuckets, programBuckets }) => {
-    const isAgi = (b) => agiBuckets.includes(b);
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// Editable numeric cell. Local state so keystrokes don't re-render the
+// rest of the grid; commits via `onCommit(fieldSlug, number)` when the
+// user blurs the field or presses Enter.
+const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurrency }) {
+    const [local, setLocal] = useState(value === 0 ? '' : String(value ?? ''));
+    const inputRef = useRef(null);
+    useEffect(() => {
+        // External value changed (e.g. via paste). Don't clobber while user
+        // is mid-edit.
+        if (document.activeElement !== inputRef.current) {
+            setLocal(value === 0 ? '' : String(value ?? ''));
+        }
+    }, [value]);
+
+    const commit = useCallback(() => {
+        const n = local === '' ? 0 : Number(local);
+        if (!Number.isFinite(n) || n < 0) {
+            // revert visual to last good value
+            setLocal(value === 0 ? '' : String(value ?? ''));
+            return;
+        }
+        if (n !== (value ?? 0)) onCommit(fieldSlug, n);
+    }, [local, value, fieldSlug, onCommit]);
+
     return (
-        <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
-            <Box sx={{ px: 2.5, py: 1.5, bgcolor: 'var(--d-surface-muted, #F1EFEA)', borderBottom: '1px solid var(--d-border-soft, #ECE9E2)', display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography sx={{ fontSize: 16, fontWeight: 700, color: 'var(--d-text, #191918)', letterSpacing: '-0.01em' }}>
-                    {block.monthName}
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                    <Chip label={`Target: ${fmtCurrency(block.teamTotal.monthlyTarget)}`} size="small" sx={{ fontWeight: 600 }} />
-                    <Chip label={`Achieved: ${fmtCurrency(block.teamTotal.achievedRevenue)}`} size="small" color="success" variant="outlined" />
-                    <Chip label={fmtPct(block.teamTotal.percentRevenue)} size="small" color={block.teamTotal.percentRevenue >= 0.8 ? 'success' : 'warning'} />
-                    <Chip label={`${block.teamTotal.totalAdmissions} admissions`} size="small" variant="outlined" />
-                </Stack>
-            </Box>
-            <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table size="small">
-                    <TableHead>
-                        <TableRow sx={{ bgcolor: 'var(--d-surface, #FFFFFF)' }}>
-                            <TableCell sx={{ fontWeight: 700, position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', zIndex: 1, minWidth: 150 }}>Member</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Monthly Target</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Achieved</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>% Rev</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>Adm.</TableCell>
-                            {buckets.map((b) => (
-                                <TableCell key={b} align="right" sx={{ fontWeight: 700, fontSize: 11, bgcolor: isAgi(b) ? 'rgba(217,119,6,0.06)' : undefined }}>
-                                    {b}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {block.members.map((m) => (
-                            <TableRow key={`${m.consultantId || m.consultantName}`} hover>
-                                <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
-                                    {m.consultantName}
-                                    {m.isActive === false ? (
-                                        <Chip label="inactive" size="small" sx={{ ml: 0.75, height: 16, fontSize: 9 }} variant="outlined" />
-                                    ) : null}
-                                </TableCell>
-                                <TableCell align="right">{fmtCurrency(m.monthlyTarget)}</TableCell>
-                                <TableCell align="right">{m.achievedRevenue ? fmtCurrency(m.achievedRevenue) : '—'}</TableCell>
-                                <TableCell align="right" sx={{ color: m.percentRevenue >= 0.8 ? '#1F7A35' : '#A35A06', fontWeight: 600 }}>{fmtPct(m.percentRevenue)}</TableCell>
-                                <TableCell align="right">{m.totalAdmissions || '—'}</TableCell>
-                                {buckets.map((b) => (
-                                    <TableCell key={b} align="right" sx={{ bgcolor: isAgi(b) ? 'rgba(217,119,6,0.04)' : undefined }}>
-                                        {m.buckets[b] ? fmtCount(m.buckets[b]) : '—'}
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        ))}
-                        <TableRow sx={{ bgcolor: 'rgba(35,131,226,0.06)' }}>
-                            <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'rgba(35,131,226,0.12)', fontWeight: 700 }}>TEAM TOTAL</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(block.teamTotal.monthlyTarget)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(block.teamTotal.achievedRevenue)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtPct(block.teamTotal.percentRevenue)}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700 }}>{block.teamTotal.totalAdmissions || '—'}</TableCell>
-                            {buckets.map((b) => (
-                                <TableCell key={b} align="right" sx={{ fontWeight: 700, bgcolor: isAgi(b) ? 'rgba(217,119,6,0.08)' : undefined }}>
-                                    {block.teamTotal.buckets[b] || '—'}
-                                </TableCell>
-                            ))}
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </TableContainer>
-        </Paper>
+        <TextField
+            inputRef={inputRef}
+            value={local}
+            onChange={(e) => setLocal(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commit();
+                    inputRef.current?.blur();
+                }
+            }}
+            size="small"
+            type="number"
+            inputProps={{
+                min: 0,
+                style: {
+                    textAlign: 'right',
+                    fontSize: isCurrency ? 12 : 13,
+                    padding: '4px 6px',
+                    width: isCurrency ? 90 : 50,
+                },
+            }}
+            sx={{
+                '& .MuiOutlinedInput-root': {
+                    borderRadius: '4px',
+                    backgroundColor: 'transparent',
+                },
+                '& fieldset': { border: 'none' },
+                '&:hover .MuiOutlinedInput-root': {
+                    backgroundColor: 'rgba(35,131,226,0.04)',
+                },
+                '& .MuiOutlinedInput-root.Mui-focused': {
+                    backgroundColor: 'rgba(35,131,226,0.08)',
+                    boxShadow: 'inset 0 0 0 1px var(--d-accent, #2383E2)',
+                },
+            }}
+        />
     );
-};
+});
+
+// Single editable row for one consultant × month. Owns the optimistic
+// state for its fields so typing doesn't cause a full grid re-render.
+const EntryRow = React.memo(function EntryRow({
+    consultant,
+    month,
+    year,
+    teamLeadId,
+    initial,
+    bucketSlugs,
+    buckets,
+    agiBuckets,
+    onPersisted,
+    onPaste,
+    canEdit,
+}) {
+    const [row, setRow] = useState(initial);
+    const [saving, setSaving] = useState(false);
+    const [savedAt, setSavedAt] = useState(null);
+    const saveTimerRef = useRef(null);
+
+    // Re-sync when initial changes (e.g. after a bulk paste).
+    useEffect(() => { setRow(initial); }, [initial]);
+
+    const programSlugs = buckets.filter((b) => !agiBuckets.includes(b)).map((b) => bucketSlugs[b]);
+
+    const totalAdmissions = programSlugs.reduce((acc, slug) => acc + (row[slug] || 0), 0);
+    const percentRevenue =
+        row.monthlyTarget > 0 ? (row.achievedRevenue || 0) / row.monthlyTarget : 0;
+
+    const persistRow = useCallback(async (next) => {
+        setSaving(true);
+        try {
+            await upsertEntry({
+                consultant: consultant._id,
+                teamLead: teamLeadId,
+                year,
+                month,
+                ...next,
+            });
+            setSavedAt(Date.now());
+            onPersisted?.();
+        } catch (err) {
+            // surface via parent
+            onPersisted?.(err);
+        } finally {
+            setSaving(false);
+        }
+    }, [consultant._id, teamLeadId, year, month, onPersisted]);
+
+    const handleCommit = useCallback((field, num) => {
+        if (!canEdit) return;
+        setRow((prev) => {
+            const next = { ...prev, [field]: num };
+            // Debounce persistence so rapid tabbing through cells fires
+            // one save instead of many.
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+            saveTimerRef.current = setTimeout(() => persistRow(next), 250);
+            return next;
+        });
+    }, [canEdit, persistRow]);
+
+    // Excel paste handler — let the parent component reassemble the
+    // matrix; this row only triggers it.
+    const handlePaste = useCallback((e, fieldSlug) => {
+        if (!canEdit) return;
+        const text = e.clipboardData?.getData('text/plain');
+        if (!text || (!text.includes('\t') && !text.includes('\n'))) return;
+        e.preventDefault();
+        onPaste?.({ consultantId: consultant._id, month, startSlug: fieldSlug, text });
+    }, [canEdit, consultant._id, month, onPaste]);
+
+    const cellSx = { p: 0.4 };
+
+    return (
+        <TableRow hover sx={consultant.isActive === false ? { opacity: 0.7 } : null}>
+            <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', fontWeight: 600, zIndex: 1 }}>
+                {consultant.name}
+                {consultant.isActive === false ? (
+                    <Chip label="inactive" size="small" sx={{ ml: 0.75, height: 16, fontSize: 9 }} variant="outlined" />
+                ) : null}
+                {saving ? (
+                    <SyncIcon sx={{ ml: 0.5, fontSize: 14, color: 'var(--d-text-muted)', verticalAlign: 'middle' }} />
+                ) : savedAt && Date.now() - savedAt < 2000 ? (
+                    <CheckCircleIcon sx={{ ml: 0.5, fontSize: 14, color: '#1F7A35', verticalAlign: 'middle' }} />
+                ) : null}
+            </TableCell>
+            <TableCell align="right" sx={cellSx} onPasteCapture={(e) => handlePaste(e, 'monthlyTarget')}>
+                <NumCell value={row.monthlyTarget} onCommit={handleCommit} fieldSlug="monthlyTarget" isCurrency />
+            </TableCell>
+            <TableCell align="right" sx={cellSx} onPasteCapture={(e) => handlePaste(e, 'achievedRevenue')}>
+                <NumCell value={row.achievedRevenue} onCommit={handleCommit} fieldSlug="achievedRevenue" isCurrency />
+            </TableCell>
+            <TableCell align="right" sx={{ ...cellSx, color: percentRevenue >= 0.8 ? '#1F7A35' : '#A35A06', fontWeight: 600 }}>
+                {fmtPct(percentRevenue)}
+            </TableCell>
+            <TableCell align="right" sx={cellSx}>
+                {totalAdmissions || '—'}
+            </TableCell>
+            {buckets.map((b) => {
+                const slug = bucketSlugs[b];
+                const isAgi = agiBuckets.includes(b);
+                return (
+                    <TableCell
+                        key={b}
+                        align="right"
+                        sx={{ ...cellSx, bgcolor: isAgi ? 'rgba(217,119,6,0.04)' : undefined }}
+                        onPasteCapture={(e) => handlePaste(e, slug)}
+                    >
+                        <NumCell value={row[slug]} onCommit={handleCommit} fieldSlug={slug} />
+                    </TableCell>
+                );
+            })}
+        </TableRow>
+    );
+});
 
 const TeamDetailPage = () => {
     const navigate = useNavigate();
@@ -128,8 +250,12 @@ const TeamDetailPage = () => {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
     const [teams, setTeams] = useState([]);
+    const [consultants, setConsultants] = useState([]);
+    const [entriesById, setEntriesById] = useState({}); // key = `${consultantId}:${month}` -> entry
+    const [toast, setToast] = useState(null);
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
+    const canEdit = !!user && (user.role === 'admin' || String(user._id || user.id) === String(effectiveTeamId));
 
     useEffect(() => {
         if (user?.role === 'admin') {
@@ -137,20 +263,102 @@ const TeamDetailPage = () => {
         }
     }, [user?.role]);
 
-    useEffect(() => {
+    const refetch = useCallback(async () => {
         if (!effectiveTeamId) return;
-        let cancelled = false;
         setLoading(true);
         setError(null);
-        getTeamDetail(effectiveTeamId, year)
-            .then((res) => { if (!cancelled) { setData(res.data); setLoading(false); } })
-            .catch((err) => {
-                if (cancelled) return;
-                setError(err.response?.data?.message || err.message || 'Failed to load team detail');
-                setLoading(false);
-            });
-        return () => { cancelled = true; };
+        try {
+            const [detailRes, consRes, entRes] = await Promise.all([
+                getTeamDetail(effectiveTeamId, year),
+                consultantService.getConsultants({ organization: 'luc' }),
+                listEntries({ year, teamLeadId: effectiveTeamId }),
+            ]);
+            setData(detailRes.data);
+            const teamConsultants = (consRes.data || [])
+                .filter((c) => String(c.teamLead) === String(effectiveTeamId))
+                .sort((a, b) => a.name.localeCompare(b.name));
+            setConsultants(teamConsultants);
+            const idx = {};
+            for (const e of entRes.data || []) {
+                idx[`${e.consultant}:${e.month}`] = e;
+            }
+            setEntriesById(idx);
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Failed to load team detail');
+        } finally {
+            setLoading(false);
+        }
     }, [effectiveTeamId, year]);
+
+    useEffect(() => { refetch(); }, [refetch]);
+
+    const handlePersisted = useCallback((err) => {
+        if (err) {
+            setToast({ severity: 'error', message: err.response?.data?.message || err.message });
+            return;
+        }
+        // Soft-refresh the aggregate so YTD strip + team totals reflect.
+        // Skip a full reload — re-fetch only the aggregate (cheap).
+        getTeamDetail(effectiveTeamId, year)
+            .then((res) => setData(res.data))
+            .catch(() => {});
+    }, [effectiveTeamId, year]);
+
+    // Bulk paste: parse a TSV block and bulk-upsert the resulting rows.
+    // Currently only supports horizontal paste (multiple columns of the
+    // same row — matches the most common Excel copy pattern).
+    const handlePaste = useCallback(async ({ consultantId, month, startSlug, text }) => {
+        if (!data) return;
+        const allSlugs = ['monthlyTarget', 'achievedRevenue', ...data.programBuckets.map((b) => data.bucketSlugs[b]), ...data.agiBuckets.map((b) => data.bucketSlugs[b])];
+        const startIdx = allSlugs.indexOf(startSlug);
+        if (startIdx < 0) return;
+
+        const linesRaw = text.replace(/\r/g, '').split('\n').filter((l) => l.length);
+        const startConsultantIdx = consultants.findIndex((c) => String(c._id) === String(consultantId));
+        if (startConsultantIdx < 0) return;
+
+        const rows = [];
+        linesRaw.forEach((line, rOff) => {
+            const targetConsultant = consultants[startConsultantIdx + rOff];
+            if (!targetConsultant) return;
+            const cells = line.split('\t');
+            const update = {
+                consultant: targetConsultant._id,
+                teamLead: effectiveTeamId,
+                year,
+                month,
+            };
+            let any = false;
+            cells.forEach((raw, cOff) => {
+                const slug = allSlugs[startIdx + cOff];
+                if (!slug) return;
+                const cleaned = raw.replace(/[^0-9.-]/g, '');
+                if (cleaned === '') return;
+                const n = Number(cleaned);
+                if (Number.isFinite(n) && n >= 0) {
+                    update[slug] = n;
+                    any = true;
+                }
+            });
+            if (any) rows.push(update);
+        });
+
+        if (rows.length === 0) return;
+        try {
+            const res = await bulkUpsertEntries(rows);
+            const errs = res.data?.errors || [];
+            setToast({
+                severity: errs.length ? 'warning' : 'success',
+                message: errs.length
+                    ? `Pasted ${res.data?.upserted || 0}, ${errs.length} errors`
+                    : `Pasted ${res.data?.upserted || 0} cells`,
+            });
+            // refresh entries + aggregate
+            refetch();
+        } catch (err) {
+            setToast({ severity: 'error', message: err.response?.data?.message || err.message });
+        }
+    }, [data, consultants, effectiveTeamId, year, refetch]);
 
     const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -170,7 +378,11 @@ const TeamDetailPage = () => {
             <DashboardHero
                 eyebrow={data ? data.teamLead.teamName : 'Team Dashboard'}
                 title={data ? `${data.teamLead.teamName} · ${year}` : 'Loading…'}
-                subtitle={data ? `Led by ${data.teamLead.name} · Mirrors the per-team Excel sheet · Updates as admissions close` : ''}
+                subtitle={
+                    data
+                        ? `Led by ${data.teamLead.name} · Edit cells directly · TEAM TOTAL, % Rev, Adm. and YTD auto-compute`
+                        : ''
+                }
                 right={
                     <Stack direction="row" spacing={1.5} alignItems="center">
                         {user?.role === 'admin' && teams.length ? (
@@ -219,45 +431,145 @@ const TeamDetailPage = () => {
                 <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
             ) : data ? (
                 <Box sx={{ pb: 6 }}>
-                    {/* YTD header strip */}
+                    {/* YTD strip */}
                     <Grid container spacing={2} sx={{ mt: 1, mb: 3 }}>
                         <Grid item xs={12} sm={6} md={3}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
-                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Target</Typography>
+                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Target</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700 }}>{fmtCurrency(data.ytd.target)}</Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
-                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Achieved</Typography>
+                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Achieved</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#1F7A35' }}>{fmtCurrency(data.ytd.achieved)}</Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
-                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD %</Typography>
+                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD %</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: data.ytd.percent >= 0.8 ? '#1F7A35' : '#A35A06' }}>{fmtPct(data.ytd.percent)}</Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
-                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Remaining</Typography>
+                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Remaining</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#A35A06' }}>{fmtCurrency(data.ytd.remaining)}</Typography>
                             </Paper>
                         </Grid>
                     </Grid>
 
-                    {data.months.map((block) => (
-                        <MonthBlock
-                            key={block.month}
-                            block={block}
-                            buckets={data.buckets}
-                            agiBuckets={data.agiBuckets}
-                            programBuckets={data.programBuckets}
-                        />
-                    ))}
+                    {!canEdit ? (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            You're viewing another team — cells are read-only.
+                        </Alert>
+                    ) : (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            Tip: click any cell to edit. Tab/Enter saves. Paste a block from Excel into any cell to fill the rest.
+                        </Alert>
+                    )}
+
+                    {data.months.map((block, blockIdx) => {
+                        const monthNum = blockIdx + 1;
+                        return (
+                            <Paper key={monthNum} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
+                                <Box sx={{
+                                    px: 2.5, py: 1.5,
+                                    bgcolor: 'var(--d-surface-muted, #F1EFEA)',
+                                    borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
+                                    display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
+                                }}>
+                                    <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
+                                        {MONTH_NAMES[blockIdx]}
+                                    </Typography>
+                                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                                        <Chip label={`Target: ${fmtCurrency(block.teamTotal.monthlyTarget)}`} size="small" sx={{ fontWeight: 600 }} />
+                                        <Chip label={`Achieved: ${fmtCurrency(block.teamTotal.achievedRevenue)}`} size="small" color="success" variant="outlined" />
+                                        <Chip label={fmtPct(block.teamTotal.percentRevenue)} size="small" color={block.teamTotal.percentRevenue >= 0.8 ? 'success' : 'warning'} />
+                                        <Chip label={`${block.teamTotal.totalAdmissions} admissions`} size="small" variant="outlined" />
+                                    </Stack>
+                                </Box>
+                                <TableContainer sx={{ overflowX: 'auto' }}>
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow sx={{ bgcolor: 'var(--d-surface, #FFFFFF)' }}>
+                                                <TableCell sx={{ fontWeight: 700, position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', zIndex: 2, minWidth: 170 }}>Member</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>Monthly Target</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>Achieved</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>% Rev</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>Adm.</TableCell>
+                                                {data.buckets.map((b) => (
+                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, fontSize: 11, bgcolor: data.agiBuckets.includes(b) ? 'rgba(217,119,6,0.06)' : undefined }}>
+                                                        {b}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {consultants.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={5 + data.buckets.length} sx={{ textAlign: 'center', py: 4, color: 'var(--d-text-muted)' }}>
+                                                        No consultants in this team yet.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : consultants.map((c) => {
+                                                const key = `${c._id}:${monthNum}`;
+                                                const entry = entriesById[key] || {};
+                                                const initial = {
+                                                    monthlyTarget: entry.monthlyTarget || 0,
+                                                    achievedRevenue: entry.achievedRevenue || 0,
+                                                    ...Object.fromEntries(
+                                                        Object.values(data.bucketSlugs).map((slug) => [slug, entry[slug] || 0])
+                                                    ),
+                                                };
+                                                return (
+                                                    <EntryRow
+                                                        key={key}
+                                                        consultant={c}
+                                                        month={monthNum}
+                                                        year={year}
+                                                        teamLeadId={effectiveTeamId}
+                                                        initial={initial}
+                                                        bucketSlugs={data.bucketSlugs}
+                                                        buckets={data.buckets}
+                                                        agiBuckets={data.agiBuckets}
+                                                        onPersisted={handlePersisted}
+                                                        onPaste={handlePaste}
+                                                        canEdit={canEdit}
+                                                    />
+                                                );
+                                            })}
+                                            <TableRow sx={{ bgcolor: 'rgba(35,131,226,0.06)' }}>
+                                                <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'rgba(35,131,226,0.12)', fontWeight: 700, zIndex: 1 }}>TEAM TOTAL</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(block.teamTotal.monthlyTarget)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(block.teamTotal.achievedRevenue)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtPct(block.teamTotal.percentRevenue)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>{block.teamTotal.totalAdmissions || '—'}</TableCell>
+                                                {data.buckets.map((b) => (
+                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, bgcolor: data.agiBuckets.includes(b) ? 'rgba(217,119,6,0.08)' : undefined }}>
+                                                        {block.teamTotal.buckets[b] || '—'}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+                            </Paper>
+                        );
+                    })}
                 </Box>
             ) : null}
+
+            <Snackbar
+                open={!!toast}
+                autoHideDuration={3500}
+                onClose={() => setToast(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert severity={toast?.severity || 'info'} onClose={() => setToast(null)}>
+                    {toast?.message}
+                </Alert>
+            </Snackbar>
         </DashboardShell>
     );
 };

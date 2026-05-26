@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/constants';
 
-const API_URL = `${API_BASE_URL}/monthly-targets`;
+const API_URL = `${API_BASE_URL}/team-entries`;
 
 const withAuth = () => ({
     headers: {
@@ -9,7 +9,7 @@ const withAuth = () => ({
     },
 });
 
-export const listTargets = async ({ year, teamLeadId } = {}) => {
+export const listEntries = async ({ year, teamLeadId } = {}) => {
     const params = new URLSearchParams();
     if (year) params.set('year', year);
     if (teamLeadId) params.set('teamLeadId', teamLeadId);
@@ -17,19 +17,32 @@ export const listTargets = async ({ year, teamLeadId } = {}) => {
     return res.data;
 };
 
-export const upsertTarget = async (row) => {
-    const res = await axios.put(API_URL, row, withAuth());
+export const upsertEntry = async (payload) => {
+    const res = await axios.put(API_URL, payload, withAuth());
     return res.data;
 };
 
-export const bulkUpsertTargets = async (rows) => {
+export const bulkUpsertEntries = async (rows) => {
     const res = await axios.post(`${API_URL}/bulk`, { rows }, withAuth());
     return res.data;
 };
 
-export const deleteTarget = async (id) => {
+export const deleteEntry = async (id) => {
     const res = await axios.delete(`${API_URL}/${id}`, withAuth());
     return res.data;
 };
 
-export default { listTargets, upsertTarget, bulkUpsertTargets, deleteTarget };
+export const getBucketMeta = async () => {
+    const res = await axios.get(`${API_URL}/meta`, withAuth());
+    return res.data;
+};
+
+const teamEntryService = {
+    listEntries,
+    upsertEntry,
+    bulkUpsertEntries,
+    deleteEntry,
+    getBucketMeta,
+};
+
+export default teamEntryService;
