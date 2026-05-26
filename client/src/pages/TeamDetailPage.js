@@ -20,9 +20,14 @@ import {
     Stack,
     TextField,
     Snackbar,
+    Collapse,
+    IconButton,
+    Button,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutline';
 import SyncIcon from '@mui/icons-material/Sync';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
@@ -253,6 +258,11 @@ const TeamDetailPage = () => {
     const [consultants, setConsultants] = useState([]);
     const [entriesById, setEntriesById] = useState({}); // key = `${consultantId}:${month}` -> entry
     const [toast, setToast] = useState(null);
+    // Months are collapsed by default to avoid mounting ~1000 inputs at
+    // once (12 months × ~8 consultants × ~18 cells). Auto-expand the
+    // most-recent month with activity so the user lands somewhere
+    // useful. They can toggle others manually.
+    const [expandedMonths, setExpandedMonths] = useState(() => new Set());
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
     const canEdit = !!user && (user.role === 'admin' || String(user._id || user.id) === String(effectiveTeamId));
@@ -288,6 +298,23 @@ const TeamDetailPage = () => {
                 idx[`${e.consultant}:${e.month}`] = e;
             }
             setEntriesById(idx);
+
+            // Auto-expand the most recent month with any activity on this
+            // team so the page lands on useful data instead of a sea of
+            // collapsed accordions. Only seeds the initial set — once the
+            // user toggles, their selection sticks.
+            setExpandedMonths((prev) => {
+                if (prev.size > 0) return prev;
+                let latest = 0;
+                for (const e of entRes.data || []) {
+                    if ((e.achievedRevenue || 0) > 0 && e.month > latest) latest = e.month;
+                }
+                if (latest === 0) {
+                    const now = new Date();
+                    latest = now.getUTCFullYear() === year ? now.getUTCMonth() + 1 : 1;
+                }
+                return new Set([latest]);
+            });
         } catch (err) {
             setError(err.response?.data?.message || err.message || 'Failed to load team detail');
         } finally {
@@ -297,16 +324,20 @@ const TeamDetailPage = () => {
 
     useEffect(() => { refetch(); }, [refetch]);
 
+    // Debounced refetch handle — multiple rapid saves (tabbing through
+    // cells) collapse into one detail re-fetch instead of N.
+    const refetchTimerRef = useRef(null);
     const handlePersisted = useCallback((err) => {
         if (err) {
             setToast({ severity: 'error', message: err.response?.data?.message || err.message });
             return;
         }
-        // Soft-refresh the aggregate so YTD strip + team totals reflect.
-        // Skip a full reload — re-fetch only the aggregate (cheap).
-        getTeamDetail(effectiveTeamId, year)
-            .then((res) => setData(res.data))
-            .catch(() => {});
+        if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+        refetchTimerRef.current = setTimeout(() => {
+            getTeamDetail(effectiveTeamId, year)
+                .then((res) => setData(res.data))
+                .catch(() => {});
+        }, 600);
     }, [effectiveTeamId, year]);
 
     // Bulk paste: parse a TSV block and bulk-upsert the resulting rows.
@@ -474,16 +505,48 @@ const TeamDetailPage = () => {
                         </Alert>
                     )}
 
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setExpandedMonths(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))}
+                        >
+                            Expand all months
+                        </Button>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setExpandedMonths(new Set())}
+                        >
+                            Collapse all
+                        </Button>
+                    </Stack>
+
                     {data.months.map((block, blockIdx) => {
                         const monthNum = blockIdx + 1;
+                        const isOpen = expandedMonths.has(monthNum);
+                        const toggle = () => setExpandedMonths((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(monthNum)) next.delete(monthNum); else next.add(monthNum);
+                            return next;
+                        });
                         return (
                             <Paper key={monthNum} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
-                                <Box sx={{
-                                    px: 2.5, py: 1.5,
-                                    bgcolor: 'var(--d-surface-muted, #F1EFEA)',
-                                    borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
-                                    display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
-                                }}>
+                                <Box
+                                    onClick={toggle}
+                                    sx={{
+                                        px: 2.5, py: 1.5,
+                                        bgcolor: 'var(--d-surface-muted, #F1EFEA)',
+                                        borderBottom: isOpen ? '1px solid var(--d-border-soft, #ECE9E2)' : 'none',
+                                        display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        '&:hover': { bgcolor: 'var(--d-surface-hover, #EFEDE8)' },
+                                    }}
+                                >
+                                    <IconButton size="small" sx={{ p: 0.25 }} onClick={(e) => { e.stopPropagation(); toggle(); }}>
+                                        {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    </IconButton>
                                     <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
                                         {MONTH_NAMES[blockIdx]}
                                     </Typography>
@@ -494,6 +557,7 @@ const TeamDetailPage = () => {
                                         <Chip label={`${block.teamTotal.totalAdmissions} admissions`} size="small" variant="outlined" />
                                     </Stack>
                                 </Box>
+                                <Collapse in={isOpen} mountOnEnter unmountOnExit>
                                 <TableContainer sx={{ overflowX: 'auto' }}>
                                     <Table size="small">
                                         <TableHead>
@@ -559,6 +623,7 @@ const TeamDetailPage = () => {
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
+                                </Collapse>
                             </Paper>
                         );
                     })}
