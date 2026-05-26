@@ -79,6 +79,43 @@ function placeholderRow(consultant) {
     };
 }
 
+// "Effective current month" mirrors the Excel's MONTH(TODAY()) semantic:
+// it's the latest month that has any non-zero achieved revenue. This
+// keeps YTD totals bounded to months that were actually tracked instead
+// of summing future-planning placeholder rows. Falls back to today's
+// calendar month for the current year, or 12 for a fully-elapsed past
+// year with no entries yet.
+function effectiveCurrentMonth({ entries, year }) {
+    let latest = 0;
+    for (const e of entries) {
+        if ((e.achievedRevenue || 0) > 0 && e.month > latest) latest = e.month;
+    }
+    if (latest > 0) return latest;
+    const now = new Date();
+    if (now.getUTCFullYear() === year) return now.getUTCMonth() + 1;
+    if (now.getUTCFullYear() > year) return 12;
+    return 0; // future year — nothing to roll up yet
+}
+
+// Org-wide effective month — used by getTeamDetail so every team shares
+// the same MONTH(TODAY())-style cutoff (otherwise smaller teams with
+// fewer active months get their YTD truncated below the Excel's).
+async function orgWideEffectiveMonth({ year }) {
+    const all = await TeamMonthlyEntry.find({
+        organization: 'luc',
+        year,
+        achievedRevenue: { $gt: 0 },
+    })
+        .sort({ month: -1 })
+        .limit(1)
+        .lean();
+    if (all.length) return all[0].month;
+    const now = new Date();
+    if (now.getUTCFullYear() === year) return now.getUTCMonth() + 1;
+    if (now.getUTCFullYear() > year) return 12;
+    return 0;
+}
+
 async function getTeamDetail({ teamLeadId, year }) {
     const teamLead = await User.findById(teamLeadId).select('name teamName organization role').lean();
     if (!teamLead) {
@@ -150,14 +187,16 @@ async function getTeamDetail({ teamLeadId, year }) {
         });
     }
 
-    // YTD strip: sum every month — for past years that's a full year, for
-    // the current year it naturally ends at the last entered month
-    // (months past TODAY simply have no entries → zeros).
+    // YTD strip: sum up to the org-wide latest-activity month so small
+    // teams (e.g. Bahrain — last achievement Feb) still include Mar–May
+    // target rows in their YTD, the way the Excel does. Past months
+    // with target-only entries still count — they're tracked.
+    const cutoff = await orgWideEffectiveMonth({ year });
     let ytdTarget = 0;
     let ytdAchieved = 0;
-    for (const b of months) {
-        ytdTarget += b.teamTotal.monthlyTarget;
-        ytdAchieved += b.teamTotal.achievedRevenue;
+    for (let m = 1; m <= cutoff; m++) {
+        ytdTarget += months[m - 1].teamTotal.monthlyTarget;
+        ytdAchieved += months[m - 1].teamTotal.achievedRevenue;
     }
 
     return {
@@ -192,8 +231,10 @@ async function getExecutiveOverview({ year }) {
         TeamMonthlyEntry.find({ organization: 'luc', year }).lean(),
     ]);
 
-    const now = new Date();
-    const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() + 1 : 12;
+    // Mirror the Excel's MONTH(TODAY()) cutoff — see comment on
+    // effectiveCurrentMonth. Used for both MTD (the month itself) and
+    // YTD (sum of months 1..cutoff).
+    const currentMonth = effectiveCurrentMonth({ entries, year });
     const mtdMonth = currentMonth;
 
     const teamIdx = new Map();

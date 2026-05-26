@@ -25,6 +25,10 @@ const DEFAULT_EXCEL_PATH = '/Users/viditkbhatnagar/Downloads/DASHBOARD_changes.x
 const EXCEL_PATH = process.env.EXCEL_PATH || DEFAULT_EXCEL_PATH;
 const YEAR = parseInt(process.env.YEAR, 10) || 2025;
 const DRY_RUN = process.env.DRY_RUN === '1';
+// WIPE_YEAR=1 deletes every TeamMonthlyEntry for YEAR before seeding —
+// use when re-seeding after the source workbook changed materially and
+// you want stale rows (e.g. consultants who left) cleared out.
+const WIPE_YEAR = process.env.WIPE_YEAR === '1';
 
 // Sheet → team-lead User name in the DB.
 const TEAM_SHEETS = {
@@ -157,6 +161,17 @@ const NAME_OVERRIDES = {
     'nigel': 'NIGEL',
 };
 
+// Names that appear in the Excel team sheets but have no Consultant doc
+// in the DB. Auto-create them under the matching team_lead so historical
+// rows seed cleanly. Per-team list keeps this explicit instead of
+// guessing — only create what we know about.
+const AUTO_CREATE_CONSULTANTS = {
+    'Team Tony': ['Neelu', 'Nimra'],
+    // Aisha exists under Team Arfath in DB; Eslam under Team Shakil. The
+    // Excel disagrees, but moving them across teams would corrupt other
+    // tracker data, so we leave those two unmatched.
+};
+
 // Resolve an Excel member name to a Consultant doc on this team.
 // Order:
 //   1. exact lowercase trim match
@@ -199,6 +214,11 @@ async function main() {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log(`connected to MongoDB: ${mongoose.connection.name}\n`);
 
+    if (WIPE_YEAR && !DRY_RUN) {
+        const res = await TeamMonthlyEntry.deleteMany({ organization: 'luc', year: YEAR });
+        console.log(`wiped ${res.deletedCount} existing entries for ${YEAR}\n`);
+    }
+
     const wb = xlsx.readFile(EXCEL_PATH);
 
     let upserted = 0;
@@ -221,8 +241,50 @@ async function main() {
             continue;
         }
 
-        const consultants = await Consultant.find({ teamLead: teamLead._id }).lean();
-        console.log(`${sheetName} — lead: ${teamLeadName} (${consultants.length} consultants in DB)`);
+        let consultants = await Consultant.find({ teamLead: teamLead._id }).lean();
+
+        // Helper — create a Consultant doc under this team if it doesn't
+        // already exist. Used for the team-lead's own row + any names
+        // listed in AUTO_CREATE_CONSULTANTS that aren't already in the DB.
+        const ensureConsultant = async (name) => {
+            const existing = consultants.find(
+                (c) => c.name.toLowerCase().trim() === name.toLowerCase().trim()
+            );
+            if (existing) return existing;
+            if (DRY_RUN) {
+                const stub = {
+                    _id: 'dry-run-' + name,
+                    name,
+                    teamLead: teamLead._id,
+                    organization: 'luc',
+                    isActive: true,
+                };
+                consultants.push(stub);
+                console.log(`  + would auto-create consultant: ${name} (dry run)`);
+                return stub;
+            }
+            const created = await Consultant.create({
+                name,
+                teamLead: teamLead._id,
+                teamName: teamLead.teamName || `Team ${teamLeadName}`,
+                organization: 'luc',
+                isActive: true,
+            });
+            consultants.push(created.toObject());
+            console.log(`  + auto-created consultant: ${name}`);
+            return created.toObject();
+        };
+
+        // Team lead as a self-consultant — every team sheet has a row
+        // for them (target only, no achievement typically).
+        await ensureConsultant(teamLeadName);
+        // Plus any historical members listed for this team but missing
+        // from the DB.
+        for (const name of (AUTO_CREATE_CONSULTANTS[sheetName] || [])) {
+            await ensureConsultant(name);
+        }
+
+        console.log(`${sheetName} — lead: ${teamLeadName} (${consultants.length} consultants)`);
 
         let teamUpserted = 0;
         let teamSkipped = 0;
@@ -232,13 +294,6 @@ async function main() {
             for (const r of block.memberRows) {
                 const memberName = cellText(sheet[`A${r}`]);
                 if (isFillerName(memberName)) continue;
-
-                // Skip rows where the name is the team lead themselves (they
-                // appear as a member row in the Excel but typically aren't a
-                // Consultant doc).
-                if (memberName.toLowerCase() === teamLeadName.toLowerCase()) {
-                    continue;
-                }
 
                 const consultant = matchConsultant(memberName, consultants);
                 if (!consultant) {
