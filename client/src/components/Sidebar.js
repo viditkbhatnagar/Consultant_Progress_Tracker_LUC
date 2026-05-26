@@ -9,7 +9,8 @@ import {
     ListItemText,
     Typography,
     Avatar,
-    Collapse,
+    Chip,
+    Tooltip,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
@@ -23,12 +24,9 @@ import {
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
     InsightsOutlined as ExecutiveIcon,
-    Groups as TeamIcon,
-    Flag as TargetIcon,
-    ExpandLess,
-    ExpandMore,
+    InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
 
 export const DRAWER_WIDTH = 280;
@@ -67,15 +65,8 @@ const MOTIVATIONAL_QUOTES = [
 
 const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
     const navigate = useNavigate();
-    const location = useLocation();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
-    const [execOpen, setExecOpen] = useState(
-        location.pathname.startsWith('/executive-overview') ||
-        location.pathname.startsWith('/team-dashboard') ||
-        location.pathname.startsWith('/monthly-targets')
-    );
-    const teamLeadId = user?._id || user?.id;
 
     const getPersonalizedQuote = (quote) => {
         const teamName = user?.teamName || 'Champions';
@@ -242,51 +233,47 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                     </ListItemButton>
                 </ListItem>
 
-                {/* Executive Sales — Exec Overview + own team detail + own
-                    monthly targets. Team lead is locked to their own team
-                    via the server-side role guard on the team-detail
-                    endpoint. */}
+                {/* Executive Sales — locked behind a Coming Soon placeholder
+                    for team leads while the feature is under development.
+                    The entry is non-interactive on purpose: clicking does
+                    nothing, the info icon explains the state on hover. */}
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => setExecOpen((v) => !v)} sx={navItemSx}>
-                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
-                        <ListItemText primary="Executive Sales" />
-                        {execOpen ? <ExpandLess /> : <ExpandMore />}
-                    </ListItemButton>
+                    <Tooltip
+                        title="Coming soon — the team-lead view for Executive Sales is still being built. Your admin maintains the data for now."
+                        placement="right"
+                        arrow
+                    >
+                        <span style={{ width: '100%' }}>
+                            <ListItemButton
+                                disabled
+                                sx={{
+                                    ...navItemSx,
+                                    '&.Mui-disabled': {
+                                        opacity: 1,
+                                        color: 'var(--d-text-muted, #8A887E)',
+                                        '& .MuiListItemIcon-root': { color: 'var(--d-text-muted, #8A887E)' },
+                                    },
+                                }}
+                            >
+                                <ListItemIcon><ExecutiveIcon /></ListItemIcon>
+                                <ListItemText primary="Executive Sales" />
+                                <Chip
+                                    label="Coming soon"
+                                    size="small"
+                                    sx={{
+                                        height: 18,
+                                        fontSize: 9.5,
+                                        fontWeight: 700,
+                                        bgcolor: 'rgba(217,119,6,0.14)',
+                                        color: '#A35A06',
+                                        mr: 0.5,
+                                    }}
+                                />
+                                <InfoIcon sx={{ fontSize: 16, color: 'var(--d-text-muted, #8A887E)' }} />
+                            </ListItemButton>
+                        </span>
+                    </Tooltip>
                 </ListItem>
-                <Collapse in={execOpen} timeout="auto" unmountOnExit>
-                    <List component="div" disablePadding sx={{ pl: 1 }}>
-                        <ListItem disablePadding sx={{ mb: 0.5 }}>
-                            <ListItemButton
-                                onClick={() => navigate('/executive-overview')}
-                                selected={location.pathname === '/executive-overview'}
-                                sx={{ ...navItemSx, pl: 3 }}
-                            >
-                                <ListItemIcon><ExecutiveIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-                                <ListItemText primary="Executive Overview" />
-                            </ListItemButton>
-                        </ListItem>
-                        <ListItem disablePadding sx={{ mb: 0.5 }}>
-                            <ListItemButton
-                                onClick={() => navigate(`/team-dashboard/${teamLeadId}`)}
-                                selected={location.pathname.startsWith('/team-dashboard')}
-                                sx={{ ...navItemSx, pl: 3 }}
-                            >
-                                <ListItemIcon><TeamIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-                                <ListItemText primary="My Team" />
-                            </ListItemButton>
-                        </ListItem>
-                        <ListItem disablePadding sx={{ mb: 0.5 }}>
-                            <ListItemButton
-                                onClick={() => navigate('/monthly-targets')}
-                                selected={location.pathname === '/monthly-targets'}
-                                sx={{ ...navItemSx, pl: 3 }}
-                            >
-                                <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-                                <ListItemText primary="Monthly Targets" />
-                            </ListItemButton>
-                        </ListItem>
-                    </List>
-                </Collapse>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>

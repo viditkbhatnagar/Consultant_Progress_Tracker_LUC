@@ -35,6 +35,7 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
+import ComingSoonLock from '../components/ComingSoonLock';
 import { getTeamDetail, getTeams } from '../services/execOverviewService';
 import { listEntries, upsertEntry, bulkUpsertEntries } from '../services/teamEntryService';
 import consultantService from '../services/consultantService';
@@ -265,7 +266,10 @@ const TeamDetailPage = () => {
     const [expandedMonths, setExpandedMonths] = useState(() => new Set());
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
-    const canEdit = !!user && (user.role === 'admin' || String(user._id || user.id) === String(effectiveTeamId));
+    // Writes are admin-only at the server. TLs see a Coming Soon lock
+    // while the feature is being finalised for them.
+    const isTeamLead = user?.role === 'team_lead';
+    const canEdit = user?.role === 'admin';
 
     useEffect(() => {
         if (user?.role === 'admin') {
@@ -274,7 +278,10 @@ const TeamDetailPage = () => {
     }, [user?.role]);
 
     const refetch = useCallback(async () => {
-        if (!effectiveTeamId) return;
+        if (!effectiveTeamId || isTeamLead) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
@@ -320,7 +327,7 @@ const TeamDetailPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [effectiveTeamId, year]);
+    }, [effectiveTeamId, year, isTeamLead]);
 
     useEffect(() => { refetch(); }, [refetch]);
 
@@ -459,7 +466,12 @@ const TeamDetailPage = () => {
                 }
             />
 
-            {loading ? (
+            {isTeamLead ? (
+                <ComingSoonLock
+                    title="Team Dashboard"
+                    subtitle="An Excel-style team sheet with 12 monthly blocks, member-level targets, and per-program admissions. Coming soon for team leads."
+                />
+            ) : loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>
