@@ -86,7 +86,10 @@ const MonthlyTargetsPage = () => {
         ])
             .then(([cRes, eRes]) => {
                 if (cancelled) return;
-                const filtered = (cRes.data || []).filter((c) => String(c.teamLead) === String(teamLeadId));
+                const filtered = (cRes.data || []).filter((c) => {
+                    const tlId = c.teamLead?._id || c.teamLead;
+                    return String(tlId) === String(teamLeadId);
+                });
                 setConsultants(filtered);
                 const g = {};
                 for (const c of filtered) g[c._id] = {};

@@ -274,8 +274,13 @@ const TeamDetailPage = () => {
                 listEntries({ year, teamLeadId: effectiveTeamId }),
             ]);
             setData(detailRes.data);
+            // /api/consultants populates teamLead as { _id, name, email }, so
+            // pull the id off the object (fall back to raw ObjectId for safety).
             const teamConsultants = (consRes.data || [])
-                .filter((c) => String(c.teamLead) === String(effectiveTeamId))
+                .filter((c) => {
+                    const tlId = c.teamLead?._id || c.teamLead;
+                    return String(tlId) === String(effectiveTeamId);
+                })
                 .sort((a, b) => a.name.localeCompare(b.name));
             setConsultants(teamConsultants);
             const idx = {};
