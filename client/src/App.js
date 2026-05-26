@@ -15,6 +15,9 @@ import SkillhubDashboard from './pages/SkillhubDashboard';
 import ExportCenterPage from './pages/ExportCenterPage';
 import AdminReconciliationPage from './pages/AdminReconciliationPage';
 import PdfViewer from './pages/PdfViewer';
+import ExecutiveOverviewPage from './pages/ExecutiveOverviewPage';
+import TeamDetailPage from './pages/TeamDetailPage';
+import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import theme from './theme';
 
@@ -158,6 +161,51 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <PdfViewer />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Executive Overview — LUC org-wide rollup of sales performance.
+                Mirrors the Excel "Executive Overview" sheet. Both admin and
+                team_lead see the full breakdown (read-only). */}
+            <Route
+              path="/executive-overview"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <ExecutiveOverviewPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Per-team dashboard mirroring the Excel team sheet. Admin can
+                view any team; team_lead is locked to own team via the
+                controller-level role guard. The team_lead's own-team route
+                redirects through this same page. */}
+            <Route
+              path="/team-dashboard/:teamLeadId"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <TeamDetailPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/team-dashboard"
+              element={
+                <PrivateRoute allowedRoles={['team_lead']}>
+                  <TeamDetailPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Monthly Targets editor — admin sets per-consultant monthly
+                targets that drive the Executive Overview KPIs. Team_lead can
+                view/edit only their own team's consultants. */}
+            <Route
+              path="/monthly-targets"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <MonthlyTargetsPage />
                 </PrivateRoute>
               }
             />

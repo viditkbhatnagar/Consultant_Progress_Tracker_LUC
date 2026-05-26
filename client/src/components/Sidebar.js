@@ -9,6 +9,7 @@ import {
     ListItemText,
     Typography,
     Avatar,
+    Collapse,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
@@ -21,8 +22,13 @@ import {
     FactCheck as CommitmentsIcon,
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
+    InsightsOutlined as ExecutiveIcon,
+    Groups as TeamIcon,
+    Flag as TargetIcon,
+    ExpandLess,
+    ExpandMore,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
 
 export const DRAWER_WIDTH = 280;
@@ -61,8 +67,15 @@ const MOTIVATIONAL_QUOTES = [
 
 const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+    const [execOpen, setExecOpen] = useState(
+        location.pathname.startsWith('/executive-overview') ||
+        location.pathname.startsWith('/team-dashboard') ||
+        location.pathname.startsWith('/monthly-targets')
+    );
+    const teamLeadId = user?._id || user?.id;
 
     const getPersonalizedQuote = (quote) => {
         const teamName = user?.teamName || 'Champions';
@@ -228,6 +241,52 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                         <ListItemText primary="Dashboard" />
                     </ListItemButton>
                 </ListItem>
+
+                {/* Executive Sales — Exec Overview + own team detail + own
+                    monthly targets. Team lead is locked to their own team
+                    via the server-side role guard on the team-detail
+                    endpoint. */}
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => setExecOpen((v) => !v)} sx={navItemSx}>
+                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
+                        <ListItemText primary="Executive Sales" />
+                        {execOpen ? <ExpandLess /> : <ExpandMore />}
+                    </ListItemButton>
+                </ListItem>
+                <Collapse in={execOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding sx={{ pl: 1 }}>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/executive-overview')}
+                                selected={location.pathname === '/executive-overview'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><ExecutiveIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Executive Overview" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate(`/team-dashboard/${teamLeadId}`)}
+                                selected={location.pathname.startsWith('/team-dashboard')}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><TeamIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="My Team" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/monthly-targets')}
+                                selected={location.pathname === '/monthly-targets'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Monthly Targets" />
+                            </ListItemButton>
+                        </ListItem>
+                    </List>
+                </Collapse>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
