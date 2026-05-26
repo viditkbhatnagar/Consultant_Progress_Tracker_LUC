@@ -27,6 +27,7 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
+import ComingSoonLock from '../components/ComingSoonLock';
 import { getOverview } from '../services/execOverviewService';
 
 const fmtCurrency = (n) => {
@@ -139,7 +140,15 @@ const ExecutiveOverviewPage = () => {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
 
+    // Team leads see a Coming Soon placeholder while the feature is
+    // under development on the TL side. Admin keeps the full view.
+    const isTeamLead = user?.role === 'team_lead';
+
     useEffect(() => {
+        if (isTeamLead) {
+            setLoading(false);
+            return;
+        }
         let cancelled = false;
         setLoading(true);
         setError(null);
@@ -157,7 +166,7 @@ const ExecutiveOverviewPage = () => {
         return () => {
             cancelled = true;
         };
-    }, [year]);
+    }, [year, isTeamLead]);
 
     const handleLogout = () => {
         logout();
@@ -198,7 +207,12 @@ const ExecutiveOverviewPage = () => {
                 }
             />
 
-            {loading ? (
+            {isTeamLead ? (
+                <ComingSoonLock
+                    title="Executive Overview"
+                    subtitle="A new org-wide sales rollup with KPI strip, team performance tables, and a program × month admissions matrix. Coming soon for team leads."
+                />
+            ) : loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>

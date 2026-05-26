@@ -28,6 +28,7 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
+import ComingSoonLock from '../components/ComingSoonLock';
 import consultantService from '../services/consultantService';
 import { listEntries, bulkUpsertEntries } from '../services/teamEntryService';
 import { getTeams } from '../services/execOverviewService';
@@ -61,9 +62,16 @@ const MonthlyTargetsPage = () => {
     const [toast, setToast] = useState(null);
 
     const isAdmin = user?.role === 'admin';
+    // TLs can no longer edit monthly targets — see the Coming Soon lock
+    // below. Skip the data fetches entirely for them.
+    const isTeamLead = user?.role === 'team_lead';
 
     // Load teams (admin only)
     useEffect(() => {
+        if (isTeamLead) {
+            setLoading(false);
+            return;
+        }
         if (!isAdmin) {
             setTeamLeadId(user?._id || user?.id);
             return;
@@ -72,11 +80,11 @@ const MonthlyTargetsPage = () => {
             setTeams(res.data || []);
             if (res.data?.length && !teamLeadId) setTeamLeadId(res.data[0]._id);
         }).catch(() => {});
-    }, [isAdmin, user?._id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isAdmin, isTeamLead, user?._id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load consultants + targets when team or year changes
     useEffect(() => {
-        if (!teamLeadId) return;
+        if (!teamLeadId || isTeamLead) return;
         let cancelled = false;
         setLoading(true);
         setError(null);
@@ -236,11 +244,18 @@ const MonthlyTargetsPage = () => {
                 }
             />
 
-            <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
-                Tip: copy a block of cells from Excel and paste into any cell here — the rest fill automatically. Save to persist.
-            </Alert>
+            {isTeamLead ? null : (
+                <Alert severity="info" sx={{ mb: 2, mt: 1 }}>
+                    Tip: copy a block of cells from Excel and paste into any cell here — the rest fill automatically. Save to persist.
+                </Alert>
+            )}
 
-            {loading ? (
+            {isTeamLead ? (
+                <ComingSoonLock
+                    title="Monthly Targets"
+                    subtitle="Per-consultant monthly revenue targets used by the Executive Overview. Coming soon for team leads."
+                />
+            ) : loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>
