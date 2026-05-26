@@ -10,6 +10,7 @@ import {
     Typography,
     Avatar,
     Divider,
+    Collapse,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
@@ -25,11 +26,17 @@ import {
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
     Link as LinkIcon,
+    InsightsOutlined as ExecutiveIcon,
+    Groups as TeamIcon,
+    Flag as TargetIcon,
+    ExpandLess,
+    ExpandMore,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import { setAdminOrgScope } from '../utils/adminOrgScope';
+import { getTeams } from '../services/execOverviewService';
 
 export const DRAWER_WIDTH = 280;
 
@@ -67,8 +74,25 @@ const MOTIVATIONAL_QUOTES = [
 
 const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, onAPICosts, apiCostsActive }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+    const [execOpen, setExecOpen] = useState(
+        location.pathname.startsWith('/executive-overview') ||
+        location.pathname.startsWith('/team-dashboard') ||
+        location.pathname.startsWith('/monthly-targets')
+    );
+    const [teams, setTeams] = useState([]);
+
+    // Lazy-load the LUC team list once when the dropdown first opens. Falls
+    // back silently if the request fails (sidebar still works, just no
+    // per-team sub-items). The endpoint is cheap (one find on User).
+    useEffect(() => {
+        if (!execOpen || teams.length) return;
+        getTeams()
+            .then((res) => setTeams(res.data || []))
+            .catch(() => {});
+    }, [execOpen, teams.length]);
 
     // Personalize quote with user name for admin
     const getPersonalizedQuote = (quote) => {
@@ -248,6 +272,57 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                         <ListItemText primary="Dashboard" />
                     </ListItemButton>
                 </ListItem>
+
+                {/* Executive Sales — expanding section with Exec Overview,
+                    one entry per LUC team, and Monthly Targets. Mirrors
+                    the per-team-sheet + Executive Overview structure of
+                    the source Excel. */}
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => setExecOpen((v) => !v)} sx={navItemSx}>
+                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
+                        <ListItemText primary="Executive Sales" />
+                        {execOpen ? <ExpandLess /> : <ExpandMore />}
+                    </ListItemButton>
+                </ListItem>
+                <Collapse in={execOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding sx={{ pl: 1 }}>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/executive-overview')}
+                                selected={location.pathname === '/executive-overview'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><ExecutiveIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Executive Overview" />
+                            </ListItemButton>
+                        </ListItem>
+                        {teams.map((t) => (
+                            <ListItem key={t._id} disablePadding sx={{ mb: 0.25 }}>
+                                <ListItemButton
+                                    onClick={() => navigate(`/team-dashboard/${t._id}`)}
+                                    selected={location.pathname === `/team-dashboard/${t._id}`}
+                                    sx={{ ...navItemSx, pl: 3 }}
+                                >
+                                    <ListItemIcon><TeamIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                    <ListItemText
+                                        primary={t.teamName || `Team ${t.name}`}
+                                        primaryTypographyProps={{ fontSize: '0.85rem' }}
+                                    />
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                        <ListItem disablePadding sx={{ mb: 0.5, mt: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/monthly-targets')}
+                                selected={location.pathname === '/monthly-targets'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Monthly Targets" />
+                            </ListItemButton>
+                        </ListItem>
+                    </List>
+                </Collapse>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
