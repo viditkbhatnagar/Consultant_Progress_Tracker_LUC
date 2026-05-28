@@ -239,7 +239,7 @@ const ExecutiveOverviewPage = () => {
                 <Box sx={{ pb: 6 }}>
                     {/* KPI strip */}
                     <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <KpiTile
                                 label="YTD Target"
                                 value={fmtCurrency(data.kpi.ytdTarget)}
@@ -247,7 +247,7 @@ const ExecutiveOverviewPage = () => {
                                 accent="#2383E2"
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <KpiTile
                                 label="YTD Achieved"
                                 value={fmtCurrency(data.kpi.ytdAchieved)}
@@ -255,7 +255,7 @@ const ExecutiveOverviewPage = () => {
                                 accent="#1F7A35"
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <KpiTile
                                 label="YTD Gap"
                                 value={fmtCurrency(data.kpi.ytdGap)}
@@ -263,7 +263,7 @@ const ExecutiveOverviewPage = () => {
                                 accent="#D97706"
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <KpiTile
                                 label="Overall YTD %"
                                 value={fmtPct(data.kpi.ytdPercent)}
@@ -276,7 +276,7 @@ const ExecutiveOverviewPage = () => {
                     {/* Visual overview (ECharts) */}
                     <SectionTitle accent="#2383E2">Visual Overview</SectionTitle>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} md={7}>
+                        <Grid size={{ xs: 12, md: 7 }}>
                             <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                                 <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                                     Team YTD — Target vs Achieved
@@ -295,7 +295,7 @@ const ExecutiveOverviewPage = () => {
                                 />
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} md={5}>
+                        <Grid size={{ xs: 12, md: 5 }}>
                             <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                                 <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                                     Program Mix (YTD admissions)
@@ -310,7 +310,7 @@ const ExecutiveOverviewPage = () => {
                                 />
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} md={7}>
+                        <Grid size={{ xs: 12, md: 7 }}>
                             <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                                 <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                                     Monthly Admissions Trend
@@ -326,7 +326,7 @@ const ExecutiveOverviewPage = () => {
                                 />
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} md={5}>
+                        <Grid size={{ xs: 12, md: 5 }}>
                             <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                                 <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                                     Top Consultants (YTD %)
