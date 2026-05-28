@@ -85,10 +85,12 @@ exports.upsertEntry = async (req, res, next) => {
         }
 
         const changes = pickEditableFields(req.body);
+        // consultantName is set in $set (applies on both insert and update),
+        // so it must NOT also appear in $setOnInsert — Mongoose rejects the
+        // same path in both operators ("would create a conflict").
         const setOnInsert = {
             organization: 'luc',
             consultant,
-            consultantName: consultantDoc.name,
             teamLead,
             year: y,
             month: m,
@@ -162,11 +164,11 @@ exports.bulkUpsert = async (req, res, next) => {
                 await TeamMonthlyEntry.findOneAndUpdate(
                     { consultant: row.consultant, year: y, month: m },
                     {
+                        // consultantName lives only in $set (see upsertEntry note).
                         $set: { ...changes, consultantName: consultantDoc.name, lastUpdatedBy: req.user._id },
                         $setOnInsert: {
                             organization: 'luc',
                             consultant: row.consultant,
-                            consultantName: consultantDoc.name,
                             teamLead: row.teamLead,
                             year: y,
                             month: m,
