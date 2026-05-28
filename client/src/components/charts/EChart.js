@@ -64,7 +64,8 @@ const EChart = ({ option, height = 300, mode, onEvents, style, ...boxProps }) =>
                 textStyle: { color: t.text2, fontFamily: FONT },
                 extraCssText: 'box-shadow:0 4px 12px rgba(0,0,0,0.12);border-radius:8px;',
             },
-            legend: { textStyle: { color: t.text2, fontFamily: FONT }, icon: 'roundRect' },
+            // Legends are fully specified per-preset (position + scroll) so
+            // they never overlap the plot — don't inject a default here.
         };
         return merge(base, option || {});
         // re-read tokens when the option or theme mode changes
