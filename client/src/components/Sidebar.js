@@ -256,7 +256,7 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                                 }}
                             >
                                 <ListItemIcon><ExecutiveIcon /></ListItemIcon>
-                                <ListItemText primary="Executive Sales" />
+                                <ListItemText primary="Leadership Dashboard" />
                                 <Chip
                                     label="Coming soon"
                                     size="small"
