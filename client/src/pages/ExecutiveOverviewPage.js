@@ -286,7 +286,7 @@ const ExecutiveOverviewPage = () => {
                                     option={barOption({
                                         categories: data.teamsYtd.map((t) => t.teamName.replace('Team ', '')),
                                         valueFormatter: compactCurrencyFmt,
-                                        rotateLabels: 30,
+                                        rotateLabels: 38,
                                         series: [
                                             { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: '#C8C4BB' },
                                             { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },

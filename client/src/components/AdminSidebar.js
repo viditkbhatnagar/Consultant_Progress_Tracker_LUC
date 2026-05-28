@@ -80,7 +80,8 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
     const [execOpen, setExecOpen] = useState(
         location.pathname.startsWith('/team-dashboard') ||
         location.pathname.startsWith('/leadership-dashboard') ||
-        location.pathname.startsWith('/consultant-performance')
+        location.pathname.startsWith('/consultant-performance') ||
+        location.pathname.startsWith('/monthly-targets')
     );
     const [teams, setTeams] = useState([]);
 
@@ -313,6 +314,16 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                             >
                                 <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
                                 <ListItemText primary="Consultant Performance" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/monthly-targets')}
+                                selected={location.pathname === '/monthly-targets'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><MoneyIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Monthly Targets" />
                             </ListItemButton>
                         </ListItem>
                     </List>
