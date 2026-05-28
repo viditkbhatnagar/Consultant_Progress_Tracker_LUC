@@ -211,9 +211,9 @@ const ConsultantPerformancePage = () => {
                             height={340}
                             option={barOption({
                                 horizontal: true,
+                                barLabelFormatter: '{c}%',
                                 categories: [...data.categoryA, ...data.categoryB]
                                     .sort((a, b) => b.ytdPercent - a.ytdPercent).slice(0, 12).reverse().map((r) => r.name),
-                                valueFormatter: '{value}%',
                                 series: [{
                                     name: 'YTD %',
                                     data: [...data.categoryA, ...data.categoryB]

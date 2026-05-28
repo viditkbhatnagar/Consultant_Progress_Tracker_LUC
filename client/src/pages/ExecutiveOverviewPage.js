@@ -133,6 +133,14 @@ const yearOptions = () => {
     return out;
 };
 
+// Replace trailing-zero months with null so a trend line ends at the last
+// active month instead of flat-lining (and dipping) to the year's end.
+const trimTrailingZeros = (arr) => {
+    let last = -1;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > 0) last = i;
+    return arr.map((v, i) => (i <= last ? v : null));
+};
+
 const ExecutiveOverviewPage = () => {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
@@ -280,7 +288,7 @@ const ExecutiveOverviewPage = () => {
                                         valueFormatter: compactCurrencyFmt,
                                         rotateLabels: 30,
                                         series: [
-                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: 'var(--d-border, #E6E3DC)' },
+                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: '#C8C4BB' },
                                             { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },
                                         ],
                                     })}
@@ -311,7 +319,9 @@ const ExecutiveOverviewPage = () => {
                                     height={280}
                                     option={lineOption({
                                         categories: monthShort,
-                                        series: [{ name: 'Admissions', data: data.programGrandTotal.monthly, color: '#2383E2' }],
+                                        // Stop the line at the last month with admissions instead of
+                                        // crashing to zero across the rest of the year.
+                                        series: [{ name: 'Admissions', data: trimTrailingZeros(data.programGrandTotal.monthly), color: '#2383E2' }],
                                     })}
                                 />
                             </Paper>
@@ -325,8 +335,8 @@ const ExecutiveOverviewPage = () => {
                                     height={280}
                                     option={barOption({
                                         horizontal: true,
+                                        barLabelFormatter: '{c}%',
                                         categories: [...data.consultants].slice(0, 8).reverse().map((c) => c.name),
-                                        valueFormatter: '{value}%',
                                         series: [{
                                             name: 'YTD %',
                                             data: [...data.consultants].slice(0, 8).reverse().map((c) => Math.round(c.ytdPercent * 100)),

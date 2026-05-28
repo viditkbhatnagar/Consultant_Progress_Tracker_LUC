@@ -20,14 +20,9 @@ import {
     Stack,
     TextField,
     Snackbar,
-    Collapse,
-    IconButton,
-    Button,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutline';
 import SyncIcon from '@mui/icons-material/Sync';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
@@ -250,6 +245,14 @@ const EntryRow = React.memo(function EntryRow({
 // Read-only summary tables below the editable month blocks: Member Wise
 // Monthly Revenue (Month × member) and Consolidated Admissions (Program ×
 // month), plus two ECharts. All derived server-side in getTeamDetail.
+// Replace trailing-zero months with null so trend lines end at the last
+// active month instead of flat-lining to year-end.
+const trimTrailingZeros = (arr) => {
+    let last = -1;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > 0) last = i;
+    return arr.map((v, i) => (i <= last ? v : null));
+};
+
 const TeamSummaryTables = ({ data }) => {
     const months = data.monthNames ? data.monthNames.map((m) => m.slice(0, 3)) : MONTH_NAMES.map((m) => m.slice(0, 3));
     const mw = data.memberWiseRevenue;
@@ -270,7 +273,7 @@ const TeamSummaryTables = ({ data }) => {
                                 categories: months,
                                 series: mw.members
                                     .filter((m) => m.ytdAchieved > 0)
-                                    .map((m) => ({ name: m.consultantName, data: m.monthly })),
+                                    .map((m) => ({ name: m.consultantName, data: trimTrailingZeros(m.monthly) })),
                             })}
                         />
                     </Paper>
@@ -385,11 +388,10 @@ const TeamDetailPage = () => {
     const [consultants, setConsultants] = useState([]);
     const [entriesById, setEntriesById] = useState({}); // key = `${consultantId}:${month}` -> entry
     const [toast, setToast] = useState(null);
-    // Months are collapsed by default to avoid mounting ~1000 inputs at
-    // once (12 months × ~8 consultants × ~18 cells). Auto-expand the
-    // most-recent month with activity so the user lands somewhere
-    // useful. They can toggle others manually.
-    const [expandedMonths, setExpandedMonths] = useState(() => new Set());
+    // One month is shown at a time, chosen from a dropdown (defaults to
+    // January). Keeps the editable grid light (one month's inputs instead
+    // of all 12) and matches the requested UX.
+    const [selectedMonth, setSelectedMonth] = useState(1);
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
     // Writes are admin-only at the server. TLs see a Coming Soon lock
@@ -431,23 +433,6 @@ const TeamDetailPage = () => {
                 idx[`${e.consultant}:${e.month}`] = e;
             }
             setEntriesById(idx);
-
-            // Auto-expand the most recent month with any activity on this
-            // team so the page lands on useful data instead of a sea of
-            // collapsed accordions. Only seeds the initial set — once the
-            // user toggles, their selection sticks.
-            setExpandedMonths((prev) => {
-                if (prev.size > 0) return prev;
-                let latest = 0;
-                for (const e of entRes.data || []) {
-                    if ((e.achievedRevenue || 0) > 0 && e.month > latest) latest = e.month;
-                }
-                if (latest === 0) {
-                    const now = new Date();
-                    latest = now.getUTCFullYear() === year ? now.getUTCMonth() + 1 : 1;
-                }
-                return new Set([latest]);
-            });
         } catch (err) {
             setError(err.response?.data?.message || err.message || 'Failed to load team detail');
         } finally {
@@ -577,6 +562,18 @@ const TeamDetailPage = () => {
                                 </Select>
                             </FormControl>
                         ) : null}
+                        <FormControl size="small" sx={{ minWidth: 130 }}>
+                            <InputLabel>Month</InputLabel>
+                            <Select
+                                value={selectedMonth}
+                                label="Month"
+                                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            >
+                                {MONTH_NAMES.map((m, i) => (
+                                    <MenuItem key={m} value={i + 1}>{m}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
                         <FormControl size="small" sx={{ minWidth: 110 }}>
                             <InputLabel>Year</InputLabel>
                             <Select
@@ -650,48 +647,21 @@ const TeamDetailPage = () => {
                         </Alert>
                     )}
 
-                    <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setExpandedMonths(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))}
-                        >
-                            Expand all months
-                        </Button>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => setExpandedMonths(new Set())}
-                        >
-                            Collapse all
-                        </Button>
-                    </Stack>
-
-                    {data.months.map((block, blockIdx) => {
-                        const monthNum = blockIdx + 1;
-                        const isOpen = expandedMonths.has(monthNum);
-                        const toggle = () => setExpandedMonths((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(monthNum)) next.delete(monthNum); else next.add(monthNum);
-                            return next;
-                        });
+                    {(() => {
+                        const blockIdx = selectedMonth - 1;
+                        const block = data.months[blockIdx];
+                        const monthNum = selectedMonth;
+                        if (!block) return null;
                         return (
                             <Paper key={monthNum} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
                                 <Box
-                                    onClick={toggle}
                                     sx={{
                                         px: 2.5, py: 1.5,
                                         bgcolor: 'var(--d-surface-muted, #F1EFEA)',
-                                        borderBottom: isOpen ? '1px solid var(--d-border-soft, #ECE9E2)' : 'none',
+                                        borderBottom: '1px solid var(--d-border-soft, #ECE9E2)',
                                         display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
-                                        cursor: 'pointer',
-                                        userSelect: 'none',
-                                        '&:hover': { bgcolor: 'var(--d-surface-hover, #EFEDE8)' },
                                     }}
                                 >
-                                    <IconButton size="small" sx={{ p: 0.25 }} onClick={(e) => { e.stopPropagation(); toggle(); }}>
-                                        {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                    </IconButton>
                                     <Typography sx={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>
                                         {MONTH_NAMES[blockIdx]}
                                     </Typography>
@@ -702,7 +672,6 @@ const TeamDetailPage = () => {
                                         <Chip label={`${block.teamTotal.totalAdmissions} admissions`} size="small" variant="outlined" />
                                     </Stack>
                                 </Box>
-                                <Collapse in={isOpen} mountOnEnter unmountOnExit>
                                 <TableContainer sx={{ overflowX: 'auto' }}>
                                     <Table size="small">
                                         <TableHead>
@@ -768,10 +737,9 @@ const TeamDetailPage = () => {
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
-                                </Collapse>
                             </Paper>
                         );
-                    })}
+                    })()}
 
                     {/* Member Wise Monthly Revenue + Consolidated Admissions */}
                     {data.memberWiseRevenue && data.consolidatedAdmissions ? (
