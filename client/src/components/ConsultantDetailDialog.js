@@ -30,7 +30,8 @@ import {
     Comment as CommentIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import EChart from './charts/EChart';
+import { barOption, lineOption } from './charts/presets';
 import { getLeadStageColor, getAchievementColor } from '../utils/constants';
 import { formatWeekOfMonth } from '../utils/weekUtils';
 
@@ -442,18 +443,17 @@ const ConsultantDetailDialog = ({
                                     <Typography variant="h6" gutterBottom>
                                         Monthly Performance Trend
                                     </Typography>
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <BarChart data={monthlyChartData}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="month" />
-                                            <YAxis />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Bar dataKey="commitments" fill="#3b82f6" name="Total Commitments" />
-                                            <Bar dataKey="achieved" fill="#10b981" name="Achieved" />
-                                            <Bar dataKey="closed" fill="#f59e0b" name="Closed" />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                    <EChart
+                                        height={300}
+                                        option={barOption({
+                                            categories: monthlyChartData.map((d) => d.month),
+                                            series: [
+                                                { name: 'Total Commitments', data: monthlyChartData.map((d) => d.commitments), color: '#3b82f6' },
+                                                { name: 'Achieved', data: monthlyChartData.map((d) => d.achieved), color: '#10b981' },
+                                                { name: 'Closed', data: monthlyChartData.map((d) => d.closed), color: '#f59e0b' },
+                                            ],
+                                        })}
+                                    />
                                 </CardContent>
                             </Card>
                         )}
@@ -465,16 +465,16 @@ const ConsultantDetailDialog = ({
                                     <Typography variant="h6" gutterBottom>
                                         Achievement Rate Trend
                                     </Typography>
-                                    <ResponsiveContainer width="100%" height={250}>
-                                        <LineChart data={monthlyChartData}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="month" />
-                                            <YAxis />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="achievementRate" stroke="#7c3aed" strokeWidth={2} name="Achievement %" />
-                                        </LineChart>
-                                    </ResponsiveContainer>
+                                    <EChart
+                                        height={250}
+                                        option={lineOption({
+                                            categories: monthlyChartData.map((d) => d.month),
+                                            valueFormatter: '{value}%',
+                                            series: [
+                                                { name: 'Achievement %', data: monthlyChartData.map((d) => d.achievementRate), color: '#7c3aed' },
+                                            ],
+                                        })}
+                                    />
                                 </CardContent>
                             </Card>
                         )}

@@ -2,7 +2,8 @@ import React from 'react';
 import { Card, CardContent, Typography, Box, Chip, Stack } from '@mui/material';
 import { TrendingUp as TrendingUpIcon } from '@mui/icons-material';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import EChart from './charts/EChart';
+import { lineOption } from './charts/presets';
 
 const ActivityHeatmap = ({ commitments, month = new Date() }) => {
     // Generate chart data
@@ -44,40 +45,14 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
     const totalDaysWithActivity = chartData.filter(d => d.commitments > 0).length;
     const maxActivity = Math.max(...chartData.map(d => d.commitments), 0);
 
-    // Custom tooltip
-    const CustomTooltip = ({ active, payload }) => {
-        if (active && payload && payload.length) {
-            return (
-                <Box
-                    sx={{
-                        backgroundColor: 'white',
-                        border: '1px solid #E5EAF5',
-                        borderRadius: 2,
-                        p: 1.5,
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    }}
-                >
-                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                        {payload[0].payload.date}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#2C3E50', display: 'block' }}>
-                        Commitments: {payload[0].value}
-                    </Typography>
-                    {payload[1] && (
-                        <Typography variant="caption" sx={{ color: '#4CAF50', display: 'block' }}>
-                            Meetings: {payload[1].value}
-                        </Typography>
-                    )}
-                    {payload[2] && (
-                        <Typography variant="caption" sx={{ color: '#FF9800', display: 'block' }}>
-                            Achieved: {payload[2].value}
-                        </Typography>
-                    )}
-                </Box>
-            );
-        }
-        return null;
-    };
+    const trendOption = lineOption({
+        categories: chartData.map((d) => d.date),
+        series: [
+            { name: 'Commitments', data: chartData.map((d) => d.commitments), color: '#2C3E50', symbolSize: 7 },
+            { name: 'Meetings', data: chartData.map((d) => d.meetings), color: '#4CAF50', symbolSize: 6 },
+            { name: 'Achieved', data: chartData.map((d) => d.achieved), color: '#FF9800', symbolSize: 6 },
+        ],
+    });
 
     return (
         <Card elevation={0} sx={{ backgroundColor: '#E5EAF5', borderRadius: 3, boxShadow: '0 2px 8px rgba(229, 234, 245, 0.3)' }}>
@@ -102,54 +77,8 @@ const ActivityHeatmap = ({ commitments, month = new Date() }) => {
                 </Box>
 
                 {/* Line Chart */}
-                <Box sx={{ width: '100%', height: 300, mt: 2 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                            data={chartData}
-                            margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" stroke="#E5EAF5" />
-                            <XAxis
-                                dataKey="date"
-                                tick={{ fontSize: 11, fill: '#2C3E50' }}
-                                interval="preserveStartEnd"
-                            />
-                            <YAxis
-                                tick={{ fontSize: 11, fill: '#2C3E50' }}
-                                allowDecimals={false}
-                            />
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend
-                                wrapperStyle={{ fontSize: '12px' }}
-                                iconType="line"
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="commitments"
-                                stroke="#2C3E50"
-                                strokeWidth={2}
-                                dot={{ fill: '#2C3E50', r: 4 }}
-                                activeDot={{ r: 6 }}
-                                name="Commitments"
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="meetings"
-                                stroke="#4CAF50"
-                                strokeWidth={2}
-                                dot={{ fill: '#4CAF50', r: 3 }}
-                                name="Meetings"
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="achieved"
-                                stroke="#FF9800"
-                                strokeWidth={2}
-                                dot={{ fill: '#FF9800', r: 3 }}
-                                name="Achieved"
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
+                <Box sx={{ width: '100%', mt: 2 }}>
+                    <EChart option={trendOption} height={300} />
                 </Box>
             </CardContent>
         </Card>

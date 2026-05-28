@@ -33,17 +33,8 @@ import {
     AccessTime as ClockIcon,
     Storage as CacheIcon,
 } from '@mui/icons-material';
-import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
-} from 'recharts';
+import EChart from '../charts/EChart';
+import { barOption, donutOption } from '../charts/presets';
 import { formatDistanceToNow } from 'date-fns';
 import {
     fetchDocsRagStats,
@@ -139,26 +130,6 @@ const EmptyState = ({ text }) => (
         <Typography variant="body2">{text}</Typography>
     </Stack>
 );
-
-// Custom tooltip on the bar chart: shows the full program display name
-// + the chunk count. Tighter than the default recharts panel.
-const BarTooltip = ({ active, payload }) => {
-    if (!active || !payload || payload.length === 0) return null;
-    const d = payload[0].payload;
-    return (
-        <Paper
-            elevation={2}
-            sx={{ px: 1.25, py: 0.75, fontSize: 12, maxWidth: 260 }}
-        >
-            <Typography sx={{ fontWeight: 600, fontSize: 12.5 }}>
-                {PROGRAM_DISPLAY[d.slug] || d.slug}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-                {d.chunks} chunks indexed
-            </Typography>
-        </Paper>
-    );
-};
 
 // Horizontal ms-bar for the Latency-by-tier mini chart. Each tier uses
 // its palette color and the bar label reads in either ms or s depending
@@ -479,34 +450,26 @@ const DocsRagPanel = () => {
                                     mt: 1,
                                 }}
                             >
-                                <ResponsiveContainer>
-                                    <BarChart
-                                        data={chunksBarData}
-                                        margin={{ top: 4, right: 8, left: -20, bottom: 20 }}
-                                    >
-                                        <XAxis
-                                            dataKey="program"
-                                            interval={0}
-                                            tick={{ fontSize: 10 }}
-                                            angle={-45}
-                                            textAnchor="end"
-                                            height={60}
-                                        />
-                                        <YAxis
-                                            tick={{ fontSize: 10 }}
-                                            allowDecimals={false}
-                                        />
-                                        <RechartsTooltip
-                                            content={<BarTooltip />}
-                                            cursor={{ fill: 'rgba(59,130,246,0.08)' }}
-                                        />
-                                        <Bar
-                                            dataKey="chunks"
-                                            fill={BAR_COLOR}
-                                            radius={[4, 4, 0, 0]}
-                                        />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                                <EChart
+                                    height={isNarrow ? 220 : 260}
+                                    option={{
+                                        ...barOption({
+                                            categories: chunksBarData.map((d) => d.program),
+                                            rotateLabels: 45,
+                                            series: [{ name: 'Chunks', data: chunksBarData.map((d) => d.chunks), color: BAR_COLOR }],
+                                        }),
+                                        tooltip: {
+                                            trigger: 'axis',
+                                            axisPointer: { type: 'shadow' },
+                                            formatter: (params) => {
+                                                const p = params[0];
+                                                const d = chunksBarData[p.dataIndex] || {};
+                                                const label = PROGRAM_DISPLAY[d.slug] || d.slug || p.name;
+                                                return `<b>${label}</b><br/>${d.chunks} chunks indexed`;
+                                            },
+                                        },
+                                    }}
+                                />
                             </Box>
                         </CardContent>
                     </Card>
@@ -539,26 +502,16 @@ const DocsRagPanel = () => {
                                             height: isNarrow ? 170 : 200,
                                         }}
                                     >
-                                        <ResponsiveContainer>
-                                            <PieChart>
-                                                <Pie
-                                                    data={tierPieData}
-                                                    dataKey="value"
-                                                    nameKey="name"
-                                                    innerRadius="60%"
-                                                    outerRadius="90%"
-                                                    paddingAngle={2}
-                                                    isAnimationActive={false}
-                                                >
-                                                    {tierPieData.map((d) => (
-                                                        <Cell
-                                                            key={d.key}
-                                                            fill={TIER_COLORS[d.key]}
-                                                        />
-                                                    ))}
-                                                </Pie>
-                                            </PieChart>
-                                        </ResponsiveContainer>
+                                        <EChart
+                                            height={isNarrow ? 170 : 200}
+                                            option={{
+                                                ...donutOption({
+                                                    data: tierPieData.map((d) => ({ name: d.name, value: d.value, color: TIER_COLORS[d.key] })),
+                                                    radius: ['60%', '90%'],
+                                                }),
+                                                animation: false,
+                                            }}
+                                        />
                                         <Box
                                             sx={{
                                                 position: 'absolute',
