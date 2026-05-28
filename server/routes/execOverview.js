@@ -5,6 +5,7 @@ const {
     getOverview,
     getTeam,
     getTeams,
+    getConsultantPerformanceRankings,
 } = require('../controllers/execOverviewController');
 
 const router = express.Router();
@@ -14,6 +15,7 @@ router.use(orgGate('luc'));
 
 // Specific routes BEFORE the parameterized one.
 router.get('/teams', authorize('admin', 'team_lead'), getTeams);
+router.get('/consultant-performance', authorize('admin', 'team_lead'), getConsultantPerformanceRankings);
 router.get('/team/:teamLeadId', authorize('admin', 'team_lead'), getTeam);
 router.get('/', authorize('admin', 'team_lead'), getOverview);
 

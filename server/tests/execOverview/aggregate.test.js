@@ -21,6 +21,7 @@ require('../../models/TeamMonthlyEntry');
 const {
     getExecutiveOverview,
     getTeamDetail,
+    getConsultantPerformance,
 } = require('../../services/execOverview/aggregate');
 
 beforeAll(async () => { await startInMemoryMongo(); });
@@ -184,5 +185,91 @@ describe('getExecutiveOverview', () => {
         const tony = out.teamsMtd.find((t) => String(t.id) === String(tonyId));
         expect(tony).toBeTruthy();
         expect(['On Track', 'Behind']).toContain(tony.status);
+    });
+});
+
+describe('getTeamDetail — memberWiseRevenue + consolidatedAdmissions', () => {
+    test('memberWiseRevenue: per-member monthly achieved + YTD rows', async () => {
+        await seed();
+        const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
+        expect(out.memberWiseRevenue).toBeTruthy();
+        const eliz = out.memberWiseRevenue.members.find((m) => m.consultantName === 'Elizabeth');
+        // Jan 208000, Feb 100000, rest 0.
+        expect(eliz.monthly[0]).toBe(208000);
+        expect(eliz.monthly[1]).toBe(100000);
+        expect(eliz.monthly[2]).toBe(0);
+        expect(eliz.ytdAchieved).toBe(308000);
+        expect(eliz.ytdTarget).toBe(220000); // 110k + 110k
+        expect(eliz.ytdPercent).toBeCloseTo(308000 / 220000, 4);
+    });
+
+    test('consolidatedAdmissions: program×month with AGI listed but excluded from Total Admissions', async () => {
+        await seed();
+        const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
+        const ca = out.consolidatedAdmissions;
+        // AGI rows come first.
+        expect(ca.rows[0].program).toBe('AGI');
+        expect(ca.rows[0].isAgi).toBe(true);
+        // KNIGHTS MBA total = Jan 4+3=7 + Feb 2 = 9.
+        const km = ca.rows.find((r) => r.program === 'KNIGHTS MBA');
+        expect(km.total).toBe(9);
+        // AGI total = 4 (Feb).
+        const agi = ca.rows.find((r) => r.program === 'AGI');
+        expect(agi.total).toBe(4);
+        // Total Admissions Jan = 7 (Eliz) + 8 (Swetha) = 15; Feb = 4 (AGI excluded).
+        expect(ca.totalAdmissions.monthly[0]).toBe(15);
+        expect(ca.totalAdmissions.monthly[1]).toBe(4);
+        expect(ca.totalAdmissions.total).toBe(19);
+    });
+});
+
+describe('getConsultantPerformance', () => {
+    const harshaId = new mongoose.Types.ObjectId();
+
+    async function seedPerf() {
+        await seed(); // Tony + Elizabeth(110k) + Swetha(130k) entries for 2025
+        // Add a team-lead self-consultant row (should be EXCLUDED) and a
+        // sub-90k consultant (Category B).
+        await insertRaw('Consultant', [
+            { _id: harshaId, name: 'Harsha', teamLead: tonyId, organization: 'luc', isActive: true },
+            // Team-lead self row: name matches the lead 'Tony'.
+            { name: 'Tony', teamLead: tonyId, organization: 'luc', isActive: true },
+        ]);
+        await insertRaw('TeamMonthlyEntry', [
+            {
+                organization: 'luc', teamLead: tonyId, consultant: harshaId,
+                consultantName: 'Harsha', year: 2025, month: 1,
+                monthlyTarget: 70000, achievedRevenue: 80000,
+            },
+        ]);
+    }
+
+    test('splits Category A (>=90k) / B (<90k) by representative monthly target', async () => {
+        await seedPerf();
+        const out = await getConsultantPerformance({ year: 2025 });
+        const aNames = out.categoryA.map((r) => r.name).sort();
+        const bNames = out.categoryB.map((r) => r.name).sort();
+        expect(aNames).toEqual(['Elizabeth', 'Swetha']); // 110k, 130k
+        expect(bNames).toEqual(['Harsha']);              // 70k
+    });
+
+    test('excludes the team-lead self-consultant row', async () => {
+        await seedPerf();
+        const out = await getConsultantPerformance({ year: 2025 });
+        const allNames = [...out.categoryA, ...out.categoryB].map((r) => r.name);
+        expect(allNames).not.toContain('Tony');
+        expect(out.activeCount).toBe(3); // Elizabeth, Swetha, Harsha
+    });
+
+    test('ranks each category by YTD% desc and returns top-5 lists', async () => {
+        await seedPerf();
+        const out = await getConsultantPerformance({ year: 2025 });
+        // Category A sorted by ytdPercent desc → ranks assigned 1..n.
+        expect(out.categoryA[0].rank).toBe(1);
+        for (let i = 1; i < out.categoryA.length; i++) {
+            expect(out.categoryA[i - 1].ytdPercent).toBeGreaterThanOrEqual(out.categoryA[i].ytdPercent);
+        }
+        expect(out.top5Ytd.length).toBeLessThanOrEqual(5);
+        expect(out.top5Mtd.length).toBeLessThanOrEqual(5);
     });
 });
