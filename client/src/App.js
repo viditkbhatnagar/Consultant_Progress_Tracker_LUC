@@ -16,6 +16,7 @@ import ExportCenterPage from './pages/ExportCenterPage';
 import AdminReconciliationPage from './pages/AdminReconciliationPage';
 import PdfViewer from './pages/PdfViewer';
 import ExecutiveOverviewPage from './pages/ExecutiveOverviewPage';
+import ConsultantPerformancePage from './pages/ConsultantPerformancePage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
@@ -196,6 +197,17 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['team_lead']}>
                   <TeamDetailPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Consultant Performance — Category A/B rankings + top-5
+                leaderboard. Admin sees all; team_lead gets Coming Soon. */}
+            <Route
+              path="/consultant-performance"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <ConsultantPerformancePage />
                 </PrivateRoute>
               }
             />
