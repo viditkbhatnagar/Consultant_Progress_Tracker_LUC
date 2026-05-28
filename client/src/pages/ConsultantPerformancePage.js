@@ -194,10 +194,10 @@ const ConsultantPerformancePage = () => {
                 <Box sx={{ pb: 6 }}>
                     {/* Top-5 leaderboards with rotating quotes */}
                     <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <LeaderboardCard title="🏆 Top 5 — YTD %" rows={data.top5Ytd} metric="ytd" accent="#1F7A35" quoteIndex={year} />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <LeaderboardCard title="🔥 Top 5 — MTD %" rows={data.top5Mtd} metric="mtd" accent="#D97706" quoteIndex={year + 3} />
                         </Grid>
                     </Grid>

@@ -254,7 +254,7 @@ const TeamSummaryTables = ({ data }) => {
         <Box sx={{ mt: 2 }}>
             {/* Charts */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={7}>
+                <Grid size={{ xs: 12, md: 7 }}>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                             Member Revenue Trend
@@ -273,7 +273,7 @@ const TeamSummaryTables = ({ data }) => {
                         />
                     </Paper>
                 </Grid>
-                <Grid item xs={12} md={5}>
+                <Grid size={{ xs: 12, md: 5 }}>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
                             Program Mix (admissions)
@@ -606,25 +606,25 @@ const TeamDetailPage = () => {
                 <Box sx={{ pb: 6 }}>
                     {/* YTD strip */}
                     <Grid container spacing={2} sx={{ mt: 1, mb: 3 }}>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
                                 <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Target</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700 }}>{fmtCurrency(data.ytd.target)}</Typography>
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
                                 <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Achieved</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#1F7A35' }}>{fmtCurrency(data.ytd.achieved)}</Typography>
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
                                 <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD %</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: data.ytd.percent >= 0.8 ? '#1F7A35' : '#A35A06' }}>{fmtPct(data.ytd.percent)}</Typography>
                             </Paper>
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
                                 <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Remaining</Typography>
                                 <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#A35A06' }}>{fmtCurrency(data.ytd.remaining)}</Typography>
