@@ -245,14 +245,6 @@ const EntryRow = React.memo(function EntryRow({
 // Read-only summary tables below the editable month blocks: Member Wise
 // Monthly Revenue (Month × member) and Consolidated Admissions (Program ×
 // month), plus two ECharts. All derived server-side in getTeamDetail.
-// Replace trailing-zero months with null so trend lines end at the last
-// active month instead of flat-lining to year-end.
-const trimTrailingZeros = (arr) => {
-    let last = -1;
-    for (let i = 0; i < arr.length; i++) if (arr[i] > 0) last = i;
-    return arr.map((v, i) => (i <= last ? v : null));
-};
-
 const TeamSummaryTables = ({ data }) => {
     const months = data.monthNames ? data.monthNames.map((m) => m.slice(0, 3)) : MONTH_NAMES.map((m) => m.slice(0, 3));
     const mw = data.memberWiseRevenue;
@@ -271,9 +263,12 @@ const TeamSummaryTables = ({ data }) => {
                             height={300}
                             option={lineOption({
                                 categories: months,
+                                // Tooltip-only (no paginated legend); null out zero
+                                // months so partial-year lines don't crash to 0.
+                                showLegend: false,
                                 series: mw.members
                                     .filter((m) => m.ytdAchieved > 0)
-                                    .map((m) => ({ name: m.consultantName, data: trimTrailingZeros(m.monthly) })),
+                                    .map((m) => ({ name: m.consultantName, data: m.monthly.map((v) => (v > 0 ? v : null)) })),
                             })}
                         />
                     </Paper>

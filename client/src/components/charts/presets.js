@@ -28,25 +28,21 @@ export function donutOption({
         emphasis: { label: { show: true, fontWeight: 'bold' } },
         data: data.map((d) => (d.color ? { name: d.name, value: d.value, itemStyle: { color: d.color } } : d)),
     }];
+    // No legend — a 14-program legend either paginates ("1/9") or wraps
+    // and crowds the ring. The colored ring + center total give the
+    // visual; the rich tooltip names each slice on hover, and the full
+    // per-program breakdown lives in the adjacent table.
     const option = {
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: {
-            type: 'scroll',
-            orient: 'horizontal',
-            bottom: 0,
-            left: 'center',
-            itemWidth: 12,
-            itemHeight: 12,
-            textStyle: LEGEND_TEXT,
-        },
-        series,
+        legend: { show: false },
+        series: series.map((s) => ({ ...s, center: ['50%', '50%'] })),
     };
     if (centerText) {
         option.graphic = {
             type: 'text',
             left: 'center',
-            top: '40%',
-            style: { text: centerText, textAlign: 'center', fontSize: 22, fontWeight: 700, fill: '#191918' },
+            top: 'middle',
+            style: { text: centerText, textAlign: 'center', fontSize: 24, fontWeight: 700, fill: '#191918' },
             z: 1,
         };
     }
@@ -118,7 +114,9 @@ export function barOption({
             left: 8,
             containLabel: true,
         };
-        option.xAxis = { ...catAxis, axisLabel: { ...catAxis.axisLabel, rotate: rotateLabels, fontSize: 10, margin: 10 } };
+        // Show every category label (don't hide on overlap) — rotation +
+        // small font keeps all team names visible.
+        option.xAxis = { ...catAxis, axisLabel: { ...catAxis.axisLabel, rotate: rotateLabels, fontSize: 9, margin: 10, hideOverlap: false, interval: 0 } };
         option.yAxis = yAxes && yAxes.length
             ? yAxes.map((y, i) => valAxis(i === 1 ? { position: 'right', ...y } : y))
             : valAxis();
@@ -133,8 +131,10 @@ export function lineOption({
     series = [],
     yAxes,
     valueFormatter,
+    showLegend = true,
 } = {}) {
     const multi = series.length > 1;
+    const legendOn = multi && showLegend;
     const valAxis = (extra = {}) => ({
         type: 'value',
         splitNumber: 4,
@@ -144,8 +144,8 @@ export function lineOption({
     });
     return {
         tooltip: { trigger: 'axis' },
-        legend: multi ? { type: 'scroll', top: 0, itemWidth: 12, itemHeight: 12, textStyle: LEGEND_TEXT } : { show: false },
-        grid: { top: multi ? 34 : 12, right: 16, bottom: 24, left: 8, containLabel: true },
+        legend: legendOn ? { type: 'scroll', top: 0, itemWidth: 12, itemHeight: 12, textStyle: LEGEND_TEXT } : { show: false },
+        grid: { top: legendOn ? 34 : 12, right: 16, bottom: 24, left: 8, containLabel: true },
         xAxis: {
             type: 'category',
             boundaryGap: false,
@@ -160,7 +160,9 @@ export function lineOption({
             name: s.name,
             data: s.data,
             smooth: s.smooth || false,
-            connectNulls: false,
+            // Bridge null gaps (e.g. zero/no-activity months that we null
+            // out) so partial-year lines don't crash down to the axis.
+            connectNulls: true,
             yAxisIndex: s.yAxisIndex || 0,
             symbol: 'circle',
             symbolSize: s.symbolSize || 6,
