@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import authService from '../services/authService';
+import { connectSocket, disconnectSocket } from '../services/socket';
 
 const AuthContext = createContext();
 
@@ -33,6 +34,15 @@ export const AuthProvider = ({ children }) => {
 
         initAuth();
     }, []);
+
+    // Keep the real-time socket connected to the current token. Covers
+    // login (connect), logout (token → null ⇒ disconnect), and password
+    // rotation (new token ⇒ reconnect). Degrades silently if the socket
+    // server is unreachable.
+    useEffect(() => {
+        if (token) connectSocket(token);
+        else disconnectSocket();
+    }, [token]);
 
     const login = async (email, password) => {
         try {
