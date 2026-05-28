@@ -1,6 +1,7 @@
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
+const { emitConsultant } = require('../services/realtime');
 
 // @desc    Get all consultants
 // @route   GET /api/consultants
@@ -78,6 +79,12 @@ exports.createConsultant = async (req, res, next) => {
             organization,
         });
 
+        emitConsultant(organization, 'created', {
+            id: String(consultant._id),
+            name: consultant.name,
+            teamLead: String(teamLeadId),
+            teamName: finalTeamName,
+        });
         res.status(201).json({
             success: true,
             data: consultant,
@@ -135,6 +142,13 @@ exports.updateConsultant = async (req, res, next) => {
             }
         );
 
+        emitConsultant(consultant.organization, 'updated', {
+            id: String(consultant._id),
+            name: consultant.name,
+            isActive: consultant.isActive,
+            teamLead: String(consultant.teamLead),
+            teamName: consultant.teamName,
+        });
         res.status(200).json({
             success: true,
             data: consultant,
@@ -169,6 +183,7 @@ exports.deleteConsultant = async (req, res, next) => {
         consultant.isActive = false;
         await consultant.save();
 
+        emitConsultant(consultant.organization, 'deactivated', { id: String(consultant._id) });
         res.status(200).json({
             success: true,
             data: {},
@@ -193,8 +208,10 @@ exports.permanentDeleteConsultant = async (req, res, next) => {
             });
         }
 
+        const org = consultant.organization;
         await Consultant.findByIdAndDelete(req.params.id);
 
+        emitConsultant(org, 'deleted', { id: String(req.params.id) });
         res.status(200).json({
             success: true,
             data: {},

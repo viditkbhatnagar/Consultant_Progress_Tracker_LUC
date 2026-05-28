@@ -36,6 +36,9 @@ import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
+import EChart from '../components/charts/EChart';
+import { donutOption, lineOption } from '../components/charts/presets';
+import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { getTeamDetail, getTeams } from '../services/execOverviewService';
 import { listEntries, upsertEntry, bulkUpsertEntries } from '../services/teamEntryService';
 import consultantService from '../services/consultantService';
@@ -244,6 +247,129 @@ const EntryRow = React.memo(function EntryRow({
     );
 });
 
+// Read-only summary tables below the editable month blocks: Member Wise
+// Monthly Revenue (Month × member) and Consolidated Admissions (Program ×
+// month), plus two ECharts. All derived server-side in getTeamDetail.
+const TeamSummaryTables = ({ data }) => {
+    const months = data.monthNames ? data.monthNames.map((m) => m.slice(0, 3)) : MONTH_NAMES.map((m) => m.slice(0, 3));
+    const mw = data.memberWiseRevenue;
+    const ca = data.consolidatedAdmissions;
+
+    return (
+        <Box sx={{ mt: 2 }}>
+            {/* Charts */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={7}>
+                    <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                            Member Revenue Trend
+                        </Typography>
+                        <EChart
+                            height={300}
+                            option={lineOption({
+                                categories: months,
+                                series: mw.members
+                                    .filter((m) => m.ytdAchieved > 0)
+                                    .map((m) => ({ name: m.consultantName, data: m.monthly })),
+                            })}
+                        />
+                    </Paper>
+                </Grid>
+                <Grid item xs={12} md={5}>
+                    <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                            Program Mix (admissions)
+                        </Typography>
+                        <EChart
+                            height={300}
+                            option={donutOption({
+                                data: ca.rows.filter((r) => !r.isAgi && r.total > 0).map((r) => ({ name: r.program, value: r.total })),
+                                radius: ['50%', '72%'],
+                                centerText: String(ca.totalAdmissions.total),
+                            })}
+                        />
+                    </Paper>
+                </Grid>
+            </Grid>
+
+            {/* Member Wise Monthly Revenue */}
+            <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
+                <Box sx={{ px: 2.5, py: 1.5, bgcolor: 'var(--d-surface-muted, #F1EFEA)', borderBottom: '1px solid var(--d-border-soft, #ECE9E2)' }}>
+                    <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Member Wise Monthly Revenue</Typography>
+                </Box>
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ bgcolor: 'var(--d-surface, #FFFFFF)' }}>
+                                <TableCell sx={{ fontWeight: 700, position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', zIndex: 1 }}>Member</TableCell>
+                                {months.map((m) => (
+                                    <TableCell key={m} align="right" sx={{ fontWeight: 700 }}>{m}</TableCell>
+                                ))}
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>YTD Ach.</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>YTD Tgt</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>YTD %</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {mw.members.map((m) => (
+                                <TableRow key={m.consultantName} hover>
+                                    <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>{m.consultantName}</TableCell>
+                                    {m.monthly.map((v, i) => (
+                                        <TableCell key={i} align="right">{v ? fmtCurrency(v) : '—'}</TableCell>
+                                    ))}
+                                    <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(m.ytdAchieved)}</TableCell>
+                                    <TableCell align="right">{fmtCurrency(m.ytdTarget)}</TableCell>
+                                    <TableCell align="right" sx={{ color: m.ytdPercent >= 0.8 ? '#1F7A35' : '#A35A06', fontWeight: 600 }}>{fmtPct(m.ytdPercent)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
+
+            {/* Consolidated Admissions — Program Wise */}
+            <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
+                <Box sx={{ px: 2.5, py: 1.5, bgcolor: 'var(--d-surface-muted, #F1EFEA)', borderBottom: '1px solid var(--d-border-soft, #ECE9E2)' }}>
+                    <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Consolidated Admissions — Program Wise</Typography>
+                </Box>
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ bgcolor: 'var(--d-surface, #FFFFFF)' }}>
+                                <TableCell sx={{ fontWeight: 700, position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', zIndex: 1 }}>Program</TableCell>
+                                {months.map((m) => (
+                                    <TableCell key={m} align="right" sx={{ fontWeight: 700 }}>{m}</TableCell>
+                                ))}
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {ca.rows.map((r) => (
+                                <TableRow key={r.program} hover sx={r.isAgi ? { bgcolor: 'rgba(217,119,6,0.05)' } : null}>
+                                    <TableCell sx={{ position: 'sticky', left: 0, bgcolor: r.isAgi ? '#FDF5E6' : 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
+                                        {r.program}{r.isAgi ? ' (excl.)' : ''}
+                                    </TableCell>
+                                    {r.monthly.map((v, i) => (
+                                        <TableCell key={i} align="right">{v || '—'}</TableCell>
+                                    ))}
+                                    <TableCell align="right" sx={{ fontWeight: 700 }}>{r.total || '—'}</TableCell>
+                                </TableRow>
+                            ))}
+                            <TableRow sx={{ bgcolor: 'rgba(35,131,226,0.06)' }}>
+                                <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'rgba(35,131,226,0.12)', fontWeight: 700, zIndex: 1 }}>Total Admissions</TableCell>
+                                {ca.totalAdmissions.monthly.map((v, i) => (
+                                    <TableCell key={i} align="right" sx={{ fontWeight: 700 }}>{v || '—'}</TableCell>
+                                ))}
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>{ca.totalAdmissions.total || '—'}</TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
+        </Box>
+    );
+};
+
 const TeamDetailPage = () => {
     const navigate = useNavigate();
     const { teamLeadId: paramId } = useParams();
@@ -330,6 +456,13 @@ const TeamDetailPage = () => {
     }, [effectiveTeamId, year, isTeamLead]);
 
     useEffect(() => { refetch(); }, [refetch]);
+
+    // Live updates from other sessions (admin edits, added consultants).
+    useRealtimeRefresh(
+        ['teamEntry:upserted', 'teamEntry:bulk', 'teamEntry:deleted', 'consultant:created', 'consultant:updated', 'consultant:deactivated'],
+        refetch,
+        { year }
+    );
 
     // Debounced refetch handle — multiple rapid saves (tabbing through
     // cells) collapse into one detail re-fetch instead of N.
@@ -639,6 +772,11 @@ const TeamDetailPage = () => {
                             </Paper>
                         );
                     })}
+
+                    {/* Member Wise Monthly Revenue + Consolidated Admissions */}
+                    {data.memberWiseRevenue && data.consolidatedAdmissions ? (
+                        <TeamSummaryTables data={data} />
+                    ) : null}
                 </Box>
             ) : null}
 

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { emitUser } = require('../services/realtime');
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -41,6 +42,11 @@ exports.register = async (req, res, next) => {
             phone,
         });
 
+        emitUser(user.organization, 'created', {
+            id: String(user._id),
+            role: user.role,
+            teamName: user.teamName,
+        });
         sendTokenResponse(user, 201, res);
     } catch (error) {
         next(error);

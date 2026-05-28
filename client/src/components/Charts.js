@@ -1,7 +1,12 @@
 import React from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, Typography, Box } from '@mui/material';
 import { getLeadStageColor } from '../utils/constants';
+import EChart from './charts/EChart';
+import { donutOption, barOption, lineOption } from './charts/presets';
+
+// All charts render via the shared themed <EChart> wrapper (Apache
+// ECharts). Export names + props are unchanged so the dashboard pages
+// that import these need no edits.
 
 // Lead Stage Distribution Chart
 export const LeadStageChart = ({ commitments }) => {
@@ -17,35 +22,12 @@ export const LeadStageChart = ({ commitments }) => {
         color: getLeadStageColor(name),
     }));
 
-    // Read the active dashboardTheme tokens so chart colors follow light/dark.
-    // Fallback to literal hex when tokens aren't in scope (legacy callers).
-    const readToken = (name, fallback) => {
-        if (typeof window === 'undefined') return fallback;
-        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        return v || fallback;
-    };
-    const accent = readToken('--d-accent', '#2383E2');
-    const accentText = readToken('--d-accent-text', '#1F6FBF');
-    const warm = readToken('--d-warm', '#D97706');
-    const success = readToken('--d-success', '#16A34A');
-    const text2 = readToken('--d-text-2', '#2A2927');
-    const textMuted = readToken('--d-text-muted', '#8A887E');
-    const surface = readToken('--d-surface', '#FFFFFF');
-    const border = readToken('--d-border', '#E6E3DC');
-    const palette = [accent, warm, success, accentText, textMuted];
-
-    const RADIAN = Math.PI / 180;
-    const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
-        const radius = innerRadius + (outerRadius - innerRadius) * 1.4;
-        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-        const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-        return (
-            <text x={x} y={y} fill={text2} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12} fontWeight={500}>
-                {`${name} (${(percent * 100).toFixed(0)}%)`}
-            </text>
-        );
-    };
+    const option = donutOption({
+        data,
+        radius: ['55%', '72%'],
+        showLabel: true,
+        labelFormatter: '{b} ({d}%)',
+    });
 
     return (
         <Box
@@ -69,43 +51,11 @@ export const LeadStageChart = ({ commitments }) => {
             >
                 Lead Stage Distribution
             </Typography>
-            <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                    <Pie
-                        data={data}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={renderCustomizedLabel}
-                        outerRadius={100}
-                        innerRadius={55}
-                        dataKey="value"
-                        paddingAngle={2}
-                    >
-                        {data.map((entry, index) => (
-                            <Cell
-                                key={`cell-${index}`}
-                                fill={palette[index % palette.length]}
-                                stroke={surface}
-                                strokeWidth={2}
-                            />
-                        ))}
-                    </Pie>
-                    <Tooltip
-                        contentStyle={{
-                            backgroundColor: surface,
-                            borderRadius: 8,
-                            border: `1px solid ${border}`,
-                            color: text2,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                        }}
-                    />
-                </PieChart>
-            </ResponsiveContainer>
+            <EChart option={option} height={320} />
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, mt: 1.5, justifyContent: 'center' }}>
-                {data.map((entry, index) => (
+                {data.map((entry) => (
                     <Box key={entry.name} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: palette[index % palette.length] }} />
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: entry.color }} />
                         <Typography sx={{ fontSize: 11.5, color: 'var(--d-text-3, #57564E)', fontVariantNumeric: 'tabular-nums' }}>
                             {entry.name}: {entry.value}
                         </Typography>
@@ -118,11 +68,14 @@ export const LeadStageChart = ({ commitments }) => {
 
 // Achievement vs Target Chart
 export const AchievementChart = ({ commitments }) => {
-    const data = commitments.map((commitment, index) => ({
-        name: commitment.studentName || `C${index + 1}`,
-        target: 100,
-        achieved: commitment.achievementPercentage || 0,
-    }));
+    const names = commitments.map((c, i) => c.studentName || `C${i + 1}`);
+    const option = barOption({
+        categories: names,
+        series: [
+            { name: 'Target (100%)', data: commitments.map(() => 100), color: '#E0E0E0' },
+            { name: 'Achieved %', data: commitments.map((c) => c.achievementPercentage || 0), color: '#4CAF50' },
+        ],
+    });
 
     return (
         <Card>
@@ -130,17 +83,7 @@ export const AchievementChart = ({ commitments }) => {
                 <Typography variant="h6" gutterBottom>
                     Achievement vs Target
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="target" fill="#E0E0E0" name="Target (100%)" />
-                        <Bar dataKey="achieved" fill="#4CAF50" name="Achieved %" />
-                    </BarChart>
-                </ResponsiveContainer>
+                <EChart option={option} height={300} />
             </CardContent>
         </Card>
     );
@@ -148,55 +91,40 @@ export const AchievementChart = ({ commitments }) => {
 
 // Weekly Trend Chart
 export const WeeklyTrendChart = ({ weeklyData }) => {
+    const weeks = (weeklyData || []).map((w) => w.week);
+    const option = lineOption({
+        categories: weeks,
+        series: [
+            { name: 'Commitments', data: (weeklyData || []).map((w) => w.commitments), color: '#2196F3' },
+            { name: 'Achieved', data: (weeklyData || []).map((w) => w.achieved), color: '#4CAF50' },
+            { name: 'Meetings', data: (weeklyData || []).map((w) => w.meetings), color: '#FF9800' },
+        ],
+    });
+
     return (
         <Card>
             <CardContent>
                 <Typography variant="h6" gutterBottom>
                     Weekly Performance Trend
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={weeklyData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="week" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Line
-                            type="monotone"
-                            dataKey="commitments"
-                            stroke="#2196F3"
-                            name="Commitments"
-                            strokeWidth={2}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="achieved"
-                            stroke="#4CAF50"
-                            name="Achieved"
-                            strokeWidth={2}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="meetings"
-                            stroke="#FF9800"
-                            name="Meetings"
-                            strokeWidth={2}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
+                <EChart option={option} height={300} />
             </CardContent>
         </Card>
     );
 };
 
-// Consultant Performance Comparison
+// Consultant Performance Comparison (dual Y-axis)
 export const ConsultantPerformanceChart = ({ consultantStats }) => {
-    const data = consultantStats.map(stat => ({
-        name: stat.consultant.name,
-        commitments: stat.total,
-        achieved: stat.achieved,
-        achievementRate: stat.achievementRate,
-    }));
+    const names = consultantStats.map((s) => s.consultant.name);
+    const option = barOption({
+        categories: names,
+        yAxes: [{}, { axisLabel: { formatter: '{value}%' } }],
+        series: [
+            { name: 'Total Commitments', data: consultantStats.map((s) => s.total), color: '#2196F3', yAxisIndex: 0 },
+            { name: 'Achieved', data: consultantStats.map((s) => s.achieved), color: '#4CAF50', yAxisIndex: 0 },
+            { name: 'Achievement %', data: consultantStats.map((s) => s.achievementRate), color: '#FF9800', yAxisIndex: 1 },
+        ],
+    });
 
     return (
         <Card>
@@ -204,19 +132,7 @@ export const ConsultantPerformanceChart = ({ consultantStats }) => {
                 <Typography variant="h6" gutterBottom>
                     Consultant Performance Comparison
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis yAxisId="left" />
-                        <YAxis yAxisId="right" orientation="right" />
-                        <Tooltip />
-                        <Legend />
-                        <Bar yAxisId="left" dataKey="commitments" fill="#2196F3" name="Total Commitments" />
-                        <Bar yAxisId="left" dataKey="achieved" fill="#4CAF50" name="Achieved" />
-                        <Bar yAxisId="right" dataKey="achievementRate" fill="#FF9800" name="Achievement %" />
-                    </BarChart>
-                </ResponsiveContainer>
+                <EChart option={option} height={300} />
             </CardContent>
         </Card>
     );
@@ -224,10 +140,13 @@ export const ConsultantPerformanceChart = ({ consultantStats }) => {
 
 // Meetings Distribution Chart
 export const MeetingsChart = ({ commitments }) => {
-    const data = commitments.map((commitment, index) => ({
-        name: commitment.studentName || `C${index + 1}`,
-        meetings: commitment.meetingsDone || 0,
-    })).filter(item => item.meetings > 0);
+    const data = commitments
+        .map((c, i) => ({ name: c.studentName || `C${i + 1}`, meetings: c.meetingsDone || 0 }))
+        .filter((item) => item.meetings > 0);
+    const option = barOption({
+        categories: data.map((d) => d.name),
+        series: [{ name: 'Meetings Done', data: data.map((d) => d.meetings), color: '#673AB7' }],
+    });
 
     return (
         <Card>
@@ -235,15 +154,7 @@ export const MeetingsChart = ({ commitments }) => {
                 <Typography variant="h6" gutterBottom>
                     Meetings Done per Commitment
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="meetings" fill="#673AB7" name="Meetings Done" />
-                    </BarChart>
-                </ResponsiveContainer>
+                <EChart option={option} height={300} />
             </CardContent>
         </Card>
     );

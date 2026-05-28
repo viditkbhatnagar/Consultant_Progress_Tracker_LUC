@@ -26,4 +26,11 @@ export const getTeams = async () => {
     return res.data;
 };
 
-export default { getOverview, getTeamDetail, getTeams };
+export const getConsultantPerformance = async (year) => {
+    const params = year ? `?year=${year}` : '';
+    const res = await axios.get(`${API_URL}/consultant-performance${params}`, withAuth());
+    return res.data;
+};
+
+const execOverviewService = { getOverview, getTeamDetail, getTeams, getConsultantPerformance };
+export default execOverviewService;

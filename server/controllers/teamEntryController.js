@@ -2,6 +2,7 @@ const TeamMonthlyEntry = require('../models/TeamMonthlyEntry');
 const Consultant = require('../models/Consultant');
 const User = require('../models/User');
 const { ALL_SLUGS, BUCKET_SLUGS } = require('../services/execOverview/bucketing');
+const { emitTeamEntry } = require('../services/realtime');
 
 const EDITABLE_NUM_FIELDS = ['monthlyTarget', 'achievedRevenue', ...ALL_SLUGS];
 
@@ -85,10 +86,12 @@ exports.upsertEntry = async (req, res, next) => {
         }
 
         const changes = pickEditableFields(req.body);
+        // consultantName is set in $set (applies on both insert and update),
+        // so it must NOT also appear in $setOnInsert — Mongoose rejects the
+        // same path in both operators ("would create a conflict").
         const setOnInsert = {
             organization: 'luc',
             consultant,
-            consultantName: consultantDoc.name,
             teamLead,
             year: y,
             month: m,
@@ -103,6 +106,7 @@ exports.upsertEntry = async (req, res, next) => {
             { upsert: true, new: true, setDefaultsOnInsert: true }
         ).lean();
 
+        emitTeamEntry('luc', 'upserted', { consultant, teamLead, year: y, month: m });
         res.status(200).json({ success: true, data: doc });
     } catch (err) {
         // Duplicate-key race (two parallel upserts) — retry once.
@@ -114,6 +118,9 @@ exports.upsertEntry = async (req, res, next) => {
                     year: Number(year),
                     month: Number(month),
                 }).lean();
+                emitTeamEntry('luc', 'upserted', {
+                    consultant, teamLead: req.body.teamLead, year: Number(year), month: Number(month),
+                });
                 return res.status(200).json({ success: true, data: doc });
             } catch (inner) {
                 return next(inner);
@@ -162,11 +169,11 @@ exports.bulkUpsert = async (req, res, next) => {
                 await TeamMonthlyEntry.findOneAndUpdate(
                     { consultant: row.consultant, year: y, month: m },
                     {
+                        // consultantName lives only in $set (see upsertEntry note).
                         $set: { ...changes, consultantName: consultantDoc.name, lastUpdatedBy: req.user._id },
                         $setOnInsert: {
                             organization: 'luc',
                             consultant: row.consultant,
-                            consultantName: consultantDoc.name,
                             teamLead: row.teamLead,
                             year: y,
                             month: m,
@@ -181,6 +188,11 @@ exports.bulkUpsert = async (req, res, next) => {
             }
         }
 
+        // One coalesced event for the whole bulk so clients refetch once.
+        if (results.upserted > 0) {
+            const year = Number(rows[0].year);
+            emitTeamEntry('luc', 'bulk', { year, upserted: results.upserted });
+        }
         res.status(200).json({ success: true, data: results });
     } catch (err) {
         next(err);
@@ -194,6 +206,7 @@ exports.deleteEntry = async (req, res, next) => {
     try {
         const doc = await TeamMonthlyEntry.findByIdAndDelete(req.params.id);
         if (!doc) return res.status(404).json({ success: false, message: 'Entry not found' });
+        emitTeamEntry('luc', 'deleted', { id: req.params.id, year: doc.year });
         res.status(200).json({ success: true });
     } catch (err) {
         next(err);

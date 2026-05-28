@@ -31,7 +31,8 @@ import {
     Comment as CommentIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import EChart from './charts/EChart';
+import { barOption } from './charts/presets';
 import { getLeadStageColor, getAchievementColor } from '../utils/constants';
 import { formatWeekOfMonth } from '../utils/weekUtils';
 
@@ -341,18 +342,17 @@ const TeamDetailDialog = ({ open, onClose, team, commitments, onConsultantClick,
                             <Typography variant="h6" gutterBottom>
                                 Consultant Performance Comparison
                             </Typography>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={consultantData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Bar dataKey="commitments" fill="#3b82f6" name="Total" />
-                                    <Bar dataKey="achieved" fill="#10b981" name="Achieved" />
-                                    <Bar dataKey="closed" fill="#f59e0b" name="Closed" />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <EChart
+                                height={300}
+                                option={barOption({
+                                    categories: consultantData.map((d) => d.name),
+                                    series: [
+                                        { name: 'Total', data: consultantData.map((d) => d.commitments), color: '#3b82f6' },
+                                        { name: 'Achieved', data: consultantData.map((d) => d.achieved), color: '#10b981' },
+                                        { name: 'Closed', data: consultantData.map((d) => d.closed), color: '#f59e0b' },
+                                    ],
+                                })}
+                            />
                         </CardContent>
                     </Card>
                 )}

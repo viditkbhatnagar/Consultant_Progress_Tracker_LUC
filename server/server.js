@@ -118,6 +118,10 @@ const server = app.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
+// Attach the real-time (Socket.IO) layer to the same HTTP server. No-op in
+// test mode; degrades silently if socket.io is unavailable.
+require('./services/realtime').initRealtime(server);
+
 // Load the Docs RAG in-memory index. Mongoose buffers operations until
 // connection is up, so calling loadChunks() immediately is safe regardless
 // of whether connectDB has resolved. Don't block boot on failure — if the

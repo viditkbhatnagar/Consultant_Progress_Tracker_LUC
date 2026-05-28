@@ -1,5 +1,9 @@
 const User = require('../models/User');
-const { getTeamDetail, getExecutiveOverview } = require('../services/execOverview/aggregate');
+const {
+    getTeamDetail,
+    getExecutiveOverview,
+    getConsultantPerformance,
+} = require('../services/execOverview/aggregate');
 
 // Parse the requested year; default to the current calendar year.
 function parseYear(req) {
@@ -44,6 +48,19 @@ exports.getTeam = async (req, res, next) => {
         if (error.statusCode) {
             return res.status(error.statusCode).json({ success: false, message: error.message });
         }
+        next(error);
+    }
+};
+
+// @desc    Consultant Performance — Category A/B rankings + top-5 highlights.
+// @route   GET /api/exec-overview/consultant-performance
+// @access  Private (admin, team_lead)
+exports.getConsultantPerformanceRankings = async (req, res, next) => {
+    try {
+        const year = parseYear(req);
+        const data = await getConsultantPerformance({ year });
+        res.status(200).json({ success: true, data });
+    } catch (error) {
         next(error);
     }
 };

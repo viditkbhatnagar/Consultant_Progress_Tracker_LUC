@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Paper,
@@ -28,6 +28,9 @@ import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
+import EChart from '../components/charts/EChart';
+import { donutOption, barOption, lineOption, compactCurrencyFmt } from '../components/charts/presets';
+import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { getOverview } from '../services/execOverviewService';
 
 const fmtCurrency = (n) => {
@@ -144,29 +147,35 @@ const ExecutiveOverviewPage = () => {
     // under development on the TL side. Admin keeps the full view.
     const isTeamLead = user?.role === 'team_lead';
 
-    useEffect(() => {
+    const loadOverview = useCallback(() => {
         if (isTeamLead) {
             setLoading(false);
             return;
         }
-        let cancelled = false;
-        setLoading(true);
-        setError(null);
         getOverview(year)
             .then((res) => {
-                if (cancelled) return;
                 setData(res.data);
                 setLoading(false);
             })
             .catch((err) => {
-                if (cancelled) return;
-                setError(err.response?.data?.message || err.message || 'Failed to load Executive Overview');
+                setError(err.response?.data?.message || err.message || 'Failed to load Leadership Dashboard');
                 setLoading(false);
             });
-        return () => {
-            cancelled = true;
-        };
     }, [year, isTeamLead]);
+
+    useEffect(() => {
+        setLoading(true);
+        setError(null);
+        loadOverview();
+    }, [loadOverview]);
+
+    // Live updates: any team-entry / consultant / user change for this year
+    // re-fetches the rollup (debounced). No-op when socket is down.
+    useRealtimeRefresh(
+        ['teamEntry:upserted', 'teamEntry:bulk', 'teamEntry:deleted', 'consultant:created', 'consultant:updated', 'consultant:deactivated', 'user:created'],
+        loadOverview,
+        { year }
+    );
 
     const handleLogout = () => {
         logout();
@@ -193,8 +202,8 @@ const ExecutiveOverviewPage = () => {
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <DashboardHero
                 eyebrow="Sales Performance"
-                title="Executive Overview"
-                subtitle={`Year ${year} · All teams roll-up · Updates automatically as admissions close`}
+                title="Leadership Dashboard"
+                subtitle={`Year ${year} · All teams roll-up · Updates live as entries change`}
                 right={
                     <FormControl size="small" sx={{ minWidth: 120 }}>
                         <InputLabel>Year</InputLabel>
@@ -209,8 +218,8 @@ const ExecutiveOverviewPage = () => {
 
             {isTeamLead ? (
                 <ComingSoonLock
-                    title="Executive Overview"
-                    subtitle="A new org-wide sales rollup with KPI strip, team performance tables, and a program × month admissions matrix. Coming soon for team leads."
+                    title="Leadership Dashboard"
+                    subtitle="A new org-wide sales rollup with KPI strip, team performance tables, charts, and a program × month admissions matrix. Coming soon for team leads."
                 />
             ) : loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -253,6 +262,79 @@ const ExecutiveOverviewPage = () => {
                                 sublabel={`MTD: ${fmtCurrency(data.kpi.mtdAchieved)} / ${fmtCurrency(data.kpi.mtdTarget)}`}
                                 accent="#6E40C9"
                             />
+                        </Grid>
+                    </Grid>
+
+                    {/* Visual overview (ECharts) */}
+                    <SectionTitle accent="#2383E2">Visual Overview</SectionTitle>
+                    <Grid container spacing={2}>
+                        <Grid item xs={12} md={7}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Team YTD — Target vs Achieved
+                                </Typography>
+                                <EChart
+                                    height={300}
+                                    option={barOption({
+                                        categories: data.teamsYtd.map((t) => t.teamName.replace('Team ', '')),
+                                        valueFormatter: compactCurrencyFmt,
+                                        rotateLabels: 30,
+                                        series: [
+                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: 'var(--d-border, #E6E3DC)' },
+                                            { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },
+                                        ],
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={5}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Program Mix (YTD admissions)
+                                </Typography>
+                                <EChart
+                                    height={300}
+                                    option={donutOption({
+                                        data: data.programs.filter((p) => !p.isAgi && p.ytdTotal > 0).map((p) => ({ name: p.program, value: p.ytdTotal })),
+                                        radius: ['50%', '72%'],
+                                        centerText: String(data.programGrandTotal.ytdTotal),
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={7}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Monthly Admissions Trend
+                                </Typography>
+                                <EChart
+                                    height={280}
+                                    option={lineOption({
+                                        categories: monthShort,
+                                        series: [{ name: 'Admissions', data: data.programGrandTotal.monthly, color: '#2383E2' }],
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid item xs={12} md={5}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Top Consultants (YTD %)
+                                </Typography>
+                                <EChart
+                                    height={280}
+                                    option={barOption({
+                                        horizontal: true,
+                                        categories: [...data.consultants].slice(0, 8).reverse().map((c) => c.name),
+                                        valueFormatter: '{value}%',
+                                        series: [{
+                                            name: 'YTD %',
+                                            data: [...data.consultants].slice(0, 8).reverse().map((c) => Math.round(c.ytdPercent * 100)),
+                                            color: '#6E40C9',
+                                        }],
+                                    })}
+                                />
+                            </Paper>
                         </Grid>
                     </Grid>
 

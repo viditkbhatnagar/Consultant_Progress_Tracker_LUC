@@ -199,6 +199,67 @@ async function getTeamDetail({ teamLeadId, year }) {
         ytdAchieved += months[m - 1].teamTotal.achievedRevenue;
     }
 
+    // ── Member Wise Monthly Revenue (Excel "MEMBER WISE MONTHLY REVENUE") ──
+    // Month × member matrix of achieved revenue + per-member YTD rows.
+    // Ordered consultants (same name sort the month tables use).
+    const orderedConsultants = [...idx.entries()]
+        .map(([key, ctx]) => ({ key, meta: ctx.meta, months: ctx.months }))
+        .sort((a, b) => a.meta.name.localeCompare(b.meta.name));
+
+    const memberWiseRevenue = {
+        members: orderedConsultants.map((c) => {
+            const monthly = [];
+            let ytdAch = 0;
+            let ytdTgt = 0;
+            for (let m = 1; m <= 12; m++) {
+                const e = c.months[m];
+                const ach = e ? e.achievedRevenue || 0 : 0;
+                monthly.push(ach);
+                if (m <= cutoff) {
+                    ytdAch += ach;
+                    ytdTgt += e ? e.monthlyTarget || 0 : 0;
+                }
+            }
+            return {
+                consultantId: c.meta._id,
+                consultantName: c.meta.name,
+                isActive: c.meta.isActive,
+                monthly,
+                ytdAchieved: ytdAch,
+                ytdTarget: ytdTgt,
+                ytdPercent: pct(ytdAch, ytdTgt),
+            };
+        }),
+    };
+
+    // ── Consolidated Admissions — Program Wise (Excel "CONSOLIDATED ADM…") ──
+    // Program × month counts. AGI rows listed first (matching Excel), then
+    // the 14 program buckets. The Total Admissions row sums ONLY program
+    // buckets (AGI excluded), mirroring Excel =SUM(program rows).
+    const consolidatedOrder = [...AGI_BUCKETS, ...PROGRAM_BUCKETS];
+    const consolidatedAdmissions = {
+        rows: consolidatedOrder.map((bucket) => {
+            const monthly = [];
+            let total = 0;
+            for (let m = 1; m <= 12; m++) {
+                const v = months[m - 1].teamTotal.buckets[bucket] || 0;
+                monthly.push(v);
+                total += v;
+            }
+            return { program: bucket, monthly, total, isAgi: AGI_BUCKETS.includes(bucket) };
+        }),
+        totalAdmissions: (() => {
+            const monthly = [];
+            let total = 0;
+            for (let m = 1; m <= 12; m++) {
+                const v = months[m - 1].teamTotal.totalAdmissions || 0;
+                monthly.push(v);
+                total += v;
+            }
+            return { monthly, total };
+        })(),
+    };
+
     return {
         year,
         teamLead: {
@@ -210,6 +271,7 @@ async function getTeamDetail({ teamLeadId, year }) {
         programBuckets: PROGRAM_BUCKETS,
         agiBuckets: AGI_BUCKETS,
         bucketSlugs: BUCKET_SLUGS,
+        monthNames: MONTH_NAMES,
         ytd: {
             target: ytdTarget,
             achieved: ytdAchieved,
@@ -217,6 +279,8 @@ async function getTeamDetail({ teamLeadId, year }) {
             remaining: Math.max(0, ytdTarget - ytdAchieved),
         },
         months,
+        memberWiseRevenue,
+        consolidatedAdmissions,
     };
 }
 
@@ -383,9 +447,100 @@ async function getExecutiveOverview({ year }) {
     };
 }
 
+// Category split threshold (Excel: "Category A — Monthly Target ≥ 90,000").
+const CATEGORY_A_THRESHOLD = 90000;
+
+// Consultant Performance rankings (Excel "Consultant Performance" sheet).
+// Per active consultant (excluding team-lead-as-consultant rows): a
+// representative monthly target (max non-zero) drives the A/B split;
+// YTD = Σ months 1..cutoff; MTD = cutoff month. Each category is ranked
+// by YTD %. Also returns top-5 by MTD% and by YTD% for the highlight band.
+async function getConsultantPerformance({ year }) {
+    const [teamLeads, consultants, entries] = await Promise.all([
+        User.find({ role: 'team_lead', organization: 'luc' }).select('name teamName').lean(),
+        Consultant.find({ organization: 'luc', isActive: true }).select('name teamLead').lean(),
+        TeamMonthlyEntry.find({ organization: 'luc', year }).lean(),
+    ]);
+
+    const cutoff = await orgWideEffectiveMonth({ year });
+
+    // Team-lead display names keyed by lead id — used to drop the
+    // team-lead's own self-consultant row from the rankings.
+    const leadById = new Map(teamLeads.map((t) => [String(t._id), t]));
+
+    // consultantId -> month -> entry
+    const byConsultant = new Map();
+    for (const e of entries) {
+        const k = String(e.consultant);
+        if (!byConsultant.has(k)) byConsultant.set(k, {});
+        byConsultant.get(k)[e.month] = e;
+    }
+
+    const rows = [];
+    for (const c of consultants) {
+        const lead = leadById.get(String(c.teamLead));
+        // Exclude the team-lead's own self-consultant row.
+        if (lead && lead.name.trim().toLowerCase() === c.name.trim().toLowerCase()) continue;
+
+        const months = byConsultant.get(String(c._id)) || {};
+        let repMonthly = 0;
+        let ytdTarget = 0;
+        let ytdAchieved = 0;
+        for (let m = 1; m <= 12; m++) {
+            const e = months[m];
+            if (!e) continue;
+            if ((e.monthlyTarget || 0) > repMonthly) repMonthly = e.monthlyTarget || 0;
+            if (m <= cutoff) {
+                ytdTarget += e.monthlyTarget || 0;
+                ytdAchieved += e.achievedRevenue || 0;
+            }
+        }
+        const mtdEntry = months[cutoff];
+        const mtdTarget = mtdEntry ? mtdEntry.monthlyTarget || 0 : 0;
+        const mtdAchieved = mtdEntry ? mtdEntry.achievedRevenue || 0 : 0;
+
+        rows.push({
+            consultantId: c._id,
+            name: c.name,
+            team: lead ? (lead.teamName || `Team ${lead.name}`) : '',
+            monthlyTarget: repMonthly,
+            ytdTarget,
+            ytdAchieved,
+            ytdPercent: pct(ytdAchieved, ytdTarget),
+            mtdTarget,
+            mtdAchieved,
+            mtdPercent: pct(mtdAchieved, mtdTarget),
+        });
+    }
+
+    const byYtdDesc = (a, b) => b.ytdPercent - a.ytdPercent;
+    const byMtdDesc = (a, b) => b.mtdPercent - a.mtdPercent;
+    const rank = (list) => list.map((r, i) => ({ ...r, rank: i + 1 }));
+
+    const categoryA = rank(rows.filter((r) => r.monthlyTarget >= CATEGORY_A_THRESHOLD).sort(byYtdDesc));
+    const categoryB = rank(rows.filter((r) => r.monthlyTarget < CATEGORY_A_THRESHOLD).sort(byYtdDesc));
+
+    const top5Ytd = [...rows].sort(byYtdDesc).slice(0, 5);
+    const top5Mtd = [...rows].sort(byMtdDesc).slice(0, 5);
+
+    return {
+        year,
+        cutoffMonth: cutoff,
+        monthName: MONTH_NAMES[cutoff - 1] || '',
+        activeCount: rows.length,
+        categoryAThreshold: CATEGORY_A_THRESHOLD,
+        categoryA,
+        categoryB,
+        top5Ytd,
+        top5Mtd,
+    };
+}
+
 module.exports = {
     getTeamDetail,
     getExecutiveOverview,
+    getConsultantPerformance,
     MONTH_NAMES,
     ON_TRACK_THRESHOLD,
+    CATEGORY_A_THRESHOLD,
 };
