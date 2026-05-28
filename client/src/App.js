@@ -165,22 +165,24 @@ function App() {
               }
             />
 
-            {/* Executive Overview — LUC org-wide rollup of sales performance.
-                Mirrors the Excel "Executive Overview" sheet. Both admin and
-                team_lead see the full breakdown (read-only). */}
+            {/* Leadership Dashboard — LUC org-wide rollup of sales
+                performance (renamed from Executive Overview). Both admin and
+                team_lead are routed here; the page shows the full view to
+                admin and a Coming Soon lock to team leads. */}
             <Route
-              path="/executive-overview"
+              path="/leadership-dashboard"
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <ExecutiveOverviewPage />
                 </PrivateRoute>
               }
             />
+            {/* Back-compat: the old route redirects to the renamed one. */}
+            <Route path="/executive-overview" element={<Navigate to="/leadership-dashboard" replace />} />
 
-            {/* Per-team dashboard mirroring the Excel team sheet. Admin can
-                view any team; team_lead is locked to own team via the
-                controller-level role guard. The team_lead's own-team route
-                redirects through this same page. */}
+            {/* All Teams — per-team dashboard mirroring the Excel team sheet.
+                Admin can view any team via the dropdown; team_lead is locked
+                to own team via the controller-level role guard. */}
             <Route
               path="/team-dashboard/:teamLeadId"
               element={
@@ -199,8 +201,8 @@ function App() {
             />
 
             {/* Monthly Targets editor — admin sets per-consultant monthly
-                targets that drive the Executive Overview KPIs. Team_lead can
-                view/edit only their own team's consultants. */}
+                targets. Kept reachable but no longer in the sidebar (target
+                editing also happens inline in the All Teams sheet). */}
             <Route
               path="/monthly-targets"
               element={
