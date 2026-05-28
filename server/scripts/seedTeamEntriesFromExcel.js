@@ -21,9 +21,9 @@ const User = require('../models/User');
 const Consultant = require('../models/Consultant');
 const TeamMonthlyEntry = require('../models/TeamMonthlyEntry');
 
-const DEFAULT_EXCEL_PATH = '/Users/viditkbhatnagar/Downloads/DASHBOARD_changes.xlsx';
+const DEFAULT_EXCEL_PATH = '/Users/viditkbhatnagar/Downloads/DASHBOARD_changes (1).xlsx';
 const EXCEL_PATH = process.env.EXCEL_PATH || DEFAULT_EXCEL_PATH;
-const YEAR = parseInt(process.env.YEAR, 10) || 2025;
+const YEAR = parseInt(process.env.YEAR, 10) || 2026;
 const DRY_RUN = process.env.DRY_RUN === '1';
 // WIPE_YEAR=1 deletes every TeamMonthlyEntry for YEAR before seeding —
 // use when re-seeding after the source workbook changed materially and
