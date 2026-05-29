@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Tooltip } from '@mui/material';
 import { LEAD_STAGES, getLeadStageColor } from '../../utils/constants';
 
 // Canonical stage order (index in LEAD_STAGES) for stable column ordering.
@@ -30,8 +30,10 @@ const luminance = (hex) => {
 // Lead-stage heatmap. Rows are whatever entity owns the commitments — teams on
 // the admin dashboard (rowField="teamName") or consultants on a team-lead
 // dashboard (rowField="consultantName"); columns are the lead stages present
-// this period, and cell colour = stage hue at an intensity scaled by count.
-// Pure CSS grid so it themes with the --d-* tokens (incl. dark mode).
+// this period, cell colour = stage hue at an intensity scaled by count. A
+// per-row total column and a per-stage totals row (+ grand total) frame the
+// grid, and hovering a cell lists the underlying commitments. Pure CSS grid so
+// it themes with the --d-* tokens (incl. dark mode).
 const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader = 'Team' }) => {
     // Columns: stages that actually appear, in canonical order.
     const stagesPresent = Array.from(
@@ -39,27 +41,35 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
     ).sort((a, b) => (STAGE_ORDER[a] ?? 99) - (STAGE_ORDER[b] ?? 99));
 
     // Rows: the distinct row-entities that have commitments, densest first.
+    // Each cell keeps the matching commitment objects (for the hover tooltip).
     const rowLabels = Array.from(new Set(commitments.map((c) => c[rowField]).filter(Boolean)));
     const rows = rowLabels
         .map((label) => {
-            const counts = {};
+            const cells = {};
             let total = 0;
             stagesPresent.forEach((stage) => {
-                const n = commitments.filter(
+                const list = commitments.filter(
                     (c) => c[rowField] === label && c.leadStage === stage
-                ).length;
-                counts[stage] = n;
-                total += n;
+                );
+                cells[stage] = list;
+                total += list.length;
             });
-            return { label, counts, total };
+            return { label, cells, total };
         })
         .filter((r) => r.total > 0)
         .sort((a, b) => b.total - a.total);
 
     const maxCount = rows.reduce(
-        (m, r) => stagesPresent.reduce((mm, s) => Math.max(mm, r.counts[s]), m),
+        (m, r) => stagesPresent.reduce((mm, s) => Math.max(mm, r.cells[s].length), m),
         0
     );
+
+    // Per-stage column totals + grand total for the totals row.
+    const colTotals = {};
+    stagesPresent.forEach((stage) => {
+        colTotals[stage] = rows.reduce((sum, r) => sum + r.cells[stage].length, 0);
+    });
+    const grandTotal = rows.reduce((sum, r) => sum + r.total, 0);
 
     const headerLabelSx = {
         fontSize: 10,
@@ -74,6 +84,21 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
         px: 0.25,
         alignSelf: 'end',
         pb: 0.5,
+    };
+
+    // Shared style for the total cells (row-total column + bottom totals row).
+    const totalCellSx = {
+        minHeight: 38,
+        borderRadius: '7px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 13,
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        color: 'var(--d-text)',
+        backgroundColor: 'var(--d-surface)',
+        border: '1px solid var(--d-border)',
     };
 
     const wrapperSx = {
@@ -110,6 +135,40 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
         );
     }
 
+    // Rich hover content for a cell: the commitments behind the count.
+    const cellTooltip = (label, stage, list) => (
+        <Box sx={{ maxHeight: 300, overflowY: 'auto', pr: 0.5 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 700, mb: 0.5, color: 'var(--d-text)' }}>
+                {label} · {stage} ({list.length})
+            </Typography>
+            {list.map((c, i) => (
+                <Box key={c._id || i} sx={{ py: 0.5, borderTop: i ? '1px solid var(--d-border-soft)' : 'none' }}>
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'var(--d-text-2)' }}>
+                        {c.consultantName || '—'} · {c.studentName || '—'}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)' }}>
+                        {c.commitmentMade ? `"${c.commitmentMade}" · ` : ''}
+                        {c.meetingsDone || 0} mtg{(c.meetingsDone || 0) === 1 ? '' : 's'} · {c.status || '—'}
+                    </Typography>
+                </Box>
+            ))}
+        </Box>
+    );
+
+    const tooltipSlotProps = {
+        tooltip: {
+            sx: {
+                bgcolor: 'var(--d-surface)',
+                color: 'var(--d-text)',
+                border: '1px solid var(--d-border)',
+                boxShadow: 'var(--d-shadow-elev)',
+                maxWidth: 360,
+                p: 1.25,
+            },
+        },
+        arrow: { sx: { color: 'var(--d-surface)' } },
+    };
+
     return (
         <Box sx={wrapperSx}>
             {header}
@@ -117,9 +176,9 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
                 <Box
                     sx={{
                         display: 'grid',
-                        gridTemplateColumns: `minmax(84px, 1.1fr) repeat(${stagesPresent.length}, minmax(46px, 1fr))`,
+                        gridTemplateColumns: `minmax(84px, 1.1fr) repeat(${stagesPresent.length}, minmax(44px, 1fr)) minmax(54px, 0.9fr)`,
                         gap: '5px',
-                        minWidth: 80 + stagesPresent.length * 58,
+                        minWidth: 140 + stagesPresent.length * 58,
                     }}
                 >
                     {/* Header row */}
@@ -129,6 +188,7 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
                             {stage}
                         </Typography>
                     ))}
+                    <Typography sx={{ ...headerLabelSx, fontWeight: 700, color: 'var(--d-text-2)' }}>Total</Typography>
 
                     {/* Body */}
                     {rows.map((row) => (
@@ -150,7 +210,8 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
                                 {row.label}
                             </Box>
                             {stagesPresent.map((stage) => {
-                                const count = row.counts[stage];
+                                const list = row.cells[stage];
+                                const count = list.length;
                                 const color = getLeadStageColor(stage);
                                 const ratio = maxCount > 0 ? count / maxCount : 0;
                                 const alpha = count > 0 ? 0.2 + 0.75 * ratio : 0;
@@ -158,32 +219,49 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
                                 if (count > 0 && alpha >= 0.55) {
                                     textColor = luminance(color) > 0.6 ? '#1A1A1A' : '#FFFFFF';
                                 }
+                                const cellSx = {
+                                    minHeight: 38,
+                                    borderRadius: '7px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    fontVariantNumeric: 'tabular-nums',
+                                    color: count > 0 ? textColor : 'var(--d-text-faint)',
+                                    backgroundColor: count > 0 ? hexToRgba(color, alpha) : 'var(--d-surface)',
+                                    border: count > 0 ? 'none' : '1px solid var(--d-border-soft)',
+                                    cursor: count > 0 ? 'help' : 'default',
+                                    transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
+                                };
+                                if (count === 0) {
+                                    return <Box key={`${row.label}-${stage}`} sx={cellSx}>·</Box>;
+                                }
                                 return (
-                                    <Box
+                                    <Tooltip
                                         key={`${row.label}-${stage}`}
-                                        title={`${row.label} · ${stage}: ${count}`}
-                                        sx={{
-                                            minHeight: 38,
-                                            borderRadius: '7px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontSize: 13,
-                                            fontWeight: 700,
-                                            fontVariantNumeric: 'tabular-nums',
-                                            color: count > 0 ? textColor : 'var(--d-text-faint)',
-                                            backgroundColor:
-                                                count > 0 ? hexToRgba(color, alpha) : 'var(--d-surface)',
-                                            border: count > 0 ? 'none' : '1px solid var(--d-border-soft)',
-                                            transition: 'background-color var(--d-dur-sm) var(--d-ease-enter)',
-                                        }}
+                                        arrow
+                                        title={cellTooltip(row.label, stage, list)}
+                                        slotProps={tooltipSlotProps}
                                     >
-                                        {count > 0 ? count : '·'}
-                                    </Box>
+                                        <Box sx={cellSx}>{count}</Box>
+                                    </Tooltip>
                                 );
                             })}
+                            <Box sx={totalCellSx}>{row.total}</Box>
                         </React.Fragment>
                     ))}
+
+                    {/* Totals row */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 700, color: 'var(--d-text)', pr: 1 }}>
+                        Total
+                    </Box>
+                    {stagesPresent.map((stage) => (
+                        <Box key={`ct-${stage}`} sx={totalCellSx}>{colTotals[stage]}</Box>
+                    ))}
+                    <Box sx={{ ...totalCellSx, backgroundColor: 'var(--d-accent-bg)', color: 'var(--d-accent-text)', borderColor: 'var(--d-accent)' }}>
+                        {grandTotal}
+                    </Box>
                 </Box>
             </Box>
 
@@ -199,7 +277,7 @@ const LeadStageHeatmap = ({ commitments = [], rowField = 'teamName', rowHeader =
                         border: '1px solid var(--d-border-soft)',
                     }}
                 />
-                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)' }}>More commitments</Typography>
+                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)' }}>More commitments · hover a cell for details</Typography>
             </Box>
         </Box>
     );
