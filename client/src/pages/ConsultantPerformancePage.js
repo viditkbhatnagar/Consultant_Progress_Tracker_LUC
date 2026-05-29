@@ -217,39 +217,45 @@ const ConsultantPerformancePage = () => {
                         <CategoryTable title="Category B" subtitle="Monthly Target < AED 90,000" accent="#6E40C9" rows={data.categoryB} />
                     </Box>
 
-                    {/* Consultants Revenue YTD% — full ranking, highest → lowest */}
-                    <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                            Consultants Revenue YTD %
-                        </Typography>
-                        {(() => {
-                            const ranked = [...data.categoryA, ...data.categoryB]
-                                .filter((r) => r.isActive !== false)
-                                .sort((a, b) => b.ytdPercent - a.ytdPercent);
-                            const opt = barOption({
-                                rotateLabels: 35,
-                                valueFormatter: percentFmt,
-                                categories: ranked.map((r) => r.name),
-                                series: [{
-                                    name: 'YTD %',
-                                    data: ranked.map((r) => Math.round(r.ytdPercent * 100)),
-                                    color: '#2383E2',
-                                }],
-                            });
-                            // Value labels above each bar (orange, like the reference sheet).
-                            opt.series[0].label = {
-                                show: true,
-                                position: 'top',
-                                formatter: '{c}%',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: '#D9730D',
-                            };
-                            // Headroom so the tallest bar's label isn't clipped.
-                            opt.yAxis = { ...opt.yAxis, max: (v) => Math.ceil((v.max * 1.12) / 10) * 10 };
-                            return <EChart height={380} option={opt} mode={themeState.mode} />;
-                        })()}
-                    </Paper>
+                    {/* Consultants Revenue YTD% — split into two charts: Category A (≥90k) and B (<90k), bigger bars */}
+                    {[
+                        { rows: data.categoryA, title: 'Category A — Revenue YTD % (Monthly Target ≥ AED 90,000)' },
+                        { rows: data.categoryB, title: 'Category B — Revenue YTD % (Monthly Target < AED 90,000)' },
+                    ].map(({ rows, title }) => {
+                        const ranked = [...rows]
+                            .filter((r) => r.isActive !== false)
+                            .sort((a, b) => b.ytdPercent - a.ytdPercent);
+                        if (ranked.length === 0) return null;
+                        const opt = barOption({
+                            rotateLabels: 35,
+                            valueFormatter: percentFmt,
+                            categories: ranked.map((r) => r.name),
+                            series: [{
+                                name: 'YTD %',
+                                data: ranked.map((r) => Math.round(r.ytdPercent * 100)),
+                                color: '#2383E2',
+                            }],
+                        });
+                        // Bigger, labelled bars (orange value labels, like the reference sheet).
+                        opt.series[0].label = {
+                            show: true,
+                            position: 'top',
+                            formatter: '{c}%',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#D9730D',
+                        };
+                        opt.series[0].barMaxWidth = 48;
+                        opt.yAxis = { ...opt.yAxis, max: (v) => Math.ceil((v.max * 1.12) / 10) * 10 };
+                        return (
+                            <Paper key={title} variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    {title}
+                                </Typography>
+                                <EChart height={420} option={opt} mode={themeState.mode} />
+                            </Paper>
+                        );
+                    })}
                 </Box>
             ) : null}
         </DashboardShell>
