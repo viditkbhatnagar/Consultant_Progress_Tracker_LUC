@@ -39,7 +39,7 @@ import AISummaryCard from '../components/AISummaryCard';
 import LeadStageHeatmap from '../components/dashboard/LeadStageHeatmap';
 import TeamPerformanceCurve from '../components/dashboard/TeamPerformanceCurve';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
-import { subMonths, startOfMonth, endOfMonth, format } from 'date-fns';
+import { format, startOfYear } from 'date-fns';
 
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
@@ -72,9 +72,10 @@ const TeamLeadDashboard = () => {
     const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
 
     const [dateRange, setDateRange] = useState({
-        startDate: format(subMonths(startOfMonth(new Date()), 2), 'yyyy-MM-dd'),
-        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
-        viewType: 'last-3-months',
+        // Default: this year so far — January 1st through today.
+        startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'),
+        endDate: format(new Date(), 'yyyy-MM-dd'),
+        viewType: 'this-year',
     });
 
     const [selectedConsultant, setSelectedConsultant] = useState(null);

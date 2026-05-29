@@ -7,17 +7,21 @@ import {
     Chip,
 } from '@mui/material';
 import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subMonths } from 'date-fns';
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, format, subMonths, startOfYear } from 'date-fns';
 
 const VIEW_OPTIONS = [
-    { value: 'current-week', label: 'Current Week' },
-    { value: 'current-month', label: 'Current Month' },
+    { value: 'this-year', label: 'This Year' },
+    { value: 'last-6-months', label: 'Last 6 Months' },
     { value: 'last-3-months', label: 'Last 3 Months' },
+    { value: 'current-month', label: 'Current Month' },
+    { value: 'current-week', label: 'Current Week' },
     { value: 'custom', label: 'Custom' },
 ];
 
 const DateRangeSelector = ({ value, onChange }) => {
-    const [viewType, setViewType] = React.useState('last-3-months');
+    // Reflect whatever default the parent seeded (e.g. This Year), falling
+    // back to This Year if none was provided.
+    const [viewType, setViewType] = React.useState(value?.viewType || 'this-year');
     const [customStart, setCustomStart] = React.useState('');
     const [customEnd, setCustomEnd] = React.useState('');
 
@@ -30,6 +34,11 @@ const DateRangeSelector = ({ value, onChange }) => {
         const today = new Date();
         let start, end;
         switch (newView) {
+            case 'this-year':
+                // January 1st of the current year through today ("till date").
+                start = startOfYear(today);
+                end = today;
+                break;
             case 'current-week':
                 start = startOfWeek(today, { weekStartsOn: 1 });
                 end = endOfWeek(today, { weekStartsOn: 1 });
@@ -40,6 +49,10 @@ const DateRangeSelector = ({ value, onChange }) => {
                 break;
             case 'last-3-months':
                 start = subMonths(startOfMonth(today), 2);
+                end = endOfMonth(today);
+                break;
+            case 'last-6-months':
+                start = subMonths(startOfMonth(today), 5);
                 end = endOfMonth(today);
                 break;
             default:
