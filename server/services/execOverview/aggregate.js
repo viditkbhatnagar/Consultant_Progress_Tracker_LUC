@@ -389,7 +389,7 @@ async function getExecutiveOverview({ year, month }) {
     // Fixed admin (Bhanu) monthly TARGET — no visible row and no achieved
     // revenue tracked here. Adds 80k to the shown month's MTD target and 80k
     // for every elapsed month to the YTD target; achieved is left untouched.
-    teamsMtd.sort((a, b) => a.teamName.localeCompare(b.teamName));
+    teamsMtd.sort((a, b) => b.mtdTarget - a.mtdTarget);
     const ADMIN_MONTHLY_TARGET = 80000;
     totalMtdTarget += ADMIN_MONTHLY_TARGET;
     totalYtdTarget += ADMIN_MONTHLY_TARGET * currentMonth;

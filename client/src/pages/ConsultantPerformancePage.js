@@ -219,9 +219,9 @@ const ConsultantPerformancePage = () => {
 
                     {/* Consultants Revenue YTD% — split into two charts: Category A (≥90k) and B (<90k), bigger bars */}
                     {[
-                        { rows: data.categoryA, title: 'Category A — Revenue YTD % (Monthly Target ≥ AED 90,000)' },
-                        { rows: data.categoryB, title: 'Category B — Revenue YTD % (Monthly Target < AED 90,000)' },
-                    ].map(({ rows, title }) => {
+                        { rows: data.categoryA, color: '#1F7A35', title: 'Category A — Revenue YTD % (Monthly Target ≥ AED 90,000)' },
+                        { rows: data.categoryB, color: '#6E40C9', title: 'Category B — Revenue YTD % (Monthly Target < AED 90,000)' },
+                    ].map(({ rows, title, color }) => {
                         const ranked = [...rows]
                             .filter((r) => r.isActive !== false)
                             .sort((a, b) => b.ytdPercent - a.ytdPercent);
@@ -233,7 +233,7 @@ const ConsultantPerformancePage = () => {
                             series: [{
                                 name: 'YTD %',
                                 data: ranked.map((r) => Math.round(r.ytdPercent * 100)),
-                                color: '#2383E2',
+                                color,
                             }],
                         });
                         // Bigger, labelled bars (orange value labels, like the reference sheet).

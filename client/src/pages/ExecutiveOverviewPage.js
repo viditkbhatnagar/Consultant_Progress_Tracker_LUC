@@ -565,10 +565,10 @@ const ExecutiveOverviewPage = () => {
                                     option={barOption({
                                         horizontal: true,
                                         barLabelFormatter: '{c}%',
-                                        categories: [...data.consultants].slice(0, 8).reverse().map((c) => c.name),
+                                        categories: [...data.consultants].slice(0, 8).map((c) => c.name),
                                         series: [{
                                             name: 'YTD %',
-                                            data: [...data.consultants].slice(0, 8).reverse().map((c) => Math.round(c.ytdPercent * 100)),
+                                            data: [...data.consultants].slice(0, 8).map((c) => Math.round(c.ytdPercent * 100)),
                                             color: '#6E40C9',
                                         }],
                                     })}
