@@ -31,7 +31,7 @@ import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
-import { barOption } from '../components/charts/presets';
+import { barOption, percentFmt } from '../components/charts/presets';
 import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { quoteAt } from '../utils/quotes';
 import { getConsultantPerformance } from '../services/execOverviewService';
@@ -202,26 +202,37 @@ const ConsultantPerformancePage = () => {
                         </Grid>
                     </Grid>
 
-                    {/* Top consultants bar */}
+                    {/* Consultants Revenue YTD% — full ranking, highest → lowest */}
                     <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                            Category A & B — YTD % (top 12)
+                            Consultants Revenue YTD %
                         </Typography>
-                        <EChart
-                            height={340}
-                            option={barOption({
-                                horizontal: true,
-                                barLabelFormatter: '{c}%',
-                                categories: [...data.categoryA, ...data.categoryB]
-                                    .sort((a, b) => b.ytdPercent - a.ytdPercent).slice(0, 12).reverse().map((r) => r.name),
+                        {(() => {
+                            const ranked = [...data.categoryA, ...data.categoryB]
+                                .sort((a, b) => b.ytdPercent - a.ytdPercent);
+                            const opt = barOption({
+                                rotateLabels: 35,
+                                valueFormatter: percentFmt,
+                                categories: ranked.map((r) => r.name),
                                 series: [{
                                     name: 'YTD %',
-                                    data: [...data.categoryA, ...data.categoryB]
-                                        .sort((a, b) => b.ytdPercent - a.ytdPercent).slice(0, 12).reverse().map((r) => Math.round(r.ytdPercent * 100)),
+                                    data: ranked.map((r) => Math.round(r.ytdPercent * 100)),
                                     color: '#2383E2',
                                 }],
-                            })}
-                        />
+                            });
+                            // Value labels above each bar (orange, like the reference sheet).
+                            opt.series[0].label = {
+                                show: true,
+                                position: 'top',
+                                formatter: '{c}%',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#D9730D',
+                            };
+                            // Headroom so the tallest bar's label isn't clipped.
+                            opt.yAxis = { ...opt.yAxis, max: (v) => Math.ceil((v.max * 1.12) / 10) * 10 };
+                            return <EChart height={380} option={opt} mode={themeState.mode} />;
+                        })()}
                     </Paper>
 
                     <Box sx={{ mt: 3 }}>
