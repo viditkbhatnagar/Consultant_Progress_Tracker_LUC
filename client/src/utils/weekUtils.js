@@ -77,8 +77,11 @@ export const formatWeekOfMonth = (primary, fallback) => {
     const d = new Date(anchor);
     if (Number.isNaN(d.getTime())) return '';
     const dow = (d.getDay() + 6) % 7; // 0 = Monday
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
     const thu = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow + 3);
-    const weekOfMonth = Math.ceil(thu.getDate() / 7);
+    // Week number = which Monday-week of the Thursday's month (caps at W4;
+    // a week whose Monday is in the prior month is W1).
+    const weekOfMonth = mon.getMonth() === thu.getMonth() ? Math.ceil(mon.getDate() / 7) : 1;
     return `${format(thu, 'MMMM')} W${weekOfMonth}`;
 };
 
