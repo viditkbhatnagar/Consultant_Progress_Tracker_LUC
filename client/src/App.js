@@ -20,6 +20,7 @@ import ConsultantPerformancePage from './pages/ConsultantPerformancePage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
+import AnnouncementBanner from './components/AnnouncementBanner';
 import theme from './theme';
 
 // Home redirect component
@@ -251,6 +252,9 @@ function App() {
             {/* Catch all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          {/* App-wide announcement banner + live toast — shows on every
+              authenticated page; self-hides when there's nothing active. */}
+          <AnnouncementBanner />
           {/* Chat copilot — visible on every authenticated page,
               hidden on /login via the component itself. */}
           <FloatingChatLauncher />
