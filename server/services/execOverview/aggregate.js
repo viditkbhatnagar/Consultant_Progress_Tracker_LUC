@@ -386,16 +386,13 @@ async function getExecutiveOverview({ year, month }) {
         totalYtdAchieved += ytdAchieved;
     }
 
-    // Fixed admin revenue (Bhanu) — no visible row, but folded into the totals
-    // so they reconcile with the source workbook: +80k to the shown month's
-    // MTD, and +80k for every elapsed month in YTD (YTD auto-accumulates the
-    // monthly figure: 80k × monthsElapsed).
+    // Fixed admin (Bhanu) monthly TARGET — no visible row and no achieved
+    // revenue tracked here. Adds 80k to the shown month's MTD target and 80k
+    // for every elapsed month to the YTD target; achieved is left untouched.
     teamsMtd.sort((a, b) => a.teamName.localeCompare(b.teamName));
-    const ADMIN_MONTHLY = 80000;
-    totalMtdTarget += ADMIN_MONTHLY;
-    totalMtdAchieved += ADMIN_MONTHLY;
-    totalYtdTarget += ADMIN_MONTHLY * currentMonth;
-    totalYtdAchieved += ADMIN_MONTHLY * currentMonth;
+    const ADMIN_MONTHLY_TARGET = 80000;
+    totalMtdTarget += ADMIN_MONTHLY_TARGET;
+    totalYtdTarget += ADMIN_MONTHLY_TARGET * currentMonth;
 
     const consultantsSnapshot = [];
     for (const c of consIdx.values()) {
