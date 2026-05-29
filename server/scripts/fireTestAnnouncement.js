@@ -22,12 +22,13 @@ async function main() {
         const res = await Announcement.deleteMany({ 'meta.test': true });
         console.log(`Cleared ${res.deletedCount} test announcement(s).`);
     } else {
+        const customMessage = process.argv.slice(2).find((a) => !a.startsWith('--'));
         const ann = await Announcement.create({
             organization: 'luc',
             type: 'manual',
             priority: 'high',
             title: '🎉 Test Announcement',
-            message: 'If you can see this banner, the announcement feature works. Click "Got it" to dismiss.',
+            message: customMessage || 'If you can see this banner, the announcement feature works. Click "Got it" to dismiss.',
             meta: { test: true },
             expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // auto-clears in 2 hours
         });
