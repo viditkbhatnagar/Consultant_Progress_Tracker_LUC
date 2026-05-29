@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Typography, Button, Snackbar, Alert } from '@mui/material';
 import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ export default function AnnouncementBanner() {
     const { user } = useAuth();
     const [items, setItems] = useState([]);
     const [toast, setToast] = useState(null);
+    const bannerRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
@@ -41,9 +42,13 @@ export default function AnnouncementBanner() {
             );
             setToast(payload);
         });
+        // Safety-net poll: re-fetch every 30s so the banner self-appears even
+        // if the live socket event is missed — nobody has to refresh the page.
+        const interval = setInterval(load, 30000);
         return () => {
             offConnect();
             offEvents();
+            clearInterval(interval);
         };
     }, [user, load]);
 
@@ -55,6 +60,16 @@ export default function AnnouncementBanner() {
             /* ignore — already removed locally */
         }
     }, []);
+
+    // Push the page down by the live banner height so it never covers the page
+    // header / nav. Cleared when there's nothing active or on unmount.
+    useEffect(() => {
+        const h = items.length && bannerRef.current ? bannerRef.current.offsetHeight : 0;
+        document.body.style.paddingTop = h ? `${h}px` : '';
+        return () => {
+            document.body.style.paddingTop = '';
+        };
+    }, [items]);
 
     const toastEl = (
         <Snackbar
@@ -84,6 +99,7 @@ export default function AnnouncementBanner() {
     return (
         <>
             <Box
+                ref={bannerRef}
                 role="status"
                 aria-live="polite"
                 sx={{
