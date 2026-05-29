@@ -462,6 +462,14 @@ const AdminDashboard = () => {
     const totalClosed = displayCommitments.filter(c => c.admissionClosed).length;
     const orgAchievementRate = totalCommitments > 0 ? Math.round((totalAchieved / totalCommitments) * 100) : 0;
     const totalConsultants = teams.reduce((sum, team) => sum + team.consultants.length, 0);
+    // "Admissions Closed" counts the admissionClosed flag, which the API
+    // auto-sets on any achieved commitment — so it can include rows still at
+    // earlier lead stages and exceed the Admission lead-stage total. Surface
+    // an explanation (KPI tooltip) only when the two actually diverge.
+    const admissionStageCount = displayCommitments.filter((c) => c.leadStage === 'Admission').length;
+    const closedNonAdmission = displayCommitments.filter(
+        (c) => c.admissionClosed && c.leadStage !== 'Admission' && c.leadStage !== 'CIF'
+    ).length;
 
     const hierarchyTeams = teamLeads.map(tl => {
         const teamConsultants = consultants
@@ -512,6 +520,9 @@ const AdminDashboard = () => {
             value: totalClosed,
             sub: 'Successful conversions',
             accent: 'warm',
+            info: closedNonAdmission > 0
+                ? `Counts every commitment marked achieved/closed. ${closedNonAdmission} of these are still at earlier lead stages (e.g. Offer Sent / Cold / Hot), so this total can exceed the “Admission” lead-stage count (${admissionStageCount}).`
+                : undefined,
         },
     ];
 

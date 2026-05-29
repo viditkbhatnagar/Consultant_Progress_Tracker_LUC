@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, Tooltip } from '@mui/material';
+import { InfoOutlined } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import {
     riseVariants,
@@ -42,7 +43,7 @@ const Trend = ({ value }) => {
 };
 
 // One segment of the bar. Own component so useCountUp runs at hook top-level.
-const Segment = ({ label, value, sub, trend, accent = 'accent', format }) => {
+const Segment = ({ label, value, sub, trend, accent = 'accent', format, info }) => {
     const line = accentColors[accent] || accentColors.accent;
     const numericValue = typeof value === 'number' ? value : parseFloat(value);
     const isNumeric = !Number.isNaN(numericValue) && typeof value === 'number';
@@ -83,6 +84,11 @@ const Segment = ({ label, value, sub, trend, accent = 'accent', format }) => {
                 >
                     {label}
                 </Typography>
+                {info && (
+                    <Tooltip title={info} arrow>
+                        <InfoOutlined sx={{ fontSize: 13, color: 'var(--d-text-faint)', cursor: 'help', flexShrink: 0 }} />
+                    </Tooltip>
+                )}
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
