@@ -87,7 +87,16 @@ exports.getTeams = async (req, res, next) => {
         })
             .select('name teamName')
             .lean();
-        teams.sort((a, b) => (a.teamName || a.name).localeCompare(b.teamName || b.name));
+        // "Team X" entries sort alphabetically first; prefix-less / departed
+        // teams (e.g. Aishwarya) sort last — so teams[0] (the "All Teams"
+        // default landing) is always a real active team, never Aishwarya.
+        teams.sort((a, b) => {
+            const la = a.teamName || a.name;
+            const lb = b.teamName || b.name;
+            const aPrefixless = la.startsWith('Team ') ? 0 : 1;
+            const bPrefixless = lb.startsWith('Team ') ? 0 : 1;
+            return aPrefixless - bPrefixless || la.localeCompare(lb);
+        });
         res.status(200).json({ success: true, data: teams });
     } catch (error) {
         next(error);
