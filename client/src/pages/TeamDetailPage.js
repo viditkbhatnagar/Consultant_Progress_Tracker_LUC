@@ -20,9 +20,11 @@ import {
     Stack,
     TextField,
     Snackbar,
+    Button,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleOutline';
 import SyncIcon from '@mui/icons-material/Sync';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
@@ -32,9 +34,10 @@ import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
-import { donutOption, lineOption } from '../components/charts/presets';
+import { lineOption } from '../components/charts/presets';
 import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { getTeamDetail, getTeams } from '../services/execOverviewService';
+import { buildWorkbook, downloadBlob } from '../services/xlsxBuilder';
 import { listEntries, upsertEntry, bulkUpsertEntries } from '../services/teamEntryService';
 import consultantService from '../services/consultantService';
 
@@ -242,9 +245,71 @@ const EntryRow = React.memo(function EntryRow({
     );
 });
 
+// Single-hue → rgba for the program×month heatmap intensity.
+const heatRgba = (a) => `rgba(35, 131, 226, ${a})`;
+
+// Program × Month admissions heatmap (replaces the program-mix donut). Rows =
+// programs (AGI excluded), columns = months, cell colour scales with the
+// admissions count. Pure CSS grid so it follows the --d-* theme tokens.
+const ProgramMonthHeatmap = ({ rows, months }) => {
+    const data = (rows || []).filter((r) => !r.isAgi);
+    const maxCount = data.reduce((mx, r) => Math.max(mx, ...r.monthly.map((v) => v || 0)), 0);
+    if (data.length === 0) {
+        return (
+            <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted)', py: 3, textAlign: 'center' }}>
+                No admissions in this period.
+            </Typography>
+        );
+    }
+    const headSx = { fontSize: 10, fontWeight: 600, color: 'var(--d-text-muted)', textAlign: 'center', alignSelf: 'end', pb: 0.5 };
+    return (
+        <Box sx={{ overflowX: 'auto' }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.4fr) repeat(12, minmax(32px, 1fr))', gap: '4px', minWidth: 140 + 12 * 36 }}>
+                <Box />
+                {months.map((m) => (
+                    <Typography key={m} sx={headSx}>{m}</Typography>
+                ))}
+                {data.map((r) => (
+                    <React.Fragment key={r.program}>
+                        <Box title={r.program} sx={{ display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 500, color: 'var(--d-text-2)', pr: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {r.program}
+                        </Box>
+                        {r.monthly.map((v, i) => {
+                            const count = v || 0;
+                            const alpha = count > 0 && maxCount > 0 ? 0.18 + 0.77 * (count / maxCount) : 0;
+                            return (
+                                <Box
+                                    key={i}
+                                    title={`${r.program} · ${months[i]}: ${count}`}
+                                    sx={{
+                                        minHeight: 30,
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 11.5,
+                                        fontWeight: 700,
+                                        fontVariantNumeric: 'tabular-nums',
+                                        color: count > 0 ? (alpha >= 0.5 ? '#fff' : 'var(--d-text-2)') : 'var(--d-text-faint)',
+                                        backgroundColor: count > 0 ? heatRgba(alpha) : 'var(--d-surface)',
+                                        border: count > 0 ? 'none' : '1px solid var(--d-border-soft)',
+                                    }}
+                                >
+                                    {count > 0 ? count : '·'}
+                                </Box>
+                            );
+                        })}
+                    </React.Fragment>
+                ))}
+            </Box>
+        </Box>
+    );
+};
+
 // Read-only summary tables below the editable month blocks: Member Wise
 // Monthly Revenue (Month × member) and Consolidated Admissions (Program ×
-// month), plus two ECharts. All derived server-side in getTeamDetail.
+// month), with the charts (trend line + program×month heatmap) at the bottom.
+// All derived server-side in getTeamDetail.
 const TeamSummaryTables = ({ data }) => {
     const months = data.monthNames ? data.monthNames.map((m) => m.slice(0, 3)) : MONTH_NAMES.map((m) => m.slice(0, 3));
     const mw = data.memberWiseRevenue;
@@ -252,44 +317,6 @@ const TeamSummaryTables = ({ data }) => {
 
     return (
         <Box sx={{ mt: 2 }}>
-            {/* Charts */}
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, md: 7 }}>
-                    <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                            Member Revenue Trend
-                        </Typography>
-                        <EChart
-                            height={300}
-                            option={lineOption({
-                                categories: months,
-                                // Tooltip-only (no paginated legend); null out zero
-                                // months so partial-year lines don't crash to 0.
-                                showLegend: false,
-                                series: mw.members
-                                    .filter((m) => m.ytdAchieved > 0)
-                                    .map((m) => ({ name: m.consultantName, data: m.monthly.map((v) => (v > 0 ? v : null)) })),
-                            })}
-                        />
-                    </Paper>
-                </Grid>
-                <Grid size={{ xs: 12, md: 5 }}>
-                    <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                            Program Mix (admissions)
-                        </Typography>
-                        <EChart
-                            height={300}
-                            option={donutOption({
-                                data: ca.rows.filter((r) => !r.isAgi && r.total > 0).map((r) => ({ name: r.program, value: r.total })),
-                                radius: ['50%', '72%'],
-                                centerText: String(ca.totalAdmissions.total),
-                            })}
-                        />
-                    </Paper>
-                </Grid>
-            </Grid>
-
             {/* Member Wise Monthly Revenue */}
             <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
                 <Box sx={{ px: 2.5, py: 1.5, bgcolor: 'var(--d-surface-muted, #F1EFEA)', borderBottom: '1px solid var(--d-border-soft, #ECE9E2)' }}>
@@ -364,6 +391,29 @@ const TeamSummaryTables = ({ data }) => {
                     </Table>
                 </TableContainer>
             </Paper>
+
+            {/* Charts — moved below the tables */}
+            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                    Member Revenue Trend
+                </Typography>
+                <EChart
+                    height={300}
+                    option={lineOption({
+                        categories: months,
+                        showLegend: false,
+                        series: mw.members
+                            .filter((m) => m.ytdAchieved > 0)
+                            .map((m) => ({ name: m.consultantName, data: m.monthly.map((v) => (v > 0 ? v : null)) })),
+                    })}
+                />
+            </Paper>
+            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: 'var(--d-text-2)' }}>
+                    Program Mix — Monthly Admissions
+                </Typography>
+                <ProgramMonthHeatmap rows={ca.rows} months={months} />
+            </Paper>
         </Box>
     );
 };
@@ -383,10 +433,10 @@ const TeamDetailPage = () => {
     const [consultants, setConsultants] = useState([]);
     const [entriesById, setEntriesById] = useState({}); // key = `${consultantId}:${month}` -> entry
     const [toast, setToast] = useState(null);
-    // One month is shown at a time, chosen from a dropdown (defaults to
-    // January). Keeps the editable grid light (one month's inputs instead
-    // of all 12) and matches the requested UX.
-    const [selectedMonth, setSelectedMonth] = useState(1);
+    // One month is shown at a time, chosen from a dropdown (defaults to the
+    // current calendar month). Keeps the editable grid light (one month's
+    // inputs instead of all 12) and matches the requested UX.
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getUTCMonth() + 1);
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
     // Writes are admin-only at the server. TLs see a Coming Soon lock
@@ -518,6 +568,82 @@ const TeamDetailPage = () => {
 
     const handleLogout = () => { logout(); navigate('/login'); };
 
+    // Download the selected month's data (month block + full-year member-wise
+    // and consolidated-admissions tables) as a multi-sheet .xlsx.
+    const handleDownload = () => {
+        if (!data) return;
+        const mName = MONTH_NAMES[selectedMonth - 1];
+        const block = data.months[selectedMonth - 1];
+        const months = (data.monthNames || MONTH_NAMES).map((m) => m.slice(0, 3));
+        const pctStr = (n) => `${((n || 0) * 100).toFixed(1)}%`;
+
+        const entryCols = [
+            { key: 'member', lbl: 'Member' },
+            { key: 'monthlyTarget', lbl: 'Monthly Target', money: true },
+            { key: 'achievedRevenue', lbl: 'Achieved', money: true },
+            { key: 'pctRev', lbl: '% Rev' },
+            { key: 'adm', lbl: 'Adm.' },
+            ...data.buckets.map((b) => ({ key: data.bucketSlugs[b], lbl: b })),
+        ];
+        const entryRows = (block ? block.members : []).map((m) => ({
+            member: m.consultantName,
+            monthlyTarget: m.monthlyTarget,
+            achievedRevenue: m.achievedRevenue,
+            pctRev: pctStr(m.percentRevenue),
+            adm: m.totalAdmissions,
+            ...Object.fromEntries(data.buckets.map((b) => [data.bucketSlugs[b], m.buckets[b] || 0])),
+        }));
+        if (block) {
+            entryRows.push({
+                member: 'TEAM TOTAL',
+                monthlyTarget: block.teamTotal.monthlyTarget,
+                achievedRevenue: block.teamTotal.achievedRevenue,
+                pctRev: pctStr(block.teamTotal.percentRevenue),
+                adm: block.teamTotal.totalAdmissions,
+                ...Object.fromEntries(data.buckets.map((b) => [data.bucketSlugs[b], block.teamTotal.buckets[b] || 0])),
+            });
+        }
+
+        const mwCols = [
+            { key: 'member', lbl: 'Member' },
+            ...months.map((m, i) => ({ key: `m${i}`, lbl: m, money: true })),
+            { key: 'ytdAch', lbl: 'YTD Ach.', money: true },
+            { key: 'ytdTgt', lbl: 'YTD Tgt', money: true },
+            { key: 'ytdPct', lbl: 'YTD %' },
+        ];
+        const mwRows = data.memberWiseRevenue.members.map((m) => ({
+            member: m.consultantName,
+            ...Object.fromEntries(m.monthly.map((v, i) => [`m${i}`, v || 0])),
+            ytdAch: m.ytdAchieved, ytdTgt: m.ytdTarget, ytdPct: pctStr(m.ytdPercent),
+        }));
+
+        const caCols = [
+            { key: 'program', lbl: 'Program' },
+            ...months.map((m, i) => ({ key: `m${i}`, lbl: m })),
+            { key: 'total', lbl: 'Total' },
+        ];
+        const caRows = data.consolidatedAdmissions.rows.map((r) => ({
+            program: r.program + (r.isAgi ? ' (excl.)' : ''),
+            ...Object.fromEntries(r.monthly.map((v, i) => [`m${i}`, v || 0])),
+            total: r.total,
+        }));
+        caRows.push({
+            program: 'Total Admissions',
+            ...Object.fromEntries(data.consolidatedAdmissions.totalAdmissions.monthly.map((v, i) => [`m${i}`, v || 0])),
+            total: data.consolidatedAdmissions.totalAdmissions.total,
+        });
+
+        const teamName = data.teamLead.teamName || `Team ${data.teamLead.name}`;
+        const blob = buildWorkbook({
+            sheets: [
+                { name: `${mName.slice(0, 20)} Entries`, rows: entryRows, columns: entryCols },
+                { name: 'Member-Wise Revenue', rows: mwRows, columns: mwCols },
+                { name: 'Consolidated Admissions', rows: caRows, columns: caCols },
+            ],
+        });
+        downloadBlob(blob, `${teamName}-${mName}-${year}.xlsx`);
+    };
+
     const sidebar = user?.role === 'admin' ? (
         <AdminSidebar
             onLogout={handleLogout}
@@ -587,6 +713,16 @@ const TeamDetailPage = () => {
                                 ))}
                             </Select>
                         </FormControl>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<FileDownloadOutlinedIcon />}
+                            onClick={handleDownload}
+                            disabled={!data}
+                            sx={{ textTransform: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}
+                        >
+                            Download
+                        </Button>
                     </Stack>
                 }
             />
