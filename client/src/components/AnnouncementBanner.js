@@ -4,6 +4,7 @@ import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import { useAuth } from '../context/AuthContext';
 import { onSocketEvents, onSocketConnect } from '../services/socket';
 import announcementService from '../services/announcementService';
+import { DRAWER_WIDTH } from './Sidebar';
 
 // App-wide announcement banner — mounted once at the App root so it shows on
 // every authenticated page (not buried in the bell). Guarantees visibility:
@@ -105,9 +106,12 @@ export default function AnnouncementBanner() {
                 sx={{
                     position: 'fixed',
                     top: 0,
-                    left: 0,
+                    // Start to the right of the permanent 280px sidebar so its
+                    // higher-z-index drawer can't clip the banner's left edge,
+                    // and the sidebar logo stays fully visible.
+                    left: `${DRAWER_WIDTH}px`,
                     right: 0,
-                    zIndex: (t) => t.zIndex.appBar + 2,
+                    zIndex: (t) => t.zIndex.drawer + 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5,
