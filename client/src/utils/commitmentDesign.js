@@ -54,16 +54,23 @@ export const formatDDMMYYYY = (dateLike) => {
     return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
-// "April W4" from a date. Matches formatWeekOfMonth in weekUtils but keeps
-// this module self-contained.
-export const formatWeekOfMonth = (primary, fallback) => {
-    const source = primary || fallback;
-    if (!source) return '';
-    const d = new Date(source);
-    if (Number.isNaN(d.getTime())) return '';
-    const monthName = d.toLocaleString('en-US', { month: 'long' });
-    const weekOfMonth = Math.ceil(d.getDate() / 7);
-    return `${monthName} W${weekOfMonth}`;
+// "April W5" for a commitment. A commitment belongs to the MONTH of its
+// WEEK's Thursday (ISO 8601 convention), anchored to the week-start
+// (Monday). So a week that straddles a month boundary (e.g. Apr 27–May 3)
+// is attributed to the month holding most of it (April) — fixing the
+// "April admission showing up in May" bug, where the label was previously
+// taken from the raw commitmentDate (which can be the logging day, May 1).
+// Dates are read in local time to match how week-start is stored
+// (org-local Monday midnight) and the single timezone the app runs in.
+export const formatWeekOfMonth = (commitmentDate, weekStartDate) => {
+    const anchor = weekStartDate || commitmentDate;
+    if (!anchor) return '';
+    const start = new Date(anchor);
+    if (Number.isNaN(start.getTime())) return '';
+    const dow = (start.getDay() + 6) % 7; // 0 = Monday
+    const thu = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow + 3);
+    const weekOfMonth = Math.ceil(thu.getDate() / 7);
+    return `${thu.toLocaleString('en-US', { month: 'long' })} W${weekOfMonth}`;
 };
 
 // Derive the best date a commitment is anchored to for display.

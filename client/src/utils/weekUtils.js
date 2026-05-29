@@ -67,13 +67,19 @@ export const isPastWeek = (weekNumber, year) => {
  * primary date is missing.
  */
 export const formatWeekOfMonth = (primary, fallback) => {
-    const source = primary || fallback;
-    if (!source) return '';
-    const d = new Date(source);
+    // Anchor to the week-start (Monday) when available and attribute by the
+    // week's Thursday (ISO 8601), so a month-straddling week lands in the
+    // month that holds most of it (e.g. Apr 27–May 3 → April), instead of
+    // following a stray commitmentDate. Keep `primary` as the fallback for
+    // callers that only pass a single date.
+    const anchor = fallback || primary;
+    if (!anchor) return '';
+    const d = new Date(anchor);
     if (Number.isNaN(d.getTime())) return '';
-    const monthName = format(d, 'MMMM');
-    const weekOfMonth = Math.ceil(d.getDate() / 7);
-    return `${monthName} W${weekOfMonth}`;
+    const dow = (d.getDay() + 6) % 7; // 0 = Monday
+    const thu = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow + 3);
+    const weekOfMonth = Math.ceil(thu.getDate() / 7);
+    return `${format(thu, 'MMMM')} W${weekOfMonth}`;
 };
 
 /**
