@@ -289,7 +289,7 @@ async function getExecutiveOverview({ year }) {
         User.find({ role: 'team_lead', organization: 'luc', isActive: true })
             .select('name teamName')
             .lean(),
-        Consultant.find({ organization: 'luc' })
+        Consultant.find({ organization: 'luc', isActive: true })
             .select('name teamLead isActive')
             .lean(),
         TeamMonthlyEntry.find({ organization: 'luc', year }).lean(),
