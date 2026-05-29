@@ -60,6 +60,7 @@ export function barOption({
     rotateLabels = 0,
     valueFormatter,
     barLabelFormatter = '{c}',
+    categoryLabelStyle = {},
 } = {}) {
     const multi = series.length > 1;
     const valAxis = (extra = {}) => ({
@@ -104,7 +105,7 @@ export function barOption({
         option.xAxis = multi
             ? valAxis()
             : { type: 'value', axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, max: (v) => v.max * 1.15 };
-        option.yAxis = { ...catAxis, inverse: true, axisLabel: { fontSize: 11, interval: 0 } };
+        option.yAxis = { ...catAxis, inverse: true, axisLabel: { fontSize: 11, interval: 0, ...categoryLabelStyle } };
     } else {
         // Leave headroom for the legend (when multi) and the rotated labels.
         option.grid = {
@@ -116,7 +117,7 @@ export function barOption({
         };
         // Show every category label (don't hide on overlap) — rotation +
         // small font keeps all team names visible.
-        option.xAxis = { ...catAxis, axisLabel: { ...catAxis.axisLabel, rotate: rotateLabels, fontSize: 9, margin: 10, hideOverlap: false, interval: 0 } };
+        option.xAxis = { ...catAxis, axisLabel: { ...catAxis.axisLabel, rotate: rotateLabels, fontSize: 9, margin: 10, hideOverlap: false, interval: 0, ...categoryLabelStyle } };
         option.yAxis = yAxes && yAxes.length
             ? yAxes.map((y, i) => valAxis(i === 1 ? { position: 'right', ...y } : y))
             : valAxis();

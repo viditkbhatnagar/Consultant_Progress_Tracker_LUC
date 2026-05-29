@@ -229,6 +229,7 @@ const ConsultantPerformancePage = () => {
                         const opt = barOption({
                             rotateLabels: 35,
                             valueFormatter: percentFmt,
+                            categoryLabelStyle: { fontSize: 13, fontWeight: 700 },
                             categories: ranked.map((r) => r.name),
                             series: [{
                                 name: 'YTD %',
