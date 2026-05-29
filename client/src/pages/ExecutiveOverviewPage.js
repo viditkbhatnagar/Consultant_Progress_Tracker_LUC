@@ -19,7 +19,10 @@ import {
     Grid,
     LinearProgress,
     Tooltip,
+    Stack,
+    Button,
 } from '@mui/material';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
@@ -32,6 +35,7 @@ import EChart from '../components/charts/EChart';
 import { donutOption, barOption, lineOption, compactCurrencyFmt } from '../components/charts/presets';
 import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { getOverview } from '../services/execOverviewService';
+import { buildWorkbook, downloadBlob } from '../services/xlsxBuilder';
 
 const fmtCurrency = (n) => {
     if (n == null) return '—';
@@ -147,6 +151,7 @@ const ExecutiveOverviewPage = () => {
     const themeState = useDashboardThemeState('dashboard-theme-mode');
 
     const [year, setYear] = useState(new Date().getUTCFullYear());
+    const [month, setMonth] = useState(0); // 0 = current/latest-active month
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
@@ -160,7 +165,7 @@ const ExecutiveOverviewPage = () => {
             setLoading(false);
             return;
         }
-        getOverview(year)
+        getOverview(year, month)
             .then((res) => {
                 setData(res.data);
                 setLoading(false);
@@ -169,7 +174,7 @@ const ExecutiveOverviewPage = () => {
                 setError(err.response?.data?.message || err.message || 'Failed to load Leadership Dashboard');
                 setLoading(false);
             });
-    }, [year, isTeamLead]);
+    }, [year, month, isTeamLead]);
 
     useEffect(() => {
         setLoading(true);
@@ -182,7 +187,7 @@ const ExecutiveOverviewPage = () => {
     useRealtimeRefresh(
         ['teamEntry:upserted', 'teamEntry:bulk', 'teamEntry:deleted', 'consultant:created', 'consultant:updated', 'consultant:deactivated', 'user:created'],
         loadOverview,
-        { year }
+        { year, month }
     );
 
     const handleLogout = () => {
@@ -206,6 +211,73 @@ const ExecutiveOverviewPage = () => {
 
     const monthShort = useMemo(() => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], []);
 
+    // Build a multi-sheet .xlsx of the on-screen tables for the resolved month.
+    const handleDownload = () => {
+        if (!data) return;
+        const mLabel = monthShort[(data.kpi.mtdMonth || 1) - 1] || '';
+        const pctStr = (n) => `${((n || 0) * 100).toFixed(1)}%`;
+
+        const mtdRows = data.teamsMtd.map((t, i) => ({
+            rank: t.isAdminAdjustment ? '' : i + 1,
+            team: t.teamName,
+            leader: t.leader,
+            mtdTarget: t.mtdTarget,
+            mtdAchieved: t.mtdAchieved,
+            mtdPct: pctStr(t.mtdPercent),
+            status: t.status,
+        }));
+        mtdRows.push({
+            rank: '', team: 'GRAND TOTAL', leader: '',
+            mtdTarget: data.kpi.mtdTarget, mtdAchieved: data.kpi.mtdAchieved,
+            mtdPct: pctStr(data.kpi.mtdTarget ? data.kpi.mtdAchieved / data.kpi.mtdTarget : 0), status: '',
+        });
+        const mtdCols = [
+            { key: 'rank', lbl: '#' }, { key: 'team', lbl: 'Team' }, { key: 'leader', lbl: 'Leader' },
+            { key: 'mtdTarget', lbl: 'MTD Target', money: true }, { key: 'mtdAchieved', lbl: 'MTD Achieved', money: true },
+            { key: 'mtdPct', lbl: 'MTD %' }, { key: 'status', lbl: 'Status' },
+        ];
+
+        const ytdRows = data.teamsYtd.map((t, i) => ({
+            rank: i + 1, team: t.teamName, leader: t.leader,
+            ytdTarget: t.ytdTarget, ytdAchieved: t.ytdAchieved, ytdPct: pctStr(t.ytdPercent), remaining: t.remaining,
+        }));
+        ytdRows.push({
+            rank: '', team: 'GRAND TOTAL', leader: '',
+            ytdTarget: data.kpi.ytdTarget, ytdAchieved: data.kpi.ytdAchieved, ytdPct: pctStr(data.kpi.ytdPercent), remaining: data.kpi.ytdGap,
+        });
+        const ytdCols = [
+            { key: 'rank', lbl: '#' }, { key: 'team', lbl: 'Team' }, { key: 'leader', lbl: 'Leader' },
+            { key: 'ytdTarget', lbl: 'YTD Target', money: true }, { key: 'ytdAchieved', lbl: 'YTD Achieved', money: true },
+            { key: 'ytdPct', lbl: 'YTD %' }, { key: 'remaining', lbl: 'Remaining', money: true },
+        ];
+
+        const progCols = [
+            { key: 'program', lbl: 'Program' },
+            ...monthShort.map((m, i) => ({ key: `m${i}`, lbl: m })),
+            { key: 'ytd', lbl: 'YTD' }, { key: 'share', lbl: '% Share' },
+        ];
+        const progRows = data.programs.map((r) => ({
+            program: r.program + (r.isAgi ? ' (excl.)' : ''),
+            ...Object.fromEntries(r.monthly.map((v, i) => [`m${i}`, v || 0])),
+            ytd: r.ytdTotal,
+            share: r.share == null ? '' : pctStr(r.share),
+        }));
+        progRows.push({
+            program: 'GRAND TOTAL',
+            ...Object.fromEntries(data.programGrandTotal.monthly.map((v, i) => [`m${i}`, v || 0])),
+            ytd: data.programGrandTotal.ytdTotal, share: '100.0%',
+        });
+
+        const blob = buildWorkbook({
+            sheets: [
+                { name: 'MTD Team Performance', rows: mtdRows, columns: mtdCols },
+                { name: 'YTD Team Performance', rows: ytdRows, columns: ytdCols },
+                { name: 'Program Admissions', rows: progRows, columns: progCols },
+            ],
+        });
+        downloadBlob(blob, `Leadership-Dashboard-${mLabel}-${year}.xlsx`);
+    };
+
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <DashboardHero
@@ -213,14 +285,35 @@ const ExecutiveOverviewPage = () => {
                 title="Leadership Dashboard"
                 subtitle={`Year ${year} · All teams roll-up · Updates live as entries change`}
                 right={
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                        <InputLabel>Year</InputLabel>
-                        <Select value={year} label="Year" onChange={(e) => setYear(Number(e.target.value))}>
-                            {yearOptions().map((y) => (
-                                <MenuItem key={y} value={y}>{y}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        <FormControl size="small" sx={{ minWidth: 140 }}>
+                            <InputLabel>Month</InputLabel>
+                            <Select value={month} label="Month" onChange={(e) => setMonth(Number(e.target.value))}>
+                                <MenuItem value={0}>Current month</MenuItem>
+                                {monthShort.map((m, i) => (
+                                    <MenuItem key={m} value={i + 1}>{m}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        <FormControl size="small" sx={{ minWidth: 110 }}>
+                            <InputLabel>Year</InputLabel>
+                            <Select value={year} label="Year" onChange={(e) => setYear(Number(e.target.value))}>
+                                {yearOptions().map((y) => (
+                                    <MenuItem key={y} value={y}>{y}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<FileDownloadOutlinedIcon />}
+                            onClick={handleDownload}
+                            disabled={!data}
+                            sx={{ textTransform: 'none', fontWeight: 600, whiteSpace: 'nowrap' }}
+                        >
+                            Download
+                        </Button>
+                    </Stack>
                 }
             />
 
@@ -349,7 +442,7 @@ const ExecutiveOverviewPage = () => {
                     </Grid>
 
                     {/* MTD Team Performance */}
-                    <SectionTitle accent="#2383E2">MTD Team Performance</SectionTitle>
+                    <SectionTitle accent="#2383E2">{`MTD Team Performance${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
                         <TableContainer>
                             <Table size="small">
@@ -369,10 +462,10 @@ const ExecutiveOverviewPage = () => {
                                         <TableRow
                                             key={t.id}
                                             hover
-                                            sx={{ cursor: 'pointer' }}
-                                            onClick={() => navigate(`/team-dashboard/${t.id}?year=${year}`)}
+                                            sx={{ cursor: t.isAdminAdjustment ? 'default' : 'pointer' }}
+                                            onClick={t.isAdminAdjustment ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
                                         >
-                                            <TableCell>{i + 1}</TableCell>
+                                            <TableCell>{t.isAdminAdjustment ? '' : i + 1}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{t.teamName}</TableCell>
                                             <TableCell>{t.leader}</TableCell>
                                             <TableCell align="right">{fmtCurrency(t.mtdTarget)}</TableCell>

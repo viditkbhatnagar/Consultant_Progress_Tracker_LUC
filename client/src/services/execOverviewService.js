@@ -9,9 +9,12 @@ const withAuth = () => ({
     },
 });
 
-export const getOverview = async (year) => {
-    const params = year ? `?year=${year}` : '';
-    const res = await axios.get(`${API_URL}${params}`, withAuth());
+export const getOverview = async (year, month) => {
+    const qs = new URLSearchParams();
+    if (year) qs.set('year', year);
+    if (month) qs.set('month', month);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    const res = await axios.get(`${API_URL}${suffix}`, withAuth());
     return res.data;
 };
 
