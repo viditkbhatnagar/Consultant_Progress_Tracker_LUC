@@ -211,6 +211,12 @@ const ConsultantPerformancePage = () => {
                         </Grid>
                     </Grid>
 
+                    {/* Category A/B ranking tables — above the chart */}
+                    <Box sx={{ mt: 3 }}>
+                        <CategoryTable title="Category A" subtitle="Monthly Target ≥ AED 90,000" accent="#1F7A35" rows={data.categoryA} />
+                        <CategoryTable title="Category B" subtitle="Monthly Target < AED 90,000" accent="#6E40C9" rows={data.categoryB} />
+                    </Box>
+
                     {/* Consultants Revenue YTD% — full ranking, highest → lowest */}
                     <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 3 }}>
                         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
@@ -244,11 +250,6 @@ const ConsultantPerformancePage = () => {
                             return <EChart height={380} option={opt} mode={themeState.mode} />;
                         })()}
                     </Paper>
-
-                    <Box sx={{ mt: 3 }}>
-                        <CategoryTable title="Category A" subtitle="Monthly Target ≥ AED 90,000" accent="#1F7A35" rows={data.categoryA} />
-                        <CategoryTable title="Category B" subtitle="Monthly Target < AED 90,000" accent="#6E40C9" rows={data.categoryB} />
-                    </Box>
                 </Box>
             ) : null}
         </DashboardShell>
