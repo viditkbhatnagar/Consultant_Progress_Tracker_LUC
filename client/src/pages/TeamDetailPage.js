@@ -386,7 +386,18 @@ const TeamDetailPage = () => {
 
     useEffect(() => {
         if (user?.role === 'admin') {
-            getTeams().then((res) => setTeams(res.data || [])).catch(() => {});
+            getTeams().then((res) => {
+                const list = res.data || [];
+                // Sort "Team X" entries alphabetically, then push prefix-less
+                // teams (e.g. Aishwarya — a departed team) to the bottom.
+                const label = (t) => t.teamName || `Team ${t.name}`;
+                list.sort((a, b) => {
+                    const aPrefixless = label(a).startsWith('Team ') ? 0 : 1;
+                    const bPrefixless = label(b).startsWith('Team ') ? 0 : 1;
+                    return aPrefixless - bPrefixless || label(a).localeCompare(label(b));
+                });
+                setTeams(list);
+            }).catch(() => {});
         }
     }, [user?.role]);
 
