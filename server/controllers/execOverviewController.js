@@ -12,6 +12,14 @@ function parseYear(req) {
     return new Date().getUTCFullYear();
 }
 
+// Optional month (1-12) for the Leadership Dashboard month picker. null means
+// "use the latest-active month" (default behaviour).
+function parseMonth(req) {
+    const raw = parseInt(req.query.month, 10);
+    if (Number.isFinite(raw) && raw >= 1 && raw <= 12) return raw;
+    return null;
+}
+
 // @desc    Executive Overview rollup (KPI + MTD/YTD team tables + consultant
 //          snapshot + program × month matrix). LUC-only.
 // @route   GET /api/exec-overview
@@ -19,7 +27,8 @@ function parseYear(req) {
 exports.getOverview = async (req, res, next) => {
     try {
         const year = parseYear(req);
-        const data = await getExecutiveOverview({ year });
+        const month = parseMonth(req);
+        const data = await getExecutiveOverview({ year, month });
         res.status(200).json({ success: true, data });
     } catch (error) {
         next(error);

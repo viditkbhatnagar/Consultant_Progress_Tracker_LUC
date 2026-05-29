@@ -284,7 +284,7 @@ async function getTeamDetail({ teamLeadId, year }) {
     };
 }
 
-async function getExecutiveOverview({ year }) {
+async function getExecutiveOverview({ year, month }) {
     const [teamLeads, consultants, entries] = await Promise.all([
         User.find({ role: 'team_lead', organization: 'luc', isActive: true })
             .select('name teamName')
@@ -298,7 +298,12 @@ async function getExecutiveOverview({ year }) {
     // Mirror the Excel's MONTH(TODAY()) cutoff — see comment on
     // effectiveCurrentMonth. Used for both MTD (the month itself) and
     // YTD (sum of months 1..cutoff).
-    const currentMonth = effectiveCurrentMonth({ entries, year });
+    // A specific month can be requested (the Leadership Dashboard month
+    // dropdown) — then the view is "as of" that month: YTD sums 1..month and
+    // MTD is that month. Otherwise fall back to the Excel-style latest-active
+    // month so the dashboard self-bounds to tracked months.
+    const requestedMonth = month && month >= 1 && month <= 12 ? month : null;
+    const currentMonth = requestedMonth || effectiveCurrentMonth({ entries, year });
     const mtdMonth = currentMonth;
 
     const teamIdx = new Map();
@@ -381,6 +386,23 @@ async function getExecutiveOverview({ year }) {
         totalYtdAchieved += ytdAchieved;
     }
 
+    // Fixed admin revenue line (Bhanu) — MTD only, so the MTD grand total
+    // reconciles with the source workbook. Real teams first (sorted), the
+    // adjustment row last; flows into the MTD grand total but not YTD.
+    teamsMtd.sort((a, b) => a.teamName.localeCompare(b.teamName));
+    teamsMtd.push({
+        id: 'admin-bhanu',
+        teamName: 'Bhanu (Admin)',
+        leader: 'Admin',
+        mtdTarget: 80000,
+        mtdAchieved: 80000,
+        mtdPercent: 1,
+        status: 'On Track',
+        isAdminAdjustment: true,
+    });
+    totalMtdTarget += 80000;
+    totalMtdAchieved += 80000;
+
     const consultantsSnapshot = [];
     for (const c of consIdx.values()) {
         let ytdTarget = 0;
@@ -434,7 +456,7 @@ async function getExecutiveOverview({ year }) {
             mtdAchieved: totalMtdAchieved,
             mtdMonth,
         },
-        teamsMtd: teamsMtd.sort((a, b) => a.teamName.localeCompare(b.teamName)),
+        teamsMtd,
         teamsYtd: teamsYtd.sort((a, b) => a.teamName.localeCompare(b.teamName)),
         consultants: consultantsSnapshot.sort((a, b) => b.ytdPercent - a.ytdPercent),
         programs: programRows,
