@@ -106,9 +106,18 @@ const CategoryTable = ({ title, accent, rows, subtitle }) => (
                         {rows.length === 0 ? (
                             <TableRow><TableCell colSpan={9} sx={{ textAlign: 'center', py: 3, color: 'var(--d-text-muted)' }}>No consultants in this category.</TableCell></TableRow>
                         ) : rows.map((r) => (
-                            <TableRow key={r.consultantId || r.name} hover>
+                            <TableRow key={r.consultantId || r.name} hover sx={r.isActive === false ? { opacity: 0.55 } : null}>
                                 <TableCell>{r.rank}</TableCell>
-                                <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                    {r.name}
+                                    {r.isActive === false && (
+                                        <Chip
+                                            label="Inactive"
+                                            size="small"
+                                            sx={{ ml: 1, height: 18, fontSize: 10, fontWeight: 700, bgcolor: 'var(--d-surface-muted, #F1EFEA)', color: 'var(--d-text-muted, #8A887E)' }}
+                                        />
+                                    )}
+                                </TableCell>
                                 <TableCell>{r.team}</TableCell>
                                 <TableCell align="right">{fmtCurrency(r.monthlyTarget)}</TableCell>
                                 <TableCell align="right">{fmtCurrency(r.ytdTarget)}</TableCell>
@@ -209,6 +218,7 @@ const ConsultantPerformancePage = () => {
                         </Typography>
                         {(() => {
                             const ranked = [...data.categoryA, ...data.categoryB]
+                                .filter((r) => r.isActive !== false)
                                 .sort((a, b) => b.ytdPercent - a.ytdPercent);
                             const opt = barOption({
                                 rotateLabels: 35,

@@ -458,7 +458,7 @@ const CATEGORY_A_THRESHOLD = 90000;
 async function getConsultantPerformance({ year }) {
     const [teamLeads, consultants, entries] = await Promise.all([
         User.find({ role: 'team_lead', organization: 'luc' }).select('name teamName').lean(),
-        Consultant.find({ organization: 'luc', isActive: true }).select('name teamLead').lean(),
+        Consultant.find({ organization: 'luc' }).select('name teamLead isActive').lean(),
         TeamMonthlyEntry.find({ organization: 'luc', year }).lean(),
     ]);
 
@@ -502,6 +502,7 @@ async function getConsultantPerformance({ year }) {
         rows.push({
             consultantId: c._id,
             name: c.name,
+            isActive: c.isActive !== false,
             team: lead ? (lead.teamName || `Team ${lead.name}`) : '',
             monthlyTarget: repMonthly,
             ytdTarget,
@@ -520,14 +521,17 @@ async function getConsultantPerformance({ year }) {
     const categoryA = rank(rows.filter((r) => r.monthlyTarget >= CATEGORY_A_THRESHOLD).sort(byYtdDesc));
     const categoryB = rank(rows.filter((r) => r.monthlyTarget < CATEGORY_A_THRESHOLD).sort(byYtdDesc));
 
-    const top5Ytd = [...rows].sort(byYtdDesc).slice(0, 5);
-    const top5Mtd = [...rows].sort(byMtdDesc).slice(0, 5);
+    // Inactive consultants stay in the Category A/B tables (tagged on the
+    // frontend) but are kept out of the top-performer leaderboards.
+    const activeRows = rows.filter((r) => r.isActive);
+    const top5Ytd = [...activeRows].sort(byYtdDesc).slice(0, 5);
+    const top5Mtd = [...activeRows].sort(byMtdDesc).slice(0, 5);
 
     return {
         year,
         cutoffMonth: cutoff,
         monthName: MONTH_NAMES[cutoff - 1] || '',
-        activeCount: rows.length,
+        activeCount: activeRows.length,
         categoryAThreshold: CATEGORY_A_THRESHOLD,
         categoryA,
         categoryB,
