@@ -46,18 +46,18 @@ import AdminSidebar from '../components/AdminSidebar';
 import AISummaryCard from '../components/AISummaryCard';
 import AIUsageTabs from '../components/admin/AIUsageTabs';
 import AdminSkillhubView from '../components/skillhub/AdminSkillhubView';
-import { LeadStageChart } from '../components/Charts';
+import LeadStageHeatmap from '../components/dashboard/LeadStageHeatmap';
+import TeamPerformanceCurve from '../components/dashboard/TeamPerformanceCurve';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { subMonths, startOfMonth, endOfMonth, format } from 'date-fns';
 
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import SectionCard from '../components/dashboard/SectionCard';
-import KPIStrip from '../components/dashboard/KPIStrip';
+import KPIBar from '../components/dashboard/KPIBar';
 import DashboardTabs, { AnimatedTabPanel } from '../components/dashboard/DashboardTabs';
 import PerformerCard from '../components/dashboard/PerformerCard';
 import PerformerGrid from '../components/dashboard/PerformerGrid';
-import ProgressBar from '../components/dashboard/ProgressBar';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
 import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion';
 
@@ -161,9 +161,9 @@ const AdminDashboard = () => {
     const [filters] = useState({ search: '', stage: '', status: '', teamLead: '', consultant: '' });
 
     const [dateRange, setDateRange] = useState({
-        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        viewType: 'current-week',
+        startDate: format(subMonths(startOfMonth(new Date()), 2), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+        viewType: 'last-3-months',
     });
 
     const [selectedTeam, setSelectedTeam] = useState(null);
@@ -559,9 +559,20 @@ const AdminDashboard = () => {
             ) : (
                 <>
                     {tabValue <= 3 && (
-                        <SectionCard eyebrow="Date range" padding={18}>
-                            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-                        </SectionCard>
+                        <motion.div variants={riseV} style={{ marginBottom: 24 }}>
+                            <Box
+                                sx={{
+                                    backgroundColor: 'var(--d-surface)',
+                                    border: '1px solid var(--d-border)',
+                                    borderRadius: '14px',
+                                    boxShadow: 'var(--d-shadow-card-sm)',
+                                    px: 2.5,
+                                    py: 1.75,
+                                }}
+                            >
+                                <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                            </Box>
+                        </motion.div>
                     )}
 
                     {error && (
@@ -572,66 +583,34 @@ const AdminDashboard = () => {
                         </motion.div>
                     )}
 
-                    {tabValue <= 3 && <KPIStrip items={kpiItems} />}
+                    {tabValue <= 3 && <KPIBar items={kpiItems} />}
 
                     {tabValue <= 3 && commitments.length > 0 && (
                         <SectionCard title="Organization Analytics" eyebrow="This period">
                             <Box
                                 sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                    display: 'flex',
+                                    flexDirection: 'column',
                                     gap: 2.5,
                                 }}
                             >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <LeadStageChart commitments={displayCommitments} />
-                                </Box>
-                                <Box
-                                    sx={{
-                                        minWidth: 0,
-                                        backgroundColor: 'var(--d-surface-muted)',
-                                        border: '1px solid var(--d-border-soft)',
-                                        borderRadius: '12px',
-                                        p: 2,
-                                    }}
-                                >
-                                    <Typography
-                                        sx={{
-                                            fontSize: 13,
-                                            color: 'var(--d-text-muted)',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.06em',
-                                            fontWeight: 600,
-                                            mb: 1.5,
-                                        }}
-                                    >
-                                        Team performance
-                                    </Typography>
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
-                                        {teamsByRate.map(team => (
-                                            <Box key={team.teamName}>
-                                                <ProgressBar
-                                                    label={team.teamName}
-                                                    value={team.rate}
-                                                />
-                                                <Typography
-                                                    sx={{
-                                                        mt: 0.5,
-                                                        fontSize: 11.5,
-                                                        color: 'var(--d-text-muted)',
-                                                    }}
-                                                >
-                                                    {team.totalCommitments} commitments · {team.consultants.length} consultants
-                                                </Typography>
-                                            </Box>
-                                        ))}
-                                        {teamsByRate.length === 0 && (
-                                            <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted)' }}>
-                                                No team activity yet in this period.
-                                            </Typography>
-                                        )}
-                                    </Box>
-                                </Box>
+                                <LeadStageHeatmap
+                                    commitments={displayCommitments}
+                                    rowField="teamName"
+                                    rowHeader="Team"
+                                />
+                                <TeamPerformanceCurve
+                                    byData={teamsByRate
+                                        .filter((t) => t.totalCommitments > 0)
+                                        .map((t) => ({
+                                            name: t.teamName,
+                                            rate: t.rate,
+                                            commitments: t.totalCommitments,
+                                            sub: `${t.consultants.length} consultants`,
+                                        }))}
+                                    commitments={displayCommitments}
+                                    byLabel="By team"
+                                />
                             </Box>
                         </SectionCard>
                     )}
