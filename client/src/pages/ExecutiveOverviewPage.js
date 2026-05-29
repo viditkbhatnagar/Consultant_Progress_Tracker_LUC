@@ -32,7 +32,8 @@ import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
-import { donutOption, barOption, lineOption, compactCurrencyFmt } from '../components/charts/presets';
+import { barOption, lineOption, compactCurrencyFmt } from '../components/charts/presets';
+import ProgramMonthHeatmap from '../components/charts/ProgramMonthHeatmap';
 import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
 import { getOverview } from '../services/execOverviewService';
 import { buildWorkbook, downloadBlob } from '../services/xlsxBuilder';
@@ -360,84 +361,8 @@ const ExecutiveOverviewPage = () => {
                             <KpiTile
                                 label="Overall YTD %"
                                 value={fmtPct(data.kpi.ytdPercent)}
-                                sublabel={`MTD: ${fmtCurrency(data.kpi.mtdAchieved)} / ${fmtCurrency(data.kpi.mtdTarget)}`}
                                 accent="#6E40C9"
                             />
-                        </Grid>
-                    </Grid>
-
-                    {/* Visual overview (ECharts) */}
-                    <SectionTitle accent="#2383E2">Visual Overview</SectionTitle>
-                    <Grid container spacing={2}>
-                        <Grid size={{ xs: 12, md: 7 }}>
-                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                                    Team YTD — Target vs Achieved
-                                </Typography>
-                                <EChart
-                                    height={300}
-                                    option={barOption({
-                                        categories: data.teamsYtd.map((t) => t.teamName.replace('Team ', '')),
-                                        valueFormatter: compactCurrencyFmt,
-                                        rotateLabels: 38,
-                                        series: [
-                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: '#C8C4BB' },
-                                            { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },
-                                        ],
-                                    })}
-                                />
-                            </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 12, md: 5 }}>
-                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                                    Program Mix (YTD admissions)
-                                </Typography>
-                                <EChart
-                                    height={300}
-                                    option={donutOption({
-                                        data: data.programs.filter((p) => !p.isAgi && p.ytdTotal > 0).map((p) => ({ name: p.program, value: p.ytdTotal })),
-                                        radius: ['50%', '72%'],
-                                        centerText: String(data.programGrandTotal.ytdTotal),
-                                    })}
-                                />
-                            </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 12, md: 7 }}>
-                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                                    Monthly Admissions Trend
-                                </Typography>
-                                <EChart
-                                    height={280}
-                                    option={lineOption({
-                                        categories: monthShort,
-                                        // Stop the line at the last month with admissions instead of
-                                        // crashing to zero across the rest of the year.
-                                        series: [{ name: 'Admissions', data: trimTrailingZeros(data.programGrandTotal.monthly), color: '#2383E2' }],
-                                    })}
-                                />
-                            </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 12, md: 5 }}>
-                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
-                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
-                                    Top Consultants (YTD %)
-                                </Typography>
-                                <EChart
-                                    height={280}
-                                    option={barOption({
-                                        horizontal: true,
-                                        barLabelFormatter: '{c}%',
-                                        categories: [...data.consultants].slice(0, 8).reverse().map((c) => c.name),
-                                        series: [{
-                                            name: 'YTD %',
-                                            data: [...data.consultants].slice(0, 8).reverse().map((c) => Math.round(c.ytdPercent * 100)),
-                                            color: '#6E40C9',
-                                        }],
-                                    })}
-                                />
-                            </Paper>
                         </Grid>
                     </Grid>
 
@@ -607,6 +532,72 @@ const ExecutiveOverviewPage = () => {
                             </Table>
                         </TableContainer>
                     </Paper>
+
+                    {/* Visual Overview — charts moved below the tables */}
+                    <SectionTitle accent="#2383E2">Visual Overview</SectionTitle>
+                    <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, md: 7 }}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Team YTD — Target vs Achieved
+                                </Typography>
+                                <EChart
+                                    height={300}
+                                    option={barOption({
+                                        categories: data.teamsYtd.map((t) => t.teamName.replace('Team ', '')),
+                                        valueFormatter: compactCurrencyFmt,
+                                        rotateLabels: 38,
+                                        series: [
+                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: '#C8C4BB' },
+                                            { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },
+                                        ],
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 5 }}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Top Consultants (YTD %)
+                                </Typography>
+                                <EChart
+                                    height={300}
+                                    option={barOption({
+                                        horizontal: true,
+                                        barLabelFormatter: '{c}%',
+                                        categories: [...data.consultants].slice(0, 8).reverse().map((c) => c.name),
+                                        series: [{
+                                            name: 'YTD %',
+                                            data: [...data.consultants].slice(0, 8).reverse().map((c) => Math.round(c.ytdPercent * 100)),
+                                            color: '#6E40C9',
+                                        }],
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1, color: 'var(--d-text-2)' }}>
+                                    Monthly Admissions Trend
+                                </Typography>
+                                <EChart
+                                    height={280}
+                                    option={lineOption({
+                                        categories: monthShort,
+                                        series: [{ name: 'Admissions', data: trimTrailingZeros(data.programGrandTotal.monthly), color: '#2383E2' }],
+                                    })}
+                                />
+                            </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1.5, color: 'var(--d-text-2)' }}>
+                                    Program Mix — Monthly Admissions
+                                </Typography>
+                                <ProgramMonthHeatmap rows={data.programs} months={monthShort} />
+                            </Paper>
+                        </Grid>
+                    </Grid>
                 </Box>
             ) : null}
         </DashboardShell>
