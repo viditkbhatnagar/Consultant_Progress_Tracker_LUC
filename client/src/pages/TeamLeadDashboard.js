@@ -36,18 +36,18 @@ import TeamLeadCommitmentDialog from '../components/TeamLeadCommitmentDialog';
 import ConsultantManagementDialog from '../components/ConsultantManagementDialog';
 import Sidebar from '../components/Sidebar';
 import AISummaryCard from '../components/AISummaryCard';
-import { LeadStageChart } from '../components/Charts';
+import LeadStageHeatmap from '../components/dashboard/LeadStageHeatmap';
+import TeamPerformanceCurve from '../components/dashboard/TeamPerformanceCurve';
 import { getWeekInfo, formatWeekDisplay } from '../utils/weekUtils';
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { subMonths, startOfMonth, endOfMonth, format } from 'date-fns';
 
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import SectionCard from '../components/dashboard/SectionCard';
-import KPIStrip from '../components/dashboard/KPIStrip';
+import KPIBar from '../components/dashboard/KPIBar';
 import DashboardTabs, { AnimatedTabPanel } from '../components/dashboard/DashboardTabs';
 import PerformerCard from '../components/dashboard/PerformerCard';
 import PerformerGrid from '../components/dashboard/PerformerGrid';
-import ProgressBar from '../components/dashboard/ProgressBar';
 import { useDashboardThemeState } from '../utils/dashboardTheme';
 import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion';
 
@@ -72,9 +72,9 @@ const TeamLeadDashboard = () => {
     const [selectedConsultantForEdit, setSelectedConsultantForEdit] = useState(null);
 
     const [dateRange, setDateRange] = useState({
-        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        viewType: 'current-week',
+        startDate: format(subMonths(startOfMonth(new Date()), 2), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+        viewType: 'last-3-months',
     });
 
     const [selectedConsultant, setSelectedConsultant] = useState(null);
@@ -324,9 +324,20 @@ const TeamLeadDashboard = () => {
                 subtitle={formatWeekDisplay(weekInfo.weekNumber, weekInfo.year, weekInfo.weekStartDate, weekInfo.weekEndDate)}
             />
 
-            <SectionCard eyebrow="Date range" padding={18}>
-                <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-            </SectionCard>
+            <motion.div variants={riseV} style={{ marginBottom: 24 }}>
+                <Box
+                    sx={{
+                        backgroundColor: 'var(--d-surface)',
+                        border: '1px solid var(--d-border)',
+                        borderRadius: '14px',
+                        boxShadow: 'var(--d-shadow-card-sm)',
+                        px: 2.5,
+                        py: 1.75,
+                    }}
+                >
+                    <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                </Box>
+            </motion.div>
 
             {error && (
                 <motion.div variants={riseV} style={{ marginBottom: 24 }}>
@@ -336,66 +347,26 @@ const TeamLeadDashboard = () => {
                 </motion.div>
             )}
 
-            <KPIStrip items={kpiItems} />
+            <KPIBar items={kpiItems} />
 
             {commitments.length > 0 && (
                 <SectionCard title="Team Analytics" eyebrow="This period">
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                            gap: 2.5,
-                        }}
-                    >
-                        <Box sx={{ minWidth: 0 }}>
-                            <LeadStageChart commitments={displayCommitments} />
-                        </Box>
-                        <Box
-                            sx={{
-                                minWidth: 0,
-                                backgroundColor: 'var(--d-surface-muted)',
-                                border: '1px solid var(--d-border-soft)',
-                                borderRadius: '12px',
-                                p: 2,
-                            }}
-                        >
-                            <Typography
-                                sx={{
-                                    fontSize: 13,
-                                    color: 'var(--d-text-muted)',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.06em',
-                                    fontWeight: 600,
-                                    mb: 1.5,
-                                }}
-                            >
-                                Consultant performance
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
-                                {consultantStatsArray.map((stat) => (
-                                    <Box key={stat.consultant}>
-                                        <ProgressBar
-                                            label={stat.consultant}
-                                            value={stat.achievementRate}
-                                        />
-                                        <Typography
-                                            sx={{
-                                                mt: 0.5,
-                                                fontSize: 11.5,
-                                                color: 'var(--d-text-muted)',
-                                            }}
-                                        >
-                                            {stat.total} commitments · {stat.meetings} meetings · {stat.closed} closed
-                                        </Typography>
-                                    </Box>
-                                ))}
-                                {consultantStatsArray.length === 0 && (
-                                    <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted)' }}>
-                                        No consultant activity yet in this period.
-                                    </Typography>
-                                )}
-                            </Box>
-                        </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                        <LeadStageHeatmap
+                            commitments={displayCommitments}
+                            rowField="consultantName"
+                            rowHeader="Consultant"
+                        />
+                        <TeamPerformanceCurve
+                            byData={consultantStatsArray.map((s) => ({
+                                name: s.consultant,
+                                rate: s.achievementRate,
+                                commitments: s.total,
+                                sub: `${s.meetings} meetings`,
+                            }))}
+                            commitments={displayCommitments}
+                            byLabel="By consultant"
+                        />
                     </Box>
                 </SectionCard>
             )}
