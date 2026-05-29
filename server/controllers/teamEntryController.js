@@ -3,8 +3,18 @@ const Consultant = require('../models/Consultant');
 const User = require('../models/User');
 const { ALL_SLUGS, BUCKET_SLUGS } = require('../services/execOverview/bucketing');
 const { emitTeamEntry } = require('../services/realtime');
+const { announceTeamAdmission } = require('../services/announcer');
 
 const EDITABLE_NUM_FIELDS = ['monthlyTarget', 'achievedRevenue', ...ALL_SLUGS];
+
+// slug -> display name (BUCKET_SLUGS maps name -> slug), for announcement text.
+const SLUG_TO_NAME = Object.fromEntries(
+    Object.entries(BUCKET_SLUGS).map(([name, slug]) => [slug, name])
+);
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 const VALID_MONTH = (m) => Number.isInteger(m) && m >= 1 && m <= 12;
 const VALID_YEAR = (y) => Number.isInteger(y) && y >= 2020 && y <= 2100;
@@ -97,6 +107,10 @@ exports.upsertEntry = async (req, res, next) => {
             month: m,
             createdBy: req.user._id,
         };
+        // Snapshot the prior course counts so we announce only *new* admissions
+        // (an increase), never a re-save of the same value or a target edit.
+        const prev = await TeamMonthlyEntry.findOne({ consultant, year: y, month: m }).lean();
+
         const doc = await TeamMonthlyEntry.findOneAndUpdate(
             { consultant, year: y, month: m },
             {
@@ -107,6 +121,31 @@ exports.upsertEntry = async (req, res, next) => {
         ).lean();
 
         emitTeamEntry('luc', 'upserted', { consultant, teamLead, year: y, month: m });
+
+        // Org-wide "new admission" announcement when this admin edit increased a
+        // course/program count. Best-effort — never block the save.
+        try {
+            const courses = [];
+            for (const slug of ALL_SLUGS) {
+                const before = prev ? Number(prev[slug] || 0) : 0;
+                const after = Number(doc[slug] || 0);
+                if (after > before) courses.push({ name: SLUG_TO_NAME[slug] || slug, delta: after - before });
+            }
+            if (courses.length) {
+                await announceTeamAdmission({
+                    organization: 'luc',
+                    teamName: tlDoc.teamName || `Team ${tlDoc.name}`,
+                    consultantName: consultantDoc.name,
+                    monthName: MONTH_NAMES[m - 1],
+                    year: y,
+                    courses,
+                    actorName: req.user.name,
+                });
+            }
+        } catch (announceErr) {
+            console.error('[announcer] team-admission announcement failed (non-fatal):', announceErr.message);
+        }
+
         res.status(200).json({ success: true, data: doc });
     } catch (err) {
         // Duplicate-key race (two parallel upserts) — retry once.

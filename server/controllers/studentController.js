@@ -4,7 +4,6 @@ const User = require('../models/User');
 const { buildScopeFilter, canAccessDoc, resolveOrganization } = require('../middleware/auth');
 const { isSkillhub, isLuc } = require('../config/organizations');
 const Commitment = require('../models/Commitment');
-const { announceAdmission } = require('../services/announcer');
 
 // Server-side data-quality guard — matches the client-side validation so
 // a direct API hit can't bypass it. Returns an error string if the
@@ -433,15 +432,6 @@ exports.createStudent = async (req, res, next) => {
                 update.achievementPercentage = 100;
             }
             await Commitment.findByIdAndUpdate(linkedCommitment._id, update);
-        }
-
-        // Broadcast a high-priority "new admission" announcement to the whole
-        // org (banner + live toast). Best-effort — never let it block or fail
-        // the admission itself. LUC-only is enforced inside announceAdmission.
-        try {
-            await announceAdmission({ student, actorName: req.user.name });
-        } catch (announceErr) {
-            console.error('[announcer] new-admission announcement failed (non-fatal):', announceErr.message);
         }
 
         res.status(201).json({

@@ -18,35 +18,32 @@ function toPayload(ann) {
     };
 }
 
-// Fire a high-priority "new admission" announcement to the whole org.
-// LUC-only for now (the admissions feature is LUC-centric). Best-effort:
-// callers wrap this in try/catch so a failure here never blocks the
-// admission itself.
-async function announceAdmission({ student, actorName } = {}) {
-    if (!student || !isLuc(student.organization)) return null;
-    const who = student.consultantName || student.teamLeadName || actorName || 'Someone';
-    const what = student.studentName || 'a new student';
-    const extra = student.program
-        ? ` · ${student.program}${student.university ? ` (${student.university})` : ''}`
-        : '';
+// Fire a high-priority "new admission" announcement when the admin logs
+// admission counts on the All Teams (Executive Overview) grid. `courses` is a
+// list of { name, delta } for the program/course buckets that INCREASED in
+// that edit, so the alert carries the real new admissions (not a re-save).
+// Org-wide, best-effort. LUC-only.
+async function announceTeamAdmission({ organization = 'luc', teamName, consultantName, monthName, year, courses, actorName } = {}) {
+    if (!isLuc(organization)) return null;
+    const added = (courses || []).filter((c) => c && c.name && c.delta > 0);
+    if (added.length === 0) return null;
+
+    const total = added.reduce((sum, c) => sum + c.delta, 0);
+    const detail = added.map((c) => `${c.delta} ${c.name}`).join(', ');
+    const who = consultantName ? ` · ${consultantName}` : '';
+    const when = monthName ? ` (${monthName}${year ? ` ${year}` : ''})` : '';
+
     const ann = await Announcement.create({
-        organization: student.organization,
+        organization,
         type: 'admission',
         priority: 'high',
-        title: '🎉 New Admission',
-        message: `${who} closed an admission — ${what}${extra}`,
-        meta: {
-            studentId: student._id,
-            studentName: student.studentName,
-            consultantName: student.consultantName,
-            teamName: student.teamName,
-            program: student.program,
-            university: student.university,
-        },
+        title: total > 1 ? '🎉 New Admissions' : '🎉 New Admission',
+        message: `${teamName || 'A team'}${who} — ${detail}${when}`,
+        meta: { teamName, consultantName, monthName, year, courses: added, total, actorName },
         expiresAt: new Date(Date.now() + ANNOUNCEMENT_TTL_MS),
     });
-    emitToOrg(student.organization, 'announcement', toPayload(ann));
+    emitToOrg(organization, 'announcement', toPayload(ann));
     return ann;
 }
 
-module.exports = { announceAdmission, toPayload };
+module.exports = { announceTeamAdmission, toPayload };
