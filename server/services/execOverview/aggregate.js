@@ -386,22 +386,16 @@ async function getExecutiveOverview({ year, month }) {
         totalYtdAchieved += ytdAchieved;
     }
 
-    // Fixed admin revenue line (Bhanu) — MTD only, so the MTD grand total
-    // reconciles with the source workbook. Real teams first (sorted), the
-    // adjustment row last; flows into the MTD grand total but not YTD.
+    // Fixed admin revenue (Bhanu) — no visible row, but folded into the totals
+    // so they reconcile with the source workbook: +80k to the shown month's
+    // MTD, and +80k for every elapsed month in YTD (YTD auto-accumulates the
+    // monthly figure: 80k × monthsElapsed).
     teamsMtd.sort((a, b) => a.teamName.localeCompare(b.teamName));
-    teamsMtd.push({
-        id: 'admin-bhanu',
-        teamName: 'Bhanu (Admin)',
-        leader: 'Admin',
-        mtdTarget: 80000,
-        mtdAchieved: 80000,
-        mtdPercent: 1,
-        status: 'On Track',
-        isAdminAdjustment: true,
-    });
-    totalMtdTarget += 80000;
-    totalMtdAchieved += 80000;
+    const ADMIN_MONTHLY = 80000;
+    totalMtdTarget += ADMIN_MONTHLY;
+    totalMtdAchieved += ADMIN_MONTHLY;
+    totalYtdTarget += ADMIN_MONTHLY * currentMonth;
+    totalYtdAchieved += ADMIN_MONTHLY * currentMonth;
 
     const consultantsSnapshot = [];
     for (const c of consIdx.values()) {
@@ -457,7 +451,7 @@ async function getExecutiveOverview({ year, month }) {
             mtdMonth,
         },
         teamsMtd,
-        teamsYtd: teamsYtd.sort((a, b) => a.teamName.localeCompare(b.teamName)),
+        teamsYtd: teamsYtd.sort((a, b) => b.ytdTarget - a.ytdTarget),
         consultants: consultantsSnapshot.sort((a, b) => b.ytdPercent - a.ytdPercent),
         programs: programRows,
         programGrandTotal: { monthly: grandTotalRow, ytdTotal: grandYtd },
@@ -536,16 +530,36 @@ async function getConsultantPerformance({ year }) {
         });
     }
 
+    // Merge duplicate consultant records (same name + team) — e.g. a re-created
+    // consultant that left an inactive twin — into one row so nobody appears
+    // twice. The merged row is active if any twin is active.
+    const byKey = new Map();
+    for (const r of rows) {
+        const key = (r.name || '').trim().toLowerCase() + '|' + (r.team || '').trim().toLowerCase();
+        const ex = byKey.get(key);
+        if (!ex) { byKey.set(key, { ...r }); continue; }
+        ex.isActive = ex.isActive || r.isActive;
+        ex.monthlyTarget = Math.max(ex.monthlyTarget, r.monthlyTarget);
+        ex.ytdTarget += r.ytdTarget;
+        ex.ytdAchieved += r.ytdAchieved;
+        ex.mtdTarget += r.mtdTarget;
+        ex.mtdAchieved += r.mtdAchieved;
+        ex.ytdPercent = pct(ex.ytdAchieved, ex.ytdTarget);
+        ex.mtdPercent = pct(ex.mtdAchieved, ex.mtdTarget);
+    }
+    const merged = Array.from(byKey.values());
+
     const byYtdDesc = (a, b) => b.ytdPercent - a.ytdPercent;
     const byMtdDesc = (a, b) => b.mtdPercent - a.mtdPercent;
+    // Active consultants first, then inactive — each block ranked by YTD %.
+    const byActiveThenYtd = (a, b) => (Number(b.isActive) - Number(a.isActive)) || (b.ytdPercent - a.ytdPercent);
     const rank = (list) => list.map((r, i) => ({ ...r, rank: i + 1 }));
 
-    const categoryA = rank(rows.filter((r) => r.monthlyTarget >= CATEGORY_A_THRESHOLD).sort(byYtdDesc));
-    const categoryB = rank(rows.filter((r) => r.monthlyTarget < CATEGORY_A_THRESHOLD).sort(byYtdDesc));
+    const categoryA = rank(merged.filter((r) => r.monthlyTarget >= CATEGORY_A_THRESHOLD).sort(byActiveThenYtd));
+    const categoryB = rank(merged.filter((r) => r.monthlyTarget < CATEGORY_A_THRESHOLD).sort(byActiveThenYtd));
 
-    // Inactive consultants stay in the Category A/B tables (tagged on the
-    // frontend) but are kept out of the top-performer leaderboards.
-    const activeRows = rows.filter((r) => r.isActive);
+    // Leaderboards celebrate current performers — active consultants only.
+    const activeRows = merged.filter((r) => r.isActive);
     const top5Ytd = [...activeRows].sort(byYtdDesc).slice(0, 5);
     const top5Mtd = [...activeRows].sort(byMtdDesc).slice(0, 5);
 
