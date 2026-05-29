@@ -345,7 +345,7 @@ const ExecutiveOverviewPage = () => {
                             <KpiTile
                                 label="YTD Achieved"
                                 value={fmtCurrency(data.kpi.ytdAchieved)}
-                                sublabel="Revenue collected"
+                                sublabel="Revenue achieved"
                                 accent="#1F7A35"
                             />
                         </Grid>
