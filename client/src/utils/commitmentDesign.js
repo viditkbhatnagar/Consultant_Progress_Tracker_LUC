@@ -68,8 +68,13 @@ export const formatWeekOfMonth = (commitmentDate, weekStartDate) => {
     const start = new Date(anchor);
     if (Number.isNaN(start.getTime())) return '';
     const dow = (start.getDay() + 6) % 7; // 0 = Monday
+    const mon = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow);
     const thu = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow + 3);
-    const weekOfMonth = Math.ceil(thu.getDate() / 7);
+    // Month = the week's Thursday (ISO). Week number = which Monday-week of
+    // that month (1st–7th → W1 … 22nd–28th → W4). A week whose Monday spills
+    // from the previous month is W1 of the Thursday's month. This caps at W4
+    // — never W5.
+    const weekOfMonth = mon.getMonth() === thu.getMonth() ? Math.ceil(mon.getDate() / 7) : 1;
     return `${thu.toLocaleString('en-US', { month: 'long' })} W${weekOfMonth}`;
 };
 
