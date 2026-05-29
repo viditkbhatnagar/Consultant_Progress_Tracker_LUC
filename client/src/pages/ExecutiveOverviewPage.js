@@ -467,33 +467,6 @@ const ExecutiveOverviewPage = () => {
                         </TableContainer>
                     </Paper>
 
-                    {/* Consultant Performance Snapshot */}
-                    <SectionTitle accent="#6E40C9">Consultant Performance Snapshot</SectionTitle>
-                    <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
-                        <TableContainer sx={{ maxHeight: 480 }}>
-                            <Table size="small" stickyHeader>
-                                <TableHead>
-                                    <TableRow sx={{ bgcolor: 'var(--d-surface-muted, #F1EFEA)' }}>
-                                        <TableCell sx={{ fontWeight: 700 }}>Consultant</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }} align="right">MTD %</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }} align="right">YTD %</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {data.consultants.map((c) => (
-                                        <TableRow key={c.id || c.name} hover>
-                                            <TableCell>{c.name}</TableCell>
-                                            <TableCell align="right">{fmtPct(c.mtdPercent)}</TableCell>
-                                            <TableCell align="right" sx={{ color: c.ytdPercent >= 0.8 ? '#1F7A35' : '#A35A06', fontWeight: 600 }}>
-                                                {fmtPct(c.ytdPercent)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </Paper>
-
                     {/* Consolidated Program-wise Admissions, Month by Month */}
                     <SectionTitle accent="#D97706">Consolidated Program-wise Admissions — Month by Month</SectionTitle>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
