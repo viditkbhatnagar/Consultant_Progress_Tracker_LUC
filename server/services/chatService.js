@@ -322,9 +322,10 @@ Use \`get_revenue\` — do NOT compute revenue by hand. It returns:
 - \`byOrganization\` — the same breakdown per org.
 
 When reporting revenue:
-1. Lead with **total revenueBooked** in AED, matching the dashboard.
-2. Always show the per-org breakdown as a table.
-3. Only mention cashCollected if the user explicitly asks for cash / collected / received / paid — otherwise it confuses the headline.
+1. **SCOPE IT FIRST.** If the user names a team (e.g. "Team Tony") or a consultant, you MUST pass \`teamName\` / \`consultantName\` to \`get_revenue\`. Without it the tool returns the **WHOLE ORG (all teams combined)** — NEVER present that org-wide total as one team's revenue. (This was the #1 cause of wrong chatbot answers.) Sanity check: a single LUC team's YTD revenue is typically AED 1–3M; if you see ~13M for one team you forgot to scope.
+2. Lead with **total revenueBooked** in AED, matching the dashboard.
+3. Always show the per-org breakdown as a table.
+4. Only mention cashCollected if the user explicitly asks for cash / collected / received / paid — otherwise it confuses the headline.
 
 Data caveats (for your reasoning, not for the user):
 - LUC admissions count comes from \`Commitment.admissionClosed\` + \`admissionClosedDate\`. Revenue/cash come from \`Student\` by \`closingDate\`. The two windows may not line up 1:1 — that's expected.

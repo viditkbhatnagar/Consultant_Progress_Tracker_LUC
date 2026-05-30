@@ -537,11 +537,18 @@ async function getStudents({
 //     fields for REVENUE.
 //   - ~349 of 975 LUC students have a non-zero `admissionFeePaid` —
 //     cashCollected is partial, revenueBooked is the reliable headline.
-async function getRevenue({ startDate, endDate, organization } = {}) {
+async function getRevenue({ startDate, endDate, organization, teamName, consultantName } = {}) {
     const s = toDate(startDate);
     const eRaw = toDate(endDate);
     const e = eRaw ? new Date(eRaw) : null;
     if (e) e.setHours(23, 59, 59, 999);
+
+    // Team / consultant scope (denormalized string fields on both Commitment
+    // and Student). WITHOUT this, a "revenue for Team X" question silently
+    // returns the WHOLE ORG — the #1 source of wrong chatbot numbers.
+    const teamScope = {};
+    if (teamName) teamScope.teamName = icontains(teamName);
+    if (consultantName) teamScope.consultantName = icontains(consultantName);
 
     const scopeLuc =
         !organization || organization === 'all' || organization === 'luc';
@@ -553,6 +560,7 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
         ? {
               admissionClosed: true,
               organization: 'luc',
+              ...teamScope,
               ...(s || e
                   ? {
                         admissionClosedDate: {
@@ -571,6 +579,7 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
         ? {
               organization: 'luc',
               admissionFeePaid: { $gt: 0 },
+              ...teamScope,
               ...(s || e
                   ? {
                         closingDate: {
@@ -615,6 +624,7 @@ async function getRevenue({ startDate, endDate, organization } = {}) {
             {
                 $match: {
                     organization: { $in: ['skillhub_training', 'skillhub_institute'] },
+                    ...teamScope,
                     ...(organization && organization !== 'all' && organization !== 'luc'
                         ? { organization }
                         : {}),
@@ -1103,7 +1113,7 @@ const TOOL_SCHEMAS = [
         function: {
             name: 'get_revenue',
             description:
-                'Compute revenue for a date window. Combines LUC (sum of closedAmount on Commitments closed in window) and Skillhub (sum of admission fees + registration fees + EMI payments dated in window). Breaks down by organization.',
+                'Revenue for a date window, broken down by organization. Returns totalRevenueBooked (sum of Student.courseFee for closings in the window — the headline "Revenue" KPI), totalCashCollected (admissionFeePaid + registrationFee + EMI payments), and totalAdmissions. CRITICAL: pass teamName to scope to ONE team (or consultantName for one consultant). WITHOUT teamName this returns the WHOLE ORG across all teams — never present an org-wide total as a single team\'s number. For "revenue for Team Tony" you MUST pass teamName:"Team Tony".',
             parameters: {
                 type: 'object',
                 properties: {
@@ -1113,6 +1123,14 @@ const TOOL_SCHEMAS = [
                         type: 'string',
                         description: 'Filter to one org. Omit or "all" for combined.',
                         enum: ['luc', 'skillhub_training', 'skillhub_institute', 'all'],
+                    },
+                    teamName: {
+                        type: 'string',
+                        description: 'Scope to ONE team, e.g. "Team Tony". REQUIRED whenever the user names a team — without it the answer is the whole org, not the team.',
+                    },
+                    consultantName: {
+                        type: 'string',
+                        description: 'Scope to ONE consultant by name.',
                     },
                 },
             },
