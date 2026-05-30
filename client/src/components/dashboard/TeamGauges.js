@@ -2,12 +2,13 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { Star as StarIcon } from '@mui/icons-material';
 
-// A compact semicircular gauge: 0–200% scale with 100% at the apex, filled from
-// the left proportional to the value, with a marker dot at the end.
+// A compact semicircular gauge where a FULL arc = 100% of target (the finish
+// line). 98.5% therefore sits just before the finish; teams that beat target
+// show a full arc (the exact % is printed below). pathLength=100 normalizes the
+// dash so the fill is exact regardless of the arc's rendered pixel length.
 function GaugeArc({ pct, color }) {
-    const cx = 70, cy = 60, r = 52, sw = 11, max = 200;
+    const cx = 70, cy = 60, r = 52, sw = 11, max = 100; // full gauge = 100% of target
     const frac = Math.max(0, Math.min((pct || 0) / max, 1));
-    const len = Math.PI * r;
     const arc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`; // top semicircle
     const angle = ((180 - frac * 180) * Math.PI) / 180;
     const mx = cx + r * Math.cos(angle);
@@ -15,12 +16,12 @@ function GaugeArc({ pct, color }) {
     return (
         <svg viewBox="0 0 140 72" style={{ width: '100%', display: 'block' }}>
             <path d={arc} fill="none" stroke="#E7E4DD" strokeWidth={sw} strokeLinecap="round" />
-            <path d={arc} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeDasharray={`${frac * len} ${len}`} />
+            <path d={arc} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" pathLength={100} strokeDasharray={`${frac * 100} 100`} />
             <circle cx={mx} cy={my} r={5.5} fill={color} stroke="#fff" strokeWidth={1.5} />
-            {/* 100% tick at the apex */}
+            {/* 50% tick at the apex */}
             <line x1={cx} y1={2} x2={cx} y2={9} stroke="#C9C6BC" strokeWidth={1.5} />
             <text x={6} y={70} fontSize="7.5" fill="#B6B3A8">0%</text>
-            <text x={134} y={70} textAnchor="end" fontSize="7.5" fill="#B6B3A8">200%</text>
+            <text x={134} y={70} textAnchor="end" fontSize="7.5" fill="#B6B3A8">100%</text>
         </svg>
     );
 }
