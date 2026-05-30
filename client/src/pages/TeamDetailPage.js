@@ -134,6 +134,7 @@ const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurr
 // state for its fields so typing doesn't cause a full grid re-render.
 const EntryRow = React.memo(function EntryRow({
     consultant,
+    isLead,
     month,
     year,
     teamLeadId,
@@ -204,10 +205,12 @@ const EntryRow = React.memo(function EntryRow({
     const cellSx = { p: 0.4 };
 
     return (
-        <TableRow hover sx={consultant.isActive === false ? { opacity: 0.7 } : null}>
+        <TableRow hover sx={isLead ? { opacity: 0.65, bgcolor: 'rgba(110,64,201,0.06)' } : (consultant.isActive === false ? { opacity: 0.7 } : null)}>
             <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', fontWeight: 600, zIndex: 1 }}>
                 {consultant.name}
-                {consultant.isActive === false ? (
+                {isLead ? (
+                    <Chip label="hidden · in total" size="small" variant="outlined" sx={{ ml: 0.75, height: 16, fontSize: 9, color: '#6E40C9', borderColor: '#6E40C9' }} />
+                ) : consultant.isActive === false ? (
                     <Chip label="inactive" size="small" sx={{ ml: 0.75, height: 16, fontSize: 9 }} variant="outlined" />
                 ) : null}
                 {saving ? (
@@ -276,7 +279,7 @@ const TeamSummaryTables = ({ data }) => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {mw.members.map((m) => (
+                            {mw.members.filter((m) => !m.isLead).map((m) => (
                                 <TableRow key={m.consultantName} hover>
                                     <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>{m.consultantName}</TableCell>
                                     {m.monthly.map((v, i) => (
@@ -343,7 +346,7 @@ const TeamSummaryTables = ({ data }) => {
                         categories: months,
                         showLegend: false,
                         series: mw.members
-                            .filter((m) => m.ytdAchieved > 0)
+                            .filter((m) => m.ytdAchieved > 0 && !m.isLead)
                             .map((m) => ({ name: m.consultantName, data: m.monthly.map((v) => (v > 0 ? v : null)) })),
                     })}
                 />
@@ -377,6 +380,9 @@ const TeamDetailPage = () => {
     // current calendar month). Keeps the editable grid light (one month's
     // inputs instead of all 12) and matches the requested UX.
     const [selectedMonth, setSelectedMonth] = useState(new Date().getUTCMonth() + 1);
+    // Team-lead's own row is hidden by default (counted in totals, never shown);
+    // admin can flip this to reveal it for data entry.
+    const [showHiddenLead, setShowHiddenLead] = useState(false);
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
     // Writes are admin-only at the server. TLs see a Coming Soon lock
@@ -734,6 +740,12 @@ const TeamDetailPage = () => {
                         const block = data.months[blockIdx];
                         const monthNum = selectedMonth;
                         if (!block) return null;
+                        // Hide the team lead's own row from the grid (it's still
+                        // summed into the totals below); admin can reveal to edit.
+                        const leadNameLower = (data.teamLead?.name || '').trim().toLowerCase();
+                        const visibleConsultants = consultants.filter(
+                            (c) => showHiddenLead || (c.name || '').trim().toLowerCase() !== leadNameLower
+                        );
                         return (
                             <Paper key={monthNum} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', mb: 3 }}>
                                 <Box
@@ -753,6 +765,15 @@ const TeamDetailPage = () => {
                                         <Chip label={fmtPct(block.teamTotal.percentRevenue)} size="small" color={block.teamTotal.percentRevenue >= 0.8 ? 'success' : 'warning'} />
                                         <Chip label={`${block.teamTotal.totalAdmissions} admissions`} size="small" variant="outlined" />
                                     </Stack>
+                                    {canEdit ? (
+                                        <Chip
+                                            label={showHiddenLead ? 'Hide team-lead row' : 'Edit hidden team-lead'}
+                                            size="small"
+                                            variant={showHiddenLead ? 'filled' : 'outlined'}
+                                            onClick={() => setShowHiddenLead((v) => !v)}
+                                            sx={{ ml: 'auto', cursor: 'pointer', fontWeight: 600, color: showHiddenLead ? '#fff' : '#6E40C9', bgcolor: showHiddenLead ? '#6E40C9' : 'transparent', borderColor: '#6E40C9' }}
+                                        />
+                                    ) : null}
                                 </Box>
                                 <TableContainer sx={{ overflowX: 'auto' }}>
                                     <Table size="small">
@@ -777,7 +798,7 @@ const TeamDetailPage = () => {
                                                         No consultants in this team yet.
                                                     </TableCell>
                                                 </TableRow>
-                                            ) : consultants.map((c) => {
+                                            ) : visibleConsultants.map((c) => {
                                                 const key = `${c._id}:${monthNum}`;
                                                 const entry = entriesById[key] || {};
                                                 const initial = {
@@ -791,6 +812,7 @@ const TeamDetailPage = () => {
                                                     <EntryRow
                                                         key={key}
                                                         consultant={c}
+                                                        isLead={(c.name || '').trim().toLowerCase() === (data.teamLead?.name || '').trim().toLowerCase()}
                                                         month={monthNum}
                                                         year={year}
                                                         teamLeadId={effectiveTeamId}
