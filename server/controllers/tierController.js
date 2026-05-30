@@ -33,11 +33,21 @@ async function generateScene() {
         prompt: buildPrompt(theme),
         size: '1792x1024',
         quality: 'standard',
-        response_format: 'b64_json',
         n: 1,
     });
-    const b64 = result.data[0].b64_json;
-    return { theme, dataUrl: `data:image/png;base64,${b64}` };
+    const item = result.data[0];
+    let dataUrl;
+    if (item.b64_json) {
+        dataUrl = `data:image/png;base64,${item.b64_json}`;
+    } else if (item.url) {
+        // dall-e-3 returns a (temporary) URL by default — fetch + inline it.
+        const resp = await fetch(item.url);
+        const buf = Buffer.from(await resp.arrayBuffer());
+        dataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+    } else {
+        throw new Error('OpenAI returned no image');
+    }
+    return { theme, dataUrl };
 }
 
 // Current MTD month = latest month with achieved revenue (mirrors the dashboard).
