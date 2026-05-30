@@ -291,6 +291,17 @@ async function commitmentStats({
         { total: 0, achieved: 0, missed: 0, pending: 0, inProgress: 0, meetings: 0, admissionsClosed: 0, closedAmountTotal: 0 }
     );
 
+    // Lead-stage distribution (Dead/Cold/Warm/Hot/Offer Sent/Awaiting Confirmation/
+    // Meeting Scheduled/Admission/CIF/Unresponsive). This is DIFFERENT from
+    // `status` (pending/in_progress/achieved/missed) — a "lead stage breakdown"
+    // question wants THIS, not the status counts.
+    const stageAgg = await Commitment.aggregate([
+        { $match: match },
+        { $group: { _id: '$leadStage', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+    ]);
+    const byLeadStage = stageAgg.filter((r) => r._id).map((r) => ({ leadStage: r._id, count: r.count }));
+
     return {
         // Primary grand-total figure for simple "how many" questions.
         totalCommitments: totals.total,
@@ -302,6 +313,9 @@ async function commitmentStats({
         admissionsClosed: totals.admissionsClosed,
         closedAmountTotal: totals.closedAmountTotal,
         achievementRate: totals.total ? Math.round((totals.achieved / totals.total) * 100) : 0,
+        // Lead-stage distribution — use THIS for "stage breakdown" questions,
+        // never the status fields above.
+        byLeadStage,
         // Per-org breakdown so the LLM can reconcile with scoped dashboards.
         byOrganization: perOrgAgg.map((r) => ({
             organization: r._id,
@@ -1065,7 +1079,7 @@ const TOOL_SCHEMAS = [
         function: {
             name: 'commitment_stats',
             description:
-                'Aggregate commitment metrics (total, achieved, missed, meetings, admissions closed, achievement rate, closed revenue) with optional filters. Always prefer this over get_commitments when the user wants a number or percentage.',
+                'Aggregate commitment metrics with optional filters. Returns total/achieved/missed/pending/inProgress (these are STATUS counts), totalMeetings, admissionsClosed, achievementRate, AND byLeadStage (the distribution across the actual lead-pipeline stages: Dead/Cold/Warm/Hot/Offer Sent/Awaiting Confirmation/Meeting Scheduled/Admission/CIF/Unresponsive). For a "lead stage breakdown / pipeline" question use byLeadStage — do NOT report status (pending/achieved/…) as if it were the lead stage. Prefer this over get_commitments for any number/percentage/breakdown.',
             parameters: {
                 type: 'object',
                 properties: {
