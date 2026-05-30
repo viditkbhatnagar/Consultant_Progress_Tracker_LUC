@@ -66,7 +66,7 @@ const MONTH_NAMES = [
 // Editable numeric cell. Local state so keystrokes don't re-render the
 // rest of the grid; commits via `onCommit(fieldSlug, number)` when the
 // user blurs the field or presses Enter.
-const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurrency }) {
+const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurrency, readOnly = false }) {
     const [local, setLocal] = useState(value === 0 ? '' : String(value ?? ''));
     const inputRef = useRef(null);
     useEffect(() => {
@@ -102,13 +102,16 @@ const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurr
             }}
             size="small"
             type="number"
+            InputProps={{ readOnly }}
             inputProps={{
                 min: 0,
+                tabIndex: readOnly ? -1 : 0,
                 style: {
                     textAlign: 'right',
                     fontSize: isCurrency ? 12 : 13,
                     padding: '4px 6px',
                     width: isCurrency ? 90 : 50,
+                    cursor: readOnly ? 'default' : 'text',
                 },
             }}
             sx={{
@@ -117,13 +120,15 @@ const NumCell = React.memo(function NumCell({ value, onCommit, fieldSlug, isCurr
                     backgroundColor: 'transparent',
                 },
                 '& fieldset': { border: 'none' },
-                '&:hover .MuiOutlinedInput-root': {
-                    backgroundColor: 'rgba(35,131,226,0.04)',
-                },
-                '& .MuiOutlinedInput-root.Mui-focused': {
-                    backgroundColor: 'rgba(35,131,226,0.08)',
-                    boxShadow: 'inset 0 0 0 1px var(--d-accent, #2383E2)',
-                },
+                ...(readOnly ? {} : {
+                    '&:hover .MuiOutlinedInput-root': {
+                        backgroundColor: 'rgba(35,131,226,0.04)',
+                    },
+                    '& .MuiOutlinedInput-root.Mui-focused': {
+                        backgroundColor: 'rgba(35,131,226,0.08)',
+                        boxShadow: 'inset 0 0 0 1px var(--d-accent, #2383E2)',
+                    },
+                }),
             }}
         />
     );
@@ -219,10 +224,10 @@ const EntryRow = React.memo(function EntryRow({
                 ) : null}
             </TableCell>
             <TableCell align="right" sx={cellSx} onPasteCapture={(e) => handlePaste(e, 'monthlyTarget')}>
-                <NumCell value={row.monthlyTarget} onCommit={handleCommit} fieldSlug="monthlyTarget" isCurrency />
+                <NumCell value={row.monthlyTarget} onCommit={handleCommit} fieldSlug="monthlyTarget" isCurrency readOnly={!canEdit} />
             </TableCell>
             <TableCell align="right" sx={cellSx} onPasteCapture={(e) => handlePaste(e, 'achievedRevenue')}>
-                <NumCell value={row.achievedRevenue} onCommit={handleCommit} fieldSlug="achievedRevenue" isCurrency />
+                <NumCell value={row.achievedRevenue} onCommit={handleCommit} fieldSlug="achievedRevenue" isCurrency readOnly={!canEdit} />
             </TableCell>
             <TableCell align="right" sx={{ ...cellSx, color: percentRevenue >= 0.8 ? '#1F7A35' : '#A35A06', fontWeight: 600 }}>
                 {fmtPct(percentRevenue)}
@@ -240,7 +245,7 @@ const EntryRow = React.memo(function EntryRow({
                         sx={{ ...cellSx, bgcolor: isAgi ? 'rgba(217,119,6,0.04)' : undefined }}
                         onPasteCapture={(e) => handlePaste(e, slug)}
                     >
-                        <NumCell value={row[slug]} onCommit={handleCommit} fieldSlug={slug} />
+                        <NumCell value={row[slug]} onCommit={handleCommit} fieldSlug={slug} readOnly={!canEdit} />
                     </TableCell>
                 );
             })}
@@ -724,7 +729,7 @@ const TeamDetailPage = () => {
 
                     {!canEdit ? (
                         <Alert severity="info" sx={{ mb: 2 }}>
-                            You're viewing another team — cells are read-only.
+                            Read-only view — only admins can edit team data.
                         </Alert>
                     ) : (
                         <Alert severity="info" sx={{ mb: 2 }}>

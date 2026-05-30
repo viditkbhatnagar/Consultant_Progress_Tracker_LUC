@@ -112,6 +112,7 @@ const MonthlyTargetsPage = () => {
     }, [teamLeadId, year]);
 
     const updateCell = (consultantId, month, raw) => {
+        if (!isAdmin) return; // team leads view targets read-only
         const num = raw === '' ? 0 : Number(raw);
         if (Number.isNaN(num) || num < 0) return;
         setGrid((prev) => ({
@@ -124,6 +125,7 @@ const MonthlyTargetsPage = () => {
     // that row across all 12 months. Pasting into the first cell of the
     // grid fills the entire grid (rows = consultants in display order).
     const handlePaste = (e, startConsultantId, startMonth) => {
+        if (!isAdmin) return; // team leads view targets read-only
         const text = e.clipboardData?.getData('text/plain');
         if (!text || (!text.includes('\t') && !text.includes('\n'))) return; // not a tabular paste
         e.preventDefault();
