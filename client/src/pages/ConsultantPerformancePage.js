@@ -68,7 +68,7 @@ const LeaderboardCard = ({ title, rows, metric, accent, quoteIndex }) => (
                         <Typography sx={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1, color: pctColor(metric === 'mtd' ? r.mtdPercent : r.ytdPercent) }}>
                             {fmtPct(metric === 'mtd' ? r.mtdPercent : r.ytdPercent)}
                         </Typography>
-                        <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'var(--d-text-muted, #8A887E)' }}>
+                        <Typography sx={{ fontSize: 12, fontWeight: 800, color: 'var(--d-text-2, #2A2927)', fontVariantNumeric: 'tabular-nums' }}>
                             {fmtCurrency(metric === 'mtd' ? r.mtdAchieved : r.ytdAchieved)}
                         </Typography>
                     </Box>
