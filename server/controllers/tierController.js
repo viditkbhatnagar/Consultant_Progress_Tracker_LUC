@@ -260,13 +260,21 @@ exports.getImageHistory = async (req, res, next) => {
         const out = [];
         for (const img of imgs) {
             let url = img.image || null;
+            let downloadUrl = img.image || null;
             if (img.s3Key) {
-                const signed = await s3.getSignedGetUrl(img.s3Key, 3600);
+                const stamp = new Date(img.createdAt).toISOString().slice(0, 10);
+                const fname = `month-end-race-${stamp}-${img.theme || 'tier'}.png`;
+                const [signed, dl] = await Promise.all([
+                    s3.getSignedGetUrl(img.s3Key, 3600),
+                    s3.getSignedDownloadUrl(img.s3Key, fname, 3600),
+                ]);
                 if (signed) url = signed;
+                if (dl) downloadUrl = dl;
             }
             out.push({
                 _id: img._id,
                 url,
+                downloadUrl,
                 theme: img.theme,
                 month: img.month,
                 monthName: img.month ? MONTH_NAMES[img.month - 1] : '',

@@ -52,6 +52,20 @@ async function getSignedGetUrl(key, expiresIn = 3600) {
     return getSignedUrl(c, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn });
 }
 
+// Presigned URL that forces a browser download with a friendly filename
+// (S3 returns Content-Disposition: attachment). Works cross-origin without any
+// CORS config because the browser navigates to it rather than fetching it.
+async function getSignedDownloadUrl(key, filename, expiresIn = 3600) {
+    const c = getClient();
+    if (!c || !key) return null;
+    const safe = String(filename || 'download').replace(/[^a-zA-Z0-9._-]/g, '_');
+    return getSignedUrl(
+        c,
+        new GetObjectCommand({ Bucket: BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${safe}"` }),
+        { expiresIn }
+    );
+}
+
 // List objects under a prefix (used by the snapshot browser). Returns
 // [{ key, size, lastModified }] sorted newest-first.
 async function listObjects(prefix, max = 1000) {
@@ -67,4 +81,4 @@ async function listObjects(prefix, max = 1000) {
     return out.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 }
 
-module.exports = { isEnabled, uploadBuffer, getSignedGetUrl, listObjects, BUCKET, REGION };
+module.exports = { isEnabled, uploadBuffer, getSignedGetUrl, getSignedDownloadUrl, listObjects, BUCKET, REGION };
