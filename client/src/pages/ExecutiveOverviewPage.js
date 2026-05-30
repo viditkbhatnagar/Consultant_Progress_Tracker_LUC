@@ -29,6 +29,7 @@ import { useDashboardThemeState } from '../utils/dashboardTheme';
 import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
+import TeamGauges from '../components/dashboard/TeamGauges';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
@@ -366,8 +367,18 @@ const ExecutiveOverviewPage = () => {
                         </Grid>
                     </Grid>
 
-                    {/* MTD Team Performance */}
+                    {/* Compact gauge view — YTD + MTD team performance */}
+                    <SectionTitle accent="#1F7A35">YTD Team Performance</SectionTitle>
+                    <Box sx={{ mb: 3 }}>
+                        <TeamGauges teams={data.teamsYtd} metric="ytd" />
+                    </Box>
                     <SectionTitle accent="#2383E2">{`MTD Team Performance${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
+                    <Box sx={{ mb: 3 }}>
+                        <TeamGauges teams={data.teamsMtd} metric="mtd" />
+                    </Box>
+
+                    {/* MTD Team Performance (detailed table) */}
+                    <SectionTitle accent="#2383E2">{`MTD Team Performance — detail${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
                         <TableContainer>
                             <Table size="small">
