@@ -29,7 +29,6 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
-import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
 import { barOption, percentFmt } from '../components/charts/presets';
 import useRealtimeRefresh from '../hooks/useRealtimeRefresh';
@@ -149,14 +148,11 @@ const ConsultantPerformancePage = () => {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
 
-    const isTeamLead = user?.role === 'team_lead';
-
     const load = useCallback(() => {
-        if (isTeamLead) { setLoading(false); return; }
         getConsultantPerformance(year)
             .then((res) => { setData(res.data); setLoading(false); })
             .catch((err) => { setError(err.response?.data?.message || err.message || 'Failed to load'); setLoading(false); });
-    }, [year, isTeamLead]);
+    }, [year]);
 
     useEffect(() => { setLoading(true); setError(null); load(); }, [load]);
 
@@ -195,12 +191,7 @@ const ConsultantPerformancePage = () => {
                 }
             />
 
-            {isTeamLead ? (
-                <ComingSoonLock
-                    title="Consultant Performance"
-                    subtitle="Category A/B rankings and the top-performer leaderboard. Coming soon for team leads."
-                />
-            ) : loading ? (
+            {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
             ) : error ? (
                 <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>

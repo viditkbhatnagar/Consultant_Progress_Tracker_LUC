@@ -9,8 +9,6 @@ import {
     ListItemText,
     Typography,
     Avatar,
-    Chip,
-    Tooltip,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
@@ -24,7 +22,7 @@ import {
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
     InsightsOutlined as ExecutiveIcon,
-    InfoOutlined as InfoIcon,
+    TrackChanges as PerfIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
@@ -238,46 +236,19 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                     </ListItemButton>
                 </ListItem>
 
-                {/* Executive Sales — locked behind a Coming Soon placeholder
-                    for team leads while the feature is under development.
-                    The entry is non-interactive on purpose: clicking does
-                    nothing, the info icon explains the state on hover. */}
+                {/* Executive Overview — org-wide read-only views, now open to
+                    team leads (editing stays admin-only). */}
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <Tooltip
-                        title="Coming soon — the team-lead view for Executive Sales is still being built. Your admin maintains the data for now."
-                        placement="right"
-                        arrow
-                    >
-                        <span style={{ width: '100%' }}>
-                            <ListItemButton
-                                disabled
-                                sx={{
-                                    ...navItemSx,
-                                    '&.Mui-disabled': {
-                                        opacity: 1,
-                                        color: 'var(--d-text-muted, #8A887E)',
-                                        '& .MuiListItemIcon-root': { color: 'var(--d-text-muted, #8A887E)' },
-                                    },
-                                }}
-                            >
-                                <ListItemIcon><ExecutiveIcon /></ListItemIcon>
-                                <ListItemText primary="Leadership Dashboard" />
-                                <Chip
-                                    label="Coming soon"
-                                    size="small"
-                                    sx={{
-                                        height: 18,
-                                        fontSize: 9.5,
-                                        fontWeight: 700,
-                                        bgcolor: 'rgba(217,119,6,0.14)',
-                                        color: '#A35A06',
-                                        mr: 0.5,
-                                    }}
-                                />
-                                <InfoIcon sx={{ fontSize: 16, color: 'var(--d-text-muted, #8A887E)' }} />
-                            </ListItemButton>
-                        </span>
-                    </Tooltip>
+                    <ListItemButton onClick={() => navigate('/leadership-dashboard')} sx={navItemSx}>
+                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
+                        <ListItemText primary="Leadership Dashboard" />
+                    </ListItemButton>
+                </ListItem>
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/consultant-performance')} sx={navItemSx}>
+                        <ListItemIcon><PerfIcon /></ListItemIcon>
+                        <ListItemText primary="Consultant Performance" />
+                    </ListItemButton>
                 </ListItem>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>

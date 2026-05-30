@@ -31,7 +31,6 @@ import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import TeamGauges from '../components/dashboard/TeamGauges';
 import DashboardHero from '../components/dashboard/DashboardHero';
-import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
 import { barOption, lineOption, compactCurrencyFmt } from '../components/charts/presets';
 import ProgramMonthHeatmap from '../components/charts/ProgramMonthHeatmap';
@@ -319,12 +318,7 @@ const ExecutiveOverviewPage = () => {
                 }
             />
 
-            {isTeamLead ? (
-                <ComingSoonLock
-                    title="Leadership Dashboard"
-                    subtitle="A new org-wide sales rollup with KPI strip, team performance tables, charts, and a program × month admissions matrix. Coming soon for team leads."
-                />
-            ) : loading ? (
+            {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>
@@ -388,8 +382,8 @@ const ExecutiveOverviewPage = () => {
                                         <TableRow
                                             key={t.id}
                                             hover
-                                            sx={{ cursor: t.isAdminAdjustment ? 'default' : 'pointer' }}
-                                            onClick={t.isAdminAdjustment ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
+                                            sx={{ cursor: (isTeamLead || t.isAdminAdjustment) ? 'default' : 'pointer' }}
+                                            onClick={(isTeamLead || t.isAdminAdjustment) ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
                                         >
                                             <TableCell>{t.isAdminAdjustment ? '' : i + 1}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{t.teamName}</TableCell>
@@ -448,8 +442,8 @@ const ExecutiveOverviewPage = () => {
                                         <TableRow
                                             key={t.id}
                                             hover
-                                            sx={{ cursor: 'pointer' }}
-                                            onClick={() => navigate(`/team-dashboard/${t.id}?year=${year}`)}
+                                            sx={{ cursor: isTeamLead ? 'default' : 'pointer' }}
+                                            onClick={isTeamLead ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
                                         >
                                             <TableCell>{i + 1}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{t.teamName}</TableCell>
