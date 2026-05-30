@@ -157,10 +157,6 @@ const ExecutiveOverviewPage = () => {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
 
-    // Team leads see a Coming Soon placeholder while the feature is
-    // under development on the TL side. Admin keeps the full view.
-    const isTeamLead = user?.role === 'team_lead';
-
     const loadOverview = useCallback(() => {
         getOverview(year, month)
             .then((res) => {
@@ -378,8 +374,8 @@ const ExecutiveOverviewPage = () => {
                                         <TableRow
                                             key={t.id}
                                             hover
-                                            sx={{ cursor: (isTeamLead || t.isAdminAdjustment) ? 'default' : 'pointer' }}
-                                            onClick={(isTeamLead || t.isAdminAdjustment) ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
+                                            sx={{ cursor: t.isAdminAdjustment ? 'default' : 'pointer' }}
+                                            onClick={t.isAdminAdjustment ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
                                         >
                                             <TableCell>{t.isAdminAdjustment ? '' : i + 1}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{t.teamName}</TableCell>
@@ -438,8 +434,8 @@ const ExecutiveOverviewPage = () => {
                                         <TableRow
                                             key={t.id}
                                             hover
-                                            sx={{ cursor: isTeamLead ? 'default' : 'pointer' }}
-                                            onClick={isTeamLead ? undefined : () => navigate(`/team-dashboard/${t.id}?year=${year}`)}
+                                            sx={{ cursor: 'pointer' }}
+                                            onClick={() => navigate(`/team-dashboard/${t.id}?year=${year}`)}
                                         >
                                             <TableCell>{i + 1}</TableCell>
                                             <TableCell sx={{ fontWeight: 600 }}>{t.teamName}</TableCell>

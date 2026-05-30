@@ -7,6 +7,7 @@ const API_URL = `${API_BASE_URL}/consultants`;
 const getConsultants = async (filters = {}) => {
     const params = new URLSearchParams();
     if (filters.organization) params.append('organization', filters.organization);
+    if (filters.scope) params.append('scope', filters.scope);
     const qs = params.toString();
     const response = await axios.get(qs ? `${API_URL}?${qs}` : API_URL);
     return response.data;

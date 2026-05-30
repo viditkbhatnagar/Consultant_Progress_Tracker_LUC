@@ -388,13 +388,15 @@ const TeamDetailPage = () => {
     // admin can flip this to reveal it for data entry.
     const [showHiddenLead, setShowHiddenLead] = useState(false);
 
-    const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
+    // Admins and team leads can both open ANY team (read-only). A team lead
+    // defaults to their own team when no team is selected in the URL.
+    const effectiveTeamId = paramId || (user?.role === 'team_lead' ? user?._id || user?.id : null);
     // Writes are admin-only at the server; team leads view their own team
     // read-only (canEdit gates the editable cells + admin-only controls).
     const canEdit = user?.role === 'admin';
 
     useEffect(() => {
-        if (user?.role === 'admin') {
+        if (user?.role === 'admin' || user?.role === 'team_lead') {
             getTeams().then((res) => {
                 const list = res.data || [];
                 // Sort "Team X" entries alphabetically, then push prefix-less
@@ -420,7 +422,7 @@ const TeamDetailPage = () => {
         try {
             const [detailRes, consRes, entRes] = await Promise.all([
                 getTeamDetail(effectiveTeamId, year),
-                consultantService.getConsultants({ organization: 'luc' }),
+                consultantService.getConsultants({ organization: 'luc', scope: 'all' }),
                 listEntries({ year, teamLeadId: effectiveTeamId }),
             ]);
             setData(detailRes.data);
@@ -627,11 +629,11 @@ const TeamDetailPage = () => {
                 }
                 right={
                     <Stack direction="row" spacing={1.5} alignItems="center">
-                        {user?.role === 'admin' && teams.length ? (
+                        {teams.length ? (
                             <FormControl size="small" sx={{ minWidth: 180 }}>
                                 <InputLabel>Team</InputLabel>
                                 <Select
-                                    value={paramId || ''}
+                                    value={effectiveTeamId || ''}
                                     label="Team"
                                     onChange={(e) => navigate(`/team-dashboard/${e.target.value}?year=${year}`)}
                                 >

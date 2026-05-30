@@ -8,7 +8,13 @@ const { emitConsultant } = require('../services/realtime');
 // @access  Private (Admin/Team Lead/Manager/Skillhub)
 exports.getConsultants = async (req, res, next) => {
     try {
-        const filter = buildScopeFilter(req);
+        let filter = buildScopeFilter(req);
+        // Executive Overview is read-only but cross-team: ?scope=all lets a team
+        // lead (or admin) list every consultant in the org so they can view any
+        // team's sheet. Mutations stay scoped (separate create/update routes).
+        if (req.query.scope === 'all' && (req.user.role === 'admin' || req.user.role === 'team_lead')) {
+            filter = { organization: req.user.organization || 'luc' };
+        }
         // team_lead/skillhub view should hide deactivated consultants by default
         if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             filter.isActive = true;

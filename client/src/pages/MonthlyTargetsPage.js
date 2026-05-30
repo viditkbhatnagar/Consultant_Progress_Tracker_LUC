@@ -66,15 +66,17 @@ const MonthlyTargetsPage = () => {
 
     // Load teams (admin only)
     useEffect(() => {
-        if (!isAdmin) {
-            // Team leads load their own team's targets (read-only view).
-            setTeamLeadId(user?._id || user?.id);
-            return;
-        }
-        getTeams().then((res) => {
-            setTeams(res.data || []);
-            if (res.data?.length && !teamLeadId) setTeamLeadId(res.data[0]._id);
-        }).catch(() => {});
+        // Both admin and team leads load the team list so they can switch teams
+        // (team leads read-only). Default: admin → first team; TL → own team.
+        getTeams()
+            .then((res) => {
+                const list = res.data || [];
+                setTeams(list);
+                if (!teamLeadId) setTeamLeadId(isAdmin ? (list[0]?._id || '') : (user?._id || user?.id));
+            })
+            .catch(() => {
+                if (!teamLeadId && !isAdmin) setTeamLeadId(user?._id || user?.id);
+            });
     }, [isAdmin, user?._id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load consultants + targets when team or year changes
@@ -84,7 +86,7 @@ const MonthlyTargetsPage = () => {
         setLoading(true);
         setError(null);
         Promise.all([
-            consultantService.getConsultants({ organization: 'luc' }),
+            consultantService.getConsultants({ organization: 'luc', scope: 'all' }),
             listEntries({ year, teamLeadId }),
         ])
             .then(([cRes, eRes]) => {
@@ -214,7 +216,7 @@ const MonthlyTargetsPage = () => {
                 subtitle="Set per-consultant monthly revenue targets · Paste from Excel supported · Saved targets drive the Executive Overview"
                 right={
                     <Stack direction="row" spacing={1.5}>
-                        {isAdmin && teams.length ? (
+                        {teams.length ? (
                             <FormControl size="small" sx={{ minWidth: 180 }}>
                                 <InputLabel>Team</InputLabel>
                                 <Select value={teamLeadId} label="Team" onChange={(e) => setTeamLeadId(e.target.value)}>

@@ -44,13 +44,9 @@ exports.getTeam = async (req, res, next) => {
         const { teamLeadId } = req.params;
         const year = parseYear(req);
 
-        if (req.user.role === 'team_lead' && String(req.user._id) !== String(teamLeadId)) {
-            return res.status(403).json({
-                success: false,
-                message: 'Team leads can only view their own team detail',
-            });
-        }
-
+        // Read-only is open across teams: team leads can view ANY team's detail
+        // in the Executive Overview. Writes go through the admin-only
+        // team-entries routes, so they still can't edit another team.
         const data = await getTeamDetail({ teamLeadId, year });
         res.status(200).json({ success: true, data });
     } catch (error) {

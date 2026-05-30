@@ -61,7 +61,10 @@ exports.listEntries = async (req, res, next) => {
     try {
         const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
         const filter = { ...readScope(req), year };
-        if (req.query.teamLeadId && req.user.role === 'admin') {
+        // Reads are open across teams: admins AND team leads (read-only in the
+        // Executive Overview) may narrow to any team via ?teamLeadId. Writes
+        // stay admin-only — separate routes + assertWriteAccess enforce that.
+        if (req.query.teamLeadId) {
             filter.teamLead = req.query.teamLeadId;
         }
         const entries = await TeamMonthlyEntry.find(filter).lean();
