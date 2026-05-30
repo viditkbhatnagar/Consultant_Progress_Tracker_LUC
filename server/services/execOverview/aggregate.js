@@ -129,6 +129,13 @@ async function getTeamDetail({ teamLeadId, year }) {
         throw err;
     }
 
+    // The team lead's own "self" row (a consultant whose name matches the lead).
+    // Admin wants it hidden from the member breakdown but still counted in the
+    // team totals — so we flag it (isLead) and the client hides it, while the
+    // totals below keep summing every member, lead included.
+    const leadNameLower = (teamLead.name || '').trim().toLowerCase();
+    const isLeadName = (name) => (name || '').trim().toLowerCase() === leadNameLower;
+
     const consultants = await Consultant.find({ teamLead: teamLeadId })
         .select('name email isActive')
         .lean();
@@ -158,7 +165,9 @@ async function getTeamDetail({ teamLeadId, year }) {
         let memberRows = [];
         for (const [, ctx] of idx.entries()) {
             const entry = ctx.months[m];
-            memberRows.push(entry ? shapeRow(entry, ctx.meta) : placeholderRow(ctx.meta));
+            const row = entry ? shapeRow(entry, ctx.meta) : placeholderRow(ctx.meta);
+            row.isLead = isLeadName(ctx.meta.name);
+            memberRows.push(row);
         }
         memberRows.sort((a, b) => a.consultantName.localeCompare(b.consultantName));
 
@@ -224,6 +233,7 @@ async function getTeamDetail({ teamLeadId, year }) {
                 consultantId: c.meta._id,
                 consultantName: c.meta.name,
                 isActive: c.meta.isActive,
+                isLead: isLeadName(c.meta.name),
                 monthly,
                 ytdAchieved: ytdAch,
                 ytdTarget: ytdTgt,
