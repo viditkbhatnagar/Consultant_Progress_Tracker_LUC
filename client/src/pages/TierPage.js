@@ -31,7 +31,7 @@ export default function TierPage() {
                 Tier standings — {isAdmin ? 'generate & post a fresh image to everyone' : 'live tier leaderboard'}
             </Typography>
             <SectionCard title="Tier Standings" eyebrow="Live MTD by tier">
-                <TierBoard isAdmin={isAdmin} />
+                <TierBoard isAdmin={isAdmin} mode={themeState.mode} />
             </SectionCard>
         </DashboardShell>
     );

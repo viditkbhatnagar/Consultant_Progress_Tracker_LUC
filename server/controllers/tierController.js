@@ -110,11 +110,30 @@ async function buildTiers(year) {
     return { year, month, tiers };
 }
 
-// @desc    Tier config + live MTD totals.  @route GET /api/tiers
+// Per-tier monthly achieved (Jan..current MTD month) for the 3-line trend chart.
+async function buildTierTrend(year) {
+    const month = await currentMonth(year);
+    const months = Array.from({ length: month }, (_, i) => i + 1);
+    const tiers = await Tier.find({ organization: 'luc' }).sort({ tier: 1 }).populate('members', '_id').lean();
+    const series = [];
+    for (const t of tiers) {
+        const ids = (t.members || []).map((m) => m._id);
+        const entries = ids.length
+            ? await TeamMonthlyEntry.find({ consultant: { $in: ids }, year, month: { $lte: month } }).lean()
+            : [];
+        const byMonth = {};
+        for (const e of entries) byMonth[e.month] = (byMonth[e.month] || 0) + (e.achievedRevenue || 0);
+        series.push({ tier: t.tier, label: t.label || `Tier ${t.tier}`, data: months.map((m) => byMonth[m] || 0) });
+    }
+    return { months, series };
+}
+
+// @desc    Tier config + live MTD totals + monthly trend.  @route GET /api/tiers
 exports.getTiers = async (req, res, next) => {
     try {
         const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
-        res.json({ success: true, data: await buildTiers(year) });
+        const [base, trend] = await Promise.all([buildTiers(year), buildTierTrend(year)]);
+        res.json({ success: true, data: { ...base, trend } });
     } catch (err) {
         next(err);
     }

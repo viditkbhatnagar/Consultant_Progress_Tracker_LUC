@@ -5,13 +5,16 @@ import tierService from '../../services/tierService';
 import { onSocketEvents } from '../../services/socket';
 import TierEditDialog from './TierEditDialog';
 import TierImageView from './TierImageView';
+import TierDataPanel from './TierDataPanel';
 
-export default function TierBoard({ isAdmin = false }) {
+export default function TierBoard({ isAdmin = false, mode = 'light' }) {
     const [latest, setLatest] = useState(null);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
+    const [dataVersion, setDataVersion] = useState(0);
+    const bumpData = useCallback(() => setDataVersion((v) => v + 1), []);
 
     const load = useCallback(async () => {
         try {
@@ -24,9 +27,9 @@ export default function TierBoard({ isAdmin = false }) {
 
     useEffect(() => {
         load();
-        const off = onSocketEvents(['tier-image'], () => { load(); setToast(true); });
+        const off = onSocketEvents(['tier-image'], () => { load(); bumpData(); setToast(true); });
         return off;
-    }, [load]);
+    }, [load, bumpData]);
 
     const generate = async () => {
         setGenerating(true);
@@ -34,6 +37,7 @@ export default function TierBoard({ isAdmin = false }) {
         try {
             const res = await tierService.generateImage();
             setLatest(res.data);
+            bumpData();
         } catch (e) {
             setError(e.response?.data?.message || 'Generation failed — check the OpenAI key.');
         } finally {
@@ -64,13 +68,16 @@ export default function TierBoard({ isAdmin = false }) {
                 </Box>
             )}
 
+            {/* Raw tier data behind the poster: 3-line trend + per-tier tables */}
+            <TierDataPanel version={dataVersion} mode={mode} />
+
             <Snackbar open={toast} autoHideDuration={6000} onClose={() => setToast(false)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
                 <Alert severity="info" variant="filled" icon={<TrophyIcon />} onClose={() => setToast(false)} sx={{ fontWeight: 600 }}>
                     🏁 New tier standings just posted!
                 </Alert>
             </Snackbar>
 
-            <TierEditDialog open={editOpen} onClose={() => setEditOpen(false)} onSaved={load} />
+            <TierEditDialog open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => { load(); bumpData(); }} />
         </Box>
     );
 }
