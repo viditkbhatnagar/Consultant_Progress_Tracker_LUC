@@ -469,7 +469,7 @@ const ExecutiveOverviewPage = () => {
                                                     />
                                                 </Box>
                                             </TableCell>
-                                            <TableCell align="right">{fmtCurrency(t.remaining)}</TableCell>
+                                            <TableCell align="right">{t.ytdAchieved > t.ytdTarget ? (<Box component="span" sx={{ color: '#1F7A35', fontWeight: 700 }}>({fmtCurrency(t.ytdAchieved - t.ytdTarget)})</Box>) : fmtCurrency(t.remaining)}</TableCell>
                                         </TableRow>
                                     ))}
                                     <TableRow sx={{ bgcolor: 'rgba(31,122,53,0.06)' }}>
@@ -479,7 +479,7 @@ const ExecutiveOverviewPage = () => {
                                         <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(data.kpi.ytdTarget)}</TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(data.kpi.ytdAchieved)}</TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtPct(data.kpi.ytdPercent)}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtCurrency(data.kpi.ytdGap)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700, color: data.kpi.ytdAchieved > data.kpi.ytdTarget ? '#1F7A35' : undefined }}>{data.kpi.ytdAchieved > data.kpi.ytdTarget ? `(${fmtCurrency(data.kpi.ytdAchieved - data.kpi.ytdTarget)})` : fmtCurrency(data.kpi.ytdGap)}</TableCell>
                                     </TableRow>
                                 </TableBody>
                             </Table>

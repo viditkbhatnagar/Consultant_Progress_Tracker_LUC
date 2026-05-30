@@ -719,8 +719,12 @@ const TeamDetailPage = () => {
                         </Grid>
                         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                             <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
-                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>YTD Remaining</Typography>
-                                <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#A35A06' }}>{fmtCurrency(data.ytd.remaining)}</Typography>
+                                <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>{(data.ytd.achieved || 0) > (data.ytd.target || 0) ? 'YTD Surplus' : 'YTD Remaining'}</Typography>
+                                {(data.ytd.achieved || 0) > (data.ytd.target || 0) ? (
+                                    <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#1F7A35' }}>({fmtCurrency((data.ytd.achieved || 0) - (data.ytd.target || 0))})</Typography>
+                                ) : (
+                                    <Typography sx={{ fontSize: 22, fontWeight: 700, color: '#A35A06' }}>{fmtCurrency(data.ytd.remaining)}</Typography>
+                                )}
                             </Paper>
                         </Grid>
                     </Grid>
