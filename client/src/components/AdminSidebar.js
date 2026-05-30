@@ -83,7 +83,8 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
         location.pathname.startsWith('/team-dashboard') ||
         location.pathname.startsWith('/leadership-dashboard') ||
         location.pathname.startsWith('/consultant-performance') ||
-        location.pathname.startsWith('/monthly-targets')
+        location.pathname.startsWith('/monthly-targets') ||
+        location.pathname.startsWith('/tiers')
     );
     const [teams, setTeams] = useState([]);
 
@@ -331,15 +332,18 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                                 <ListItemText primary="Monthly Targets" />
                             </ListItemButton>
                         </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/tiers')}
+                                selected={location.pathname === '/tiers'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Month-End Race" />
+                            </ListItemButton>
+                        </ListItem>
                     </List>
                 </Collapse>
-
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => navigate('/tiers')} selected={location.pathname === '/tiers'} sx={navItemSx}>
-                        <ListItemIcon><TargetIcon /></ListItemIcon>
-                        <ListItemText primary="Month-End Race" />
-                    </ListItemButton>
-                </ListItem>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
