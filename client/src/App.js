@@ -21,6 +21,8 @@ import TeamDetailPage from './pages/TeamDetailPage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import AnnouncementBanner from './components/AnnouncementBanner';
+import FloatingFullscreenButton from './components/FloatingFullscreenButton';
+import { FullscreenProvider } from './context/FullscreenContext';
 import theme from './theme';
 
 // Home redirect component
@@ -50,6 +52,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
+        <FullscreenProvider>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -258,7 +261,10 @@ function App() {
           {/* Chat copilot — visible on every authenticated page,
               hidden on /login via the component itself. */}
           <FloatingChatLauncher />
+          {/* Full-screen focus toggle — hides the sidebar, expands main. */}
+          <FloatingFullscreenButton />
         </Router>
+        </FullscreenProvider>
       </AuthProvider>
     </ThemeProvider>
   );
