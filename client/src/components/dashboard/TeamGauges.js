@@ -9,18 +9,27 @@ import { Star as StarIcon } from '@mui/icons-material';
 function GaugeArc({ pct, color }) {
     const cx = 70, cy = 60, r = 52, sw = 11, max = 100; // full gauge = 100% of target
     const frac = Math.max(0, Math.min((pct || 0) / max, 1));
-    const bg = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`; // full top semicircle
-    // Draw the fill as a real partial arc ending at the value's angle (180°→0°
-    // as frac 0→1). No dash math, so frac=1 is the exact same path as bg = a
-    // visually complete semicircle.
-    const angle = Math.PI - frac * Math.PI;
-    const mx = cx + r * Math.cos(angle);
-    const my = cy - r * Math.sin(angle);
-    const value = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${mx.toFixed(2)} ${my.toFixed(2)}`;
+    // Point on the top semicircle at progress f (0 = left/0%, 0.5 = apex, 1 = right).
+    const ptAt = (f) => {
+        const ang = Math.PI - f * Math.PI; // 180°→0°
+        return [cx + r * Math.cos(ang), cy - r * Math.sin(ang)];
+    };
+    // Trace the arc as a polyline of points along the exact circle — no SVG
+    // arc-flags (which pick the wrong side for partial arcs) and no dash math.
+    const polyline = (from, to) => {
+        const steps = Math.max(1, Math.ceil((to - from) * 60));
+        let d = '';
+        for (let i = 0; i <= steps; i++) {
+            const [x, y] = ptAt(from + (to - from) * (i / steps));
+            d += `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)} `;
+        }
+        return d.trim();
+    };
+    const [mx, my] = ptAt(frac);
     return (
         <svg viewBox="0 0 140 72" style={{ width: '100%', display: 'block' }}>
-            <path d={bg} fill="none" stroke="#E7E4DD" strokeWidth={sw} strokeLinecap="round" />
-            {frac > 0.002 && <path d={value} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" />}
+            <path d={polyline(0, 1)} fill="none" stroke="#E7E4DD" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+            {frac > 0.002 && <path d={polyline(0, frac)} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />}
             <circle cx={mx} cy={my} r={5.5} fill={color} stroke="#fff" strokeWidth={1.5} />
             {/* tick at the apex (50% of target) */}
             <line x1={cx} y1={2} x2={cx} y2={9} stroke="#C9C6BC" strokeWidth={1.5} />
