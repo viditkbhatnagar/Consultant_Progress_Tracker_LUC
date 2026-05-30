@@ -383,7 +383,7 @@ const ExecutiveOverviewPage = () => {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {data.teamsMtd.map((t, i) => (
+                                    {data.teamsMtd.filter((t) => t.mtdTarget > 0 || t.mtdAchieved > 0).map((t, i) => (
                                         <TableRow
                                             key={t.id}
                                             hover
@@ -546,7 +546,8 @@ const ExecutiveOverviewPage = () => {
                                     option={(() => {
                                         // Highest YTD target first, always.
                                         const sorted = [...data.teamsYtd].sort((a, b) => b.ytdTarget - a.ytdTarget);
-                                        return barOption({
+                                        const pcts = sorted.map((t) => (t.ytdTarget ? Math.round((t.ytdAchieved / t.ytdTarget) * 100) : 0));
+                                        const opt = barOption({
                                             categories: sorted.map((t) => t.teamName.replace('Team ', '')),
                                             valueFormatter: compactCurrencyFmt,
                                             rotateLabels: 38,
@@ -555,6 +556,12 @@ const ExecutiveOverviewPage = () => {
                                                 { name: 'YTD Achieved', data: sorted.map((t) => t.ytdAchieved), color: '#1F7A35' },
                                             ],
                                         });
+                                        // Achievement % on top of each Achieved bar.
+                                        opt.series[1].label = {
+                                            show: true, position: 'top', formatter: (p) => `${pcts[p.dataIndex]}%`,
+                                            fontSize: 10, fontWeight: 700, color: '#1F7A35',
+                                        };
+                                        return opt;
                                     })()}
                                 />
                             </Paper>

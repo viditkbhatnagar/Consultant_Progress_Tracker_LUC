@@ -64,9 +64,14 @@ const LeaderboardCard = ({ title, rows, metric, accent, quoteIndex }) => (
                         <Typography sx={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</Typography>
                         <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)' }}>{r.team}</Typography>
                     </Box>
-                    <Typography sx={{ fontSize: 15, fontWeight: 800, color: pctColor(metric === 'mtd' ? r.mtdPercent : r.ytdPercent) }}>
-                        {fmtPct(metric === 'mtd' ? r.mtdPercent : r.ytdPercent)}
-                    </Typography>
+                    <Box sx={{ textAlign: 'right' }}>
+                        <Typography sx={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1, color: pctColor(metric === 'mtd' ? r.mtdPercent : r.ytdPercent) }}>
+                            {fmtPct(metric === 'mtd' ? r.mtdPercent : r.ytdPercent)}
+                        </Typography>
+                        <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'var(--d-text-muted, #8A887E)' }}>
+                            {fmtCurrency(metric === 'mtd' ? r.mtdAchieved : r.ytdAchieved)}
+                        </Typography>
+                    </Box>
                 </Stack>
             ))}
             <Box sx={{ mt: 1, px: 1.25, py: 1.25, display: 'flex', gap: 1, alignItems: 'flex-start', borderTop: '1px dashed var(--d-border-soft, #ECE9E2)' }}>
