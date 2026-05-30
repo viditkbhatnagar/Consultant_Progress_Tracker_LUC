@@ -26,6 +26,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ORGANIZATION_LABELS } from '../../utils/constants';
 import NotificationBell from '../NotificationBell';
+import { useFullscreen } from '../../context/FullscreenContext';
 
 export const DRAWER_WIDTH = 280;
 
@@ -44,6 +45,7 @@ const MOTIVATIONAL_QUOTES = [
 
 const SkillhubSidebar = ({ activeView, onNavigate, onNewAdmission, onLogout }) => {
     const navigate = useNavigate();
+    const { isFullscreen } = useFullscreen();
     const user = JSON.parse(localStorage.getItem('user') || 'null');
     const [quoteIdx, setQuoteIdx] = useState(0);
     const branchLabel = ORGANIZATION_LABELS[user?.organization] || 'Skillhub';
@@ -99,6 +101,9 @@ const SkillhubSidebar = ({ activeView, onNavigate, onNewAdmission, onLogout }) =
             </ListItemButton>
         </ListItem>
     );
+
+    // Full-screen focus mode hides the sidebar so main content fills the page.
+    if (isFullscreen) return null;
 
     return (
         <Drawer

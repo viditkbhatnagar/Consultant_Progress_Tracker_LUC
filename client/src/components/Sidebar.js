@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
+import { useFullscreen } from '../context/FullscreenContext';
 
 export const DRAWER_WIDTH = 280;
 
@@ -65,6 +66,7 @@ const MOTIVATIONAL_QUOTES = [
 
 const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnalysisActive }) => {
     const navigate = useNavigate();
+    const { isFullscreen } = useFullscreen();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
 
@@ -122,6 +124,9 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
             },
         },
     };
+
+    // Full-screen focus mode hides the sidebar so main content fills the page.
+    if (isFullscreen) return null;
 
     return (
         <Drawer

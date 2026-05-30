@@ -37,6 +37,7 @@ import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import { setAdminOrgScope } from '../utils/adminOrgScope';
 import { getTeams } from '../services/execOverviewService';
+import { useFullscreen } from '../context/FullscreenContext';
 
 export const DRAWER_WIDTH = 280;
 
@@ -75,6 +76,7 @@ const MOTIVATIONAL_QUOTES = [
 const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, onAPICosts, apiCostsActive }) => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { isFullscreen } = useFullscreen();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
     const [execOpen, setExecOpen] = useState(
@@ -159,6 +161,9 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
             },
         },
     };
+
+    // Full-screen focus mode hides the sidebar so main content fills the page.
+    if (isFullscreen) return null;
 
     return (
         <Drawer
