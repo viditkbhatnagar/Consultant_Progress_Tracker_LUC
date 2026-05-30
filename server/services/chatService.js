@@ -284,6 +284,8 @@ Live distribution (snapshot):
 ### 4. Meetings (${s_meetings.total ?? '?'} records, meetingDate range ${_fmtRange(s_meetings.dateRange)})
 One row per meeting. Fields: meetingDate, studentName, program (free-text), mode, consultantName, teamLeadName, teamName, organization, status (reuses the 12-value LEAD_STAGES enum), remarks. Outside that date range = empty.
 
+**CRITICAL — which "meetings" number?** For any "how many meetings did X have" COUNT question, use \`commitment_stats\` → \`totalMeetings\` (the sum of \`meetingsDone\` on commitments). **That is the "Total Meetings" number users see on the team dashboard.** \`get_meetings\` reads the SEPARATE Meeting Tracker collection, which is logged independently and is frequently EMPTY for a given team — use it ONLY to list specific meeting records (who/when/mode/remarks), never as the headline count. If \`get_meetings\` returns 0 but the team has commitments, the answer is the commitment-based \`totalMeetings\`, not 0.
+
 - **by mode**: ${_fmtObj(s_meetings.byMode)}
 - **by status**: ${_fmtDist(s_meetings.byStatus)}
 
