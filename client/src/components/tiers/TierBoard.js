@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Button, Typography, CircularProgress, Snackbar, Alert } from '@mui/material';
-import { AutoAwesome as GenerateIcon, EmojiEvents as TrophyIcon } from '@mui/icons-material';
+import { AutoAwesome as GenerateIcon, EmojiEvents as TrophyIcon, EditOutlined as EditIcon } from '@mui/icons-material';
 import tierService from '../../services/tierService';
 import { onSocketEvents } from '../../services/socket';
+import TierEditDialog from './TierEditDialog';
 
 const TIER_STYLES = {
     1: { color: '#1F7A35', label: 'TIER 1' },
@@ -56,6 +57,7 @@ export default function TierBoard({ isAdmin = false }) {
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -92,6 +94,9 @@ export default function TierBoard({ isAdmin = false }) {
                     <Button variant="contained" startIcon={generating ? <CircularProgress size={16} color="inherit" /> : <GenerateIcon />} onClick={generate} disabled={generating}>
                         {generating ? 'Generating…' : 'Generate Tier Image'}
                     </Button>
+                    <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>
+                        Edit tiers
+                    </Button>
                     {generating ? <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted)' }}>OpenAI is drawing the scene (~15s)…</Typography> : null}
                     {error ? <Typography sx={{ fontSize: 13, color: 'var(--d-danger, #C0392B)' }}>{error}</Typography> : null}
                 </Box>
@@ -110,6 +115,8 @@ export default function TierBoard({ isAdmin = false }) {
                     🏁 New tier standings just posted!
                 </Alert>
             </Snackbar>
+
+            <TierEditDialog open={editOpen} onClose={() => setEditOpen(false)} onSaved={load} />
         </Box>
     );
 }
