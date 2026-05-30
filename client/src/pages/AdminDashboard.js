@@ -55,6 +55,7 @@ import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
 import SectionCard from '../components/dashboard/SectionCard';
 import KPIBar from '../components/dashboard/KPIBar';
+import TierBoard from '../components/tiers/TierBoard';
 import DashboardTabs, { AnimatedTabPanel } from '../components/dashboard/DashboardTabs';
 import PerformerCard from '../components/dashboard/PerformerCard';
 import PerformerGrid from '../components/dashboard/PerformerGrid';
@@ -596,6 +597,12 @@ const AdminDashboard = () => {
                     )}
 
                     {tabValue <= 3 && <KPIBar items={kpiItems} />}
+
+                    {tabValue <= 3 && (
+                        <SectionCard title="Month-End Race" eyebrow="Tier standings — generate & post">
+                            <TierBoard isAdmin />
+                        </SectionCard>
+                    )}
 
                     {tabValue <= 3 && commitments.length > 0 && (
                         <SectionCard title="Organization Analytics" eyebrow="This period">
