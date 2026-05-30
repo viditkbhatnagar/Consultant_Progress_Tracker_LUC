@@ -149,6 +149,25 @@ if (process.env.NODE_ENV !== 'test') {
     startDriftMonitor();
 }
 
+// Nightly full-database snapshot to S3 at 00:30 Asia/Dubai (UAE). Dumps every
+// collection as gzipped JSON under db-snapshots/YYYY-MM-DD/. Skipped in test
+// mode and when S3 isn't configured.
+if (process.env.NODE_ENV !== 'test') {
+    const cron = require('node-cron');
+    const s3 = require('./services/s3');
+    const { runDbSnapshot } = require('./services/dbSnapshot');
+    if (s3.isEnabled()) {
+        cron.schedule(
+            '30 0 * * *',
+            () => runDbSnapshot().catch((e) => console.error('[db-snapshot] nightly run failed:', e.message)),
+            { timezone: 'Asia/Dubai' }
+        );
+        console.log('[db-snapshot] nightly backup scheduled — 00:30 Asia/Dubai');
+    } else {
+        console.warn('[db-snapshot] S3 not configured — nightly backup disabled');
+    }
+}
+
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
     console.log(`Error: ${err.message}`);
