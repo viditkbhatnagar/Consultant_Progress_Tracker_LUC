@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     Box,
     Paper,
-    Typography,
     Table,
     TableBody,
     TableCell,
@@ -28,7 +27,6 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
-import ComingSoonLock from '../components/ComingSoonLock';
 import consultantService from '../services/consultantService';
 import { listEntries, bulkUpsertEntries } from '../services/teamEntryService';
 import { getTeams } from '../services/execOverviewService';
@@ -68,11 +66,8 @@ const MonthlyTargetsPage = () => {
 
     // Load teams (admin only)
     useEffect(() => {
-        if (isTeamLead) {
-            setLoading(false);
-            return;
-        }
         if (!isAdmin) {
+            // Team leads load their own team's targets (read-only view).
             setTeamLeadId(user?._id || user?.id);
             return;
         }
@@ -80,11 +75,11 @@ const MonthlyTargetsPage = () => {
             setTeams(res.data || []);
             if (res.data?.length && !teamLeadId) setTeamLeadId(res.data[0]._id);
         }).catch(() => {});
-    }, [isAdmin, isTeamLead, user?._id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [isAdmin, user?._id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load consultants + targets when team or year changes
     useEffect(() => {
-        if (!teamLeadId || isTeamLead) return;
+        if (!teamLeadId) return;
         let cancelled = false;
         setLoading(true);
         setError(null);
@@ -130,7 +125,7 @@ const MonthlyTargetsPage = () => {
     // grid fills the entire grid (rows = consultants in display order).
     const handlePaste = (e, startConsultantId, startMonth) => {
         const text = e.clipboardData?.getData('text/plain');
-        if (!text || !text.includes('\t') && !text.includes('\n')) return; // not a tabular paste
+        if (!text || (!text.includes('\t') && !text.includes('\n'))) return; // not a tabular paste
         e.preventDefault();
         const rows = text.replace(/\r/g, '').split('\n').filter((r) => r.length);
         const startIdx = consultants.findIndex((c) => c._id === startConsultantId);
@@ -237,9 +232,11 @@ const MonthlyTargetsPage = () => {
                                 ))}
                             </Select>
                         </FormControl>
-                        <Button variant="contained" disabled={saving || loading} onClick={handleSave}>
-                            {saving ? 'Saving…' : 'Save All'}
-                        </Button>
+                        {isAdmin ? (
+                            <Button variant="contained" disabled={saving || loading} onClick={handleSave}>
+                                {saving ? 'Saving…' : 'Save All'}
+                            </Button>
+                        ) : null}
                     </Stack>
                 }
             />
@@ -250,12 +247,7 @@ const MonthlyTargetsPage = () => {
                 </Alert>
             )}
 
-            {isTeamLead ? (
-                <ComingSoonLock
-                    title="Monthly Targets"
-                    subtitle="Per-consultant monthly revenue targets used by the Executive Overview. Coming soon for team leads."
-                />
-            ) : loading ? (
+            {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>
@@ -296,6 +288,7 @@ const MonthlyTargetsPage = () => {
                                                     onPaste={(e) => handlePaste(e, c._id, i + 1)}
                                                     size="small"
                                                     type="number"
+                                                    InputProps={{ readOnly: !isAdmin }}
                                                     inputProps={{ min: 0, style: { textAlign: 'right', fontSize: 13 } }}
                                                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '6px' } }}
                                                 />

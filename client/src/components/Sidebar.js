@@ -9,6 +9,7 @@ import {
     ListItemText,
     Typography,
     Avatar,
+    Collapse,
 } from '@mui/material';
 import {
     Dashboard as DashboardIcon,
@@ -23,6 +24,11 @@ import {
     SaveAlt as ExportCenterIcon,
     InsightsOutlined as ExecutiveIcon,
     TrackChanges as PerfIcon,
+    Groups as TeamIcon,
+    AttachMoney as MoneyIcon,
+    EmojiEvents as RaceIcon,
+    ExpandLess,
+    ExpandMore,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
@@ -67,6 +73,7 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
     const { isFullscreen } = useFullscreen();
     const user = JSON.parse(localStorage.getItem('user'));
     const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+    const [execOpen, setExecOpen] = useState(true);
 
     const getPersonalizedQuote = (quote) => {
         const teamName = user?.teamName || 'Champions';
@@ -236,32 +243,54 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                     </ListItemButton>
                 </ListItem>
 
-                {/* Executive Overview — org-wide read-only views, now open to
-                    team leads (editing stays admin-only). */}
+                {/* Executive Overview — collapsible group, mirrors the admin
+                    sidebar (org-wide views; all read-only for team leads). */}
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => navigate('/leadership-dashboard')} sx={navItemSx}>
+                    <ListItemButton onClick={() => setExecOpen((v) => !v)} sx={navItemSx}>
                         <ListItemIcon><ExecutiveIcon /></ListItemIcon>
-                        <ListItemText primary="Leadership Dashboard" />
+                        <ListItemText primary="Executive Overview" />
+                        {execOpen ? <ExpandLess /> : <ExpandMore />}
                     </ListItemButton>
                 </ListItem>
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => navigate('/consultant-performance')} sx={navItemSx}>
-                        <ListItemIcon><PerfIcon /></ListItemIcon>
-                        <ListItemText primary="Consultant Performance" />
-                    </ListItemButton>
-                </ListItem>
+                <Collapse in={execOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding sx={{ pl: 1 }}>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/leadership-dashboard')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><ExecutiveIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Leadership Dashboard" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/team-dashboard')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><TeamIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="All Teams" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/consultant-performance')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><PerfIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Consultant Performance" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/monthly-targets')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><MoneyIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Monthly Targets" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/tiers')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><RaceIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Month-End Race" />
+                            </ListItemButton>
+                        </ListItem>
+                    </List>
+                </Collapse>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
                         <ListItemIcon><AutoAwesomeIcon /></ListItemIcon>
                         <ListItemText primary="AI Analysis" />
-                    </ListItemButton>
-                </ListItem>
-
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                    <ListItemButton onClick={() => navigate('/tiers')} sx={navItemSx}>
-                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
-                        <ListItemText primary="Month-End Race" />
                     </ListItemButton>
                 </ListItem>
 

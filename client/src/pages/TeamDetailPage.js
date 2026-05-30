@@ -32,7 +32,6 @@ import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
-import ComingSoonLock from '../components/ComingSoonLock';
 import EChart from '../components/charts/EChart';
 import ProgramMonthHeatmap from '../components/charts/ProgramMonthHeatmap';
 import { lineOption } from '../components/charts/presets';
@@ -385,9 +384,8 @@ const TeamDetailPage = () => {
     const [showHiddenLead, setShowHiddenLead] = useState(false);
 
     const effectiveTeamId = user?.role === 'team_lead' ? user?._id || user?.id : paramId;
-    // Writes are admin-only at the server. TLs see a Coming Soon lock
-    // while the feature is being finalised for them.
-    const isTeamLead = user?.role === 'team_lead';
+    // Writes are admin-only at the server; team leads view their own team
+    // read-only (canEdit gates the editable cells + admin-only controls).
     const canEdit = user?.role === 'admin';
 
     useEffect(() => {
@@ -408,7 +406,7 @@ const TeamDetailPage = () => {
     }, [user?.role]);
 
     const refetch = useCallback(async () => {
-        if (!effectiveTeamId || isTeamLead) {
+        if (!effectiveTeamId) {
             setLoading(false);
             return;
         }
@@ -440,7 +438,7 @@ const TeamDetailPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [effectiveTeamId, year, isTeamLead]);
+    }, [effectiveTeamId, year]);
 
     useEffect(() => { refetch(); }, [refetch]);
 
@@ -619,7 +617,7 @@ const TeamDetailPage = () => {
                 title={data ? `${data.teamLead.teamName} · ${year}` : 'Loading…'}
                 subtitle={
                     data
-                        ? `Led by ${data.teamLead.name} · Edit cells directly · TEAM TOTAL, % Rev, Adm. and YTD auto-compute`
+                        ? `Led by ${data.teamLead.name} · ${canEdit ? 'Edit cells directly · ' : 'Read-only · '}TEAM TOTAL, % Rev, Adm. and YTD auto-compute`
                         : ''
                 }
                 right={
@@ -684,12 +682,7 @@ const TeamDetailPage = () => {
                 }
             />
 
-            {isTeamLead ? (
-                <ComingSoonLock
-                    title="Team Dashboard"
-                    subtitle="An Excel-style team sheet with 12 monthly blocks, member-level targets, and per-program admissions. Coming soon for team leads."
-                />
-            ) : loading ? (
+            {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                     <CircularProgress />
                 </Box>
