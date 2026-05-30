@@ -162,10 +162,6 @@ const ExecutiveOverviewPage = () => {
     const isTeamLead = user?.role === 'team_lead';
 
     const loadOverview = useCallback(() => {
-        if (isTeamLead) {
-            setLoading(false);
-            return;
-        }
         getOverview(year, month)
             .then((res) => {
                 setData(res.data);
@@ -175,7 +171,7 @@ const ExecutiveOverviewPage = () => {
                 setError(err.response?.data?.message || err.message || 'Failed to load Leadership Dashboard');
                 setLoading(false);
             });
-    }, [year, month, isTeamLead]);
+    }, [year, month]);
 
     useEffect(() => {
         setLoading(true);
