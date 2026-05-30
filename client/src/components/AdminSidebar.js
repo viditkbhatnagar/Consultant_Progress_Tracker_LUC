@@ -15,7 +15,6 @@ import {
 import {
     Dashboard as DashboardIcon,
     Logout as LogoutIcon,
-    Notifications as NotificationsIcon,
     FormatQuote as QuoteIcon,
     School as SchoolIcon,
     AutoAwesome as AutoAwesomeIcon,
@@ -33,7 +32,6 @@ import {
     ExpandMore,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import { setAdminOrgScope } from '../utils/adminOrgScope';
 import { getTeams } from '../services/execOverviewService';
