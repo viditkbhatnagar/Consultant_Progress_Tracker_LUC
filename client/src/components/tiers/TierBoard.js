@@ -51,7 +51,7 @@ export default function TierBoard({ isAdmin = false }) {
                     <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditOpen(true)}>
                         Edit tiers
                     </Button>
-                    {generating ? <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted)' }}>OpenAI is drawing the scene (~15s)…</Typography> : null}
+                    {generating ? <Typography sx={{ fontSize: 12, color: 'var(--d-text-muted)' }}>OpenAI is drawing the scene (~1 min)…</Typography> : null}
                     {error ? <Typography sx={{ fontSize: 13, color: 'var(--d-danger, #C0392B)' }}>{error}</Typography> : null}
                 </Box>
             ) : null}
