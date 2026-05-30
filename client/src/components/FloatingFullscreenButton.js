@@ -31,6 +31,9 @@ export default function FloatingFullscreenButton() {
                     color: 'var(--d-text-2, #333333)',
                     border: '1px solid var(--d-border, rgba(0,0,0,0.12))',
                     boxShadow: 3,
+                    width: 48,
+                    height: 48,
+                    '& svg': { fontSize: 28 },
                     '&:hover': { bgcolor: 'var(--d-surface-hover, #f3f3f3)' },
                 }}
             >
