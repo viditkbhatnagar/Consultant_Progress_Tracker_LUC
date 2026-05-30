@@ -6,6 +6,7 @@ import { onSocketEvents } from '../../services/socket';
 import TierEditDialog from './TierEditDialog';
 import TierImageView from './TierImageView';
 import TierDataPanel from './TierDataPanel';
+import TierHistory from './TierHistory';
 
 export default function TierBoard({ isAdmin = false, mode = 'light' }) {
     const [latest, setLatest] = useState(null);
@@ -70,6 +71,9 @@ export default function TierBoard({ isAdmin = false, mode = 'light' }) {
 
             {/* Raw tier data behind the poster: 3-line trend + per-tier tables */}
             <TierDataPanel version={dataVersion} mode={mode} />
+
+            {/* Date-wise archive of every generated poster (from S3) */}
+            <TierHistory version={dataVersion} />
 
             <Snackbar open={toast} autoHideDuration={6000} onClose={() => setToast(false)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
                 <Alert severity="info" variant="filled" icon={<TrophyIcon />} onClose={() => setToast(false)} sx={{ fontWeight: 600 }}>
