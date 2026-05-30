@@ -367,18 +367,8 @@ const ExecutiveOverviewPage = () => {
                         </Grid>
                     </Grid>
 
-                    {/* Compact gauge view — YTD + MTD team performance */}
-                    <SectionTitle accent="#1F7A35">YTD Team Performance</SectionTitle>
-                    <Box sx={{ mb: 3 }}>
-                        <TeamGauges teams={data.teamsYtd} metric="ytd" />
-                    </Box>
+                    {/* MTD Team Performance (detailed table) — tables first, gauges pushed below */}
                     <SectionTitle accent="#2383E2">{`MTD Team Performance${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
-                    <Box sx={{ mb: 3 }}>
-                        <TeamGauges teams={data.teamsMtd} metric="mtd" />
-                    </Box>
-
-                    {/* MTD Team Performance (detailed table) */}
-                    <SectionTitle accent="#2383E2">{`MTD Team Performance — detail${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
                     <Paper variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden' }}>
                         <TableContainer>
                             <Table size="small">
@@ -495,6 +485,16 @@ const ExecutiveOverviewPage = () => {
                             </Table>
                         </TableContainer>
                     </Paper>
+
+                    {/* At-a-glance gauges — same order/data as the tables above */}
+                    <SectionTitle accent="#2383E2">{`MTD Team Performance — at a glance${data.kpi.mtdMonth ? ` · ${monthShort[data.kpi.mtdMonth - 1]} ${year}` : ''}`}</SectionTitle>
+                    <Box sx={{ mb: 3 }}>
+                        <TeamGauges teams={data.teamsMtd} metric="mtd" />
+                    </Box>
+                    <SectionTitle accent="#1F7A35">YTD Team Performance — at a glance</SectionTitle>
+                    <Box sx={{ mb: 3 }}>
+                        <TeamGauges teams={data.teamsYtd} metric="ytd" />
+                    </Box>
 
                     {/* Consolidated Program-wise Admissions, Month by Month */}
                     <SectionTitle accent="#D97706">Consolidated Program-wise Admissions — Month by Month</SectionTitle>
