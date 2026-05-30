@@ -1,14 +1,19 @@
 const express = require('express');
 const { protect, authorize } = require('../middleware/auth');
 const orgGate = require('../middleware/orgGate');
-const { getTiers } = require('../controllers/tierController');
+const { getTiers, generateImage, getLatestImage, updateTier } = require('../controllers/tierController');
 
 const router = express.Router();
 
 router.use(protect);
 router.use(orgGate('luc'));
 
-// Read: admin + team_lead (TL dashboards show the tier standings/image).
+// Reads: admin + team_lead (TL dashboards show the tier standings/image).
 router.get('/', authorize('admin', 'team_lead'), getTiers);
+router.get('/latest-image', authorize('admin', 'team_lead'), getLatestImage);
+
+// Mutations: admin only.
+router.post('/generate-image', authorize('admin'), generateImage);
+router.put('/:tier', authorize('admin'), updateTier);
 
 module.exports = router;
