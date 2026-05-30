@@ -17,7 +17,7 @@ const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
 const AnnouncementSchema = new mongoose.Schema(
     {
         organization: { type: String, enum: ORGANIZATIONS, default: ORG_LUC, required: true },
-        type: { type: String, enum: ['admission', 'manual'], default: 'manual' },
+        type: { type: String, enum: ['admission', 'manual', 'tier'], default: 'manual' },
         priority: { type: String, enum: ['normal', 'high'], default: 'high' },
         title: { type: String, required: true, trim: true },
         message: { type: String, required: true, trim: true },

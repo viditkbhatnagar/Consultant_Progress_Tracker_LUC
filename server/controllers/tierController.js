@@ -3,7 +3,9 @@ const Tier = require('../models/Tier');
 const TierImage = require('../models/TierImage');
 const TeamMonthlyEntry = require('../models/TeamMonthlyEntry');
 const AIUsage = require('../models/AIUsage');
+const s3 = require('../services/s3');
 const { emitToOrg } = require('../services/realtime');
+const { announceTierImage } = require('../services/announcer');
 
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -150,9 +152,32 @@ exports.generateImage = async (req, res, next) => {
         const snapshot = tiers.map((t) => ({ tier: t.tier, label: t.label || `Tier ${t.tier}`, mtdAchieved: t.mtdAchieved }));
 
         const { theme, dataUrl, usage } = await generateScene(snapshot);
+
+        // Archive the PNG to S3 under a date-structured key. Keep the base64
+        // inline only as a fallback when S3 is unconfigured / the upload fails,
+        // so Mongo stays lean and the history view can presign from the key.
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const buffer = Buffer.from(dataUrl.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+        const s3Key = `tier-images/${now.getUTCFullYear()}/${pad(now.getUTCMonth() + 1)}/${pad(now.getUTCDate())}/${now.getTime()}-${theme}.png`;
+        let storedKey = '';
+        let inlineFallback = '';
+        if (s3.isEnabled()) {
+            try {
+                await s3.uploadBuffer(s3Key, buffer, 'image/png');
+                storedKey = s3Key;
+            } catch (e) {
+                console.error('[tiers] S3 upload failed, storing inline:', e.message);
+                inlineFallback = dataUrl;
+            }
+        } else {
+            inlineFallback = dataUrl;
+        }
+
         const doc = await TierImage.create({
             organization: 'luc',
-            image: dataUrl,
+            image: inlineFallback,
+            s3Key: storedKey,
             theme,
             headline: 'Month-End Race Is On!',
             month,
@@ -190,6 +215,14 @@ exports.generateImage = async (req, res, next) => {
         // Light socket ping — clients fetch /latest-image (the image is large).
         emitToOrg('luc', 'tier-image', { _id: doc._id, month, year, monthName: MONTH_NAMES[month - 1] });
 
+        // Org-wide dismissable banner so EVERY user (not just the TL modal) is
+        // alerted wherever they are in the app. Best-effort — never block the image.
+        try {
+            await announceTierImage({ organization: 'luc', tiers: snapshot, monthName: MONTH_NAMES[month - 1], year, actorName: req.user.name });
+        } catch (annErr) {
+            console.error('[tiers] announce failed:', annErr.message);
+        }
+
         res.json({
             success: true,
             data: { _id: doc._id, image: dataUrl, theme, headline: doc.headline, month, monthName: MONTH_NAMES[month - 1], year, tiers: snapshot, createdAt: doc.createdAt },
@@ -204,8 +237,45 @@ exports.generateImage = async (req, res, next) => {
 exports.getLatestImage = async (req, res, next) => {
     try {
         const img = await TierImage.findOne({ organization: 'luc' }).sort({ createdAt: -1 }).lean();
-        if (img && img.month) img.monthName = MONTH_NAMES[img.month - 1];
+        if (img) {
+            if (img.month) img.monthName = MONTH_NAMES[img.month - 1];
+            // Serve from S3 via a short-lived presigned URL; fall back to the
+            // inline data URL for legacy/no-S3 docs.
+            if (img.s3Key) {
+                const url = await s3.getSignedGetUrl(img.s3Key, 3600);
+                if (url) img.image = url;
+            }
+        }
         res.json({ success: true, data: img || null });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// @desc    Past tier images, newest first (admin + TL).  @route GET /api/tiers/images
+exports.getImageHistory = async (req, res, next) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 60, 200);
+        const imgs = await TierImage.find({ organization: 'luc' }).sort({ createdAt: -1 }).limit(limit).lean();
+        const out = [];
+        for (const img of imgs) {
+            let url = img.image || null;
+            if (img.s3Key) {
+                const signed = await s3.getSignedGetUrl(img.s3Key, 3600);
+                if (signed) url = signed;
+            }
+            out.push({
+                _id: img._id,
+                url,
+                theme: img.theme,
+                month: img.month,
+                monthName: img.month ? MONTH_NAMES[img.month - 1] : '',
+                year: img.year,
+                tiers: img.tiers || [],
+                createdAt: img.createdAt,
+            });
+        }
+        res.json({ success: true, data: out });
     } catch (err) {
         next(err);
     }

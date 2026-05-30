@@ -46,4 +46,26 @@ async function announceTeamAdmission({ organization = 'luc', teamName, consultan
     return ann;
 }
 
-module.exports = { announceTeamAdmission, toPayload };
+// Fire an org-wide announcement when the admin posts fresh tier standings.
+// Everyone in the org (admin, team leads, managers) gets the dismissable banner
+// no matter what page they're on — not just the Month-End Race tab. LUC-only.
+async function announceTierImage({ organization = 'luc', tiers = [], monthName, year, actorName } = {}) {
+    if (!isLuc(organization)) return null;
+    const leader = [...tiers].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0))[0];
+    const when = monthName ? ` (${monthName}${year ? ` ${year}` : ''})` : '';
+    const lead = leader ? ` Tier ${leader.tier} is leading${when}.` : '';
+
+    const ann = await Announcement.create({
+        organization,
+        type: 'tier',
+        priority: 'high',
+        title: '🏁 Month-End Race',
+        message: `New tier standings just posted!${lead} Open Month-End Race to see who's ahead.`,
+        meta: { kind: 'tier-image', link: '/tiers', tiers, monthName, year, actorName },
+        expiresAt: new Date(Date.now() + ANNOUNCEMENT_TTL_MS),
+    });
+    emitToOrg(organization, 'announcement', toPayload(ann));
+    return ann;
+}
+
+module.exports = { announceTeamAdmission, announceTierImage, toPayload };
