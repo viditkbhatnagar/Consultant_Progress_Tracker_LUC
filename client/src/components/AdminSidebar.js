@@ -335,6 +335,13 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                 </Collapse>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/tiers')} selected={location.pathname === '/tiers'} sx={navItemSx}>
+                        <ListItemIcon><TargetIcon /></ListItemIcon>
+                        <ListItemText primary="Month-End Race" />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
                         <ListItemIcon><AutoAwesomeIcon /></ListItemIcon>
                         <ListItemText primary="AI Analysis" />

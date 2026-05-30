@@ -288,6 +288,13 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                 </ListItem>
 
                 <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/tiers')} sx={navItemSx}>
+                        <ListItemIcon><ExecutiveIcon /></ListItemIcon>
+                        <ListItemText primary="Month-End Race" />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
                         onClick={() => window.dispatchEvent(new CustomEvent('askme:open'))}
                         sx={navItemSx}

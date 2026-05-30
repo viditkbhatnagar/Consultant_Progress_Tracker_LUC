@@ -18,9 +18,11 @@ import PdfViewer from './pages/PdfViewer';
 import ExecutiveOverviewPage from './pages/ExecutiveOverviewPage';
 import ConsultantPerformancePage from './pages/ConsultantPerformancePage';
 import TeamDetailPage from './pages/TeamDetailPage';
+import TierPage from './pages/TierPage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import AnnouncementBanner from './components/AnnouncementBanner';
+import TierAnnounceModal from './components/tiers/TierAnnounceModal';
 import FloatingFullscreenButton from './components/FloatingFullscreenButton';
 import { FullscreenProvider } from './context/FullscreenContext';
 import theme from './theme';
@@ -216,6 +218,15 @@ function App() {
               }
             />
 
+            <Route
+              path="/tiers"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <TierPage />
+                </PrivateRoute>
+              }
+            />
+
             {/* Monthly Targets editor — admin sets per-consultant monthly
                 targets. Kept reachable but no longer in the sidebar (target
                 editing also happens inline in the All Teams sheet). */}
@@ -258,6 +269,8 @@ function App() {
           {/* App-wide announcement banner + live toast — shows on every
               authenticated page; self-hides when there's nothing active. */}
           <AnnouncementBanner />
+          {/* Tier-standings modal — pops for team leads when admin generates. */}
+          <TierAnnounceModal />
           {/* Chat copilot — visible on every authenticated page,
               hidden on /login via the component itself. */}
           <FloatingChatLauncher />
