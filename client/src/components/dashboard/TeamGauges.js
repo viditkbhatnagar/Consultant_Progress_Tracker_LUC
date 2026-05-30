@@ -9,16 +9,20 @@ import { Star as StarIcon } from '@mui/icons-material';
 function GaugeArc({ pct, color }) {
     const cx = 70, cy = 60, r = 52, sw = 11, max = 100; // full gauge = 100% of target
     const frac = Math.max(0, Math.min((pct || 0) / max, 1));
-    const arc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`; // top semicircle
-    const angle = ((180 - frac * 180) * Math.PI) / 180;
+    const bg = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`; // full top semicircle
+    // Draw the fill as a real partial arc ending at the value's angle (180°→0°
+    // as frac 0→1). No dash math, so frac=1 is the exact same path as bg = a
+    // visually complete semicircle.
+    const angle = Math.PI - frac * Math.PI;
     const mx = cx + r * Math.cos(angle);
     const my = cy - r * Math.sin(angle);
+    const value = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${mx.toFixed(2)} ${my.toFixed(2)}`;
     return (
         <svg viewBox="0 0 140 72" style={{ width: '100%', display: 'block' }}>
-            <path d={arc} fill="none" stroke="#E7E4DD" strokeWidth={sw} strokeLinecap="round" />
-            <path d={arc} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" pathLength={100} strokeDasharray={`${frac * 100} 100`} />
+            <path d={bg} fill="none" stroke="#E7E4DD" strokeWidth={sw} strokeLinecap="round" />
+            {frac > 0.002 && <path d={value} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" />}
             <circle cx={mx} cy={my} r={5.5} fill={color} stroke="#fff" strokeWidth={1.5} />
-            {/* 50% tick at the apex */}
+            {/* tick at the apex (50% of target) */}
             <line x1={cx} y1={2} x2={cx} y2={9} stroke="#C9C6BC" strokeWidth={1.5} />
             <text x={6} y={70} fontSize="7.5" fill="#B6B3A8">0%</text>
             <text x={134} y={70} textAnchor="end" fontSize="7.5" fill="#B6B3A8">100%</text>
