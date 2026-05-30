@@ -69,6 +69,14 @@ const inRange = (field, start, end) => {
 const icontains = (value) =>
     new RegExp(String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
+// Non-specific scope values the LLM sometimes passes for org-wide questions —
+// ignore them so a filter isn't applied to a non-existent team/consultant.
+const GENERIC_SCOPE = new Set([
+    'all', 'all teams', 'all team', 'every team', 'everyone', 'all consultants',
+    'all consultant', 'team', 'teams', 'org', 'organization', 'company', 'overall', 'total', 'everybody',
+]);
+const isSpecificScope = (v) => v && !GENERIC_SCOPE.has(String(v).trim().toLowerCase());
+
 // ==============================
 // People: users, consultants
 // ==============================
@@ -316,16 +324,47 @@ async function leaderboard({
     metric = 'achievement',
     scope = 'consultant',
     organization,
+    teamName,
+    consultantName,
     startDate,
     endDate,
     limit = 10,
 } = {}) {
-    const match = {};
+    const cap = Math.min(Number(limit) || 10, 50);
+    const key = scope === 'team' ? '$teamName' : '$consultantName';
+
+    // Optional filters so "top consultant IN Team Anousha" actually scopes to
+    // that team. Generic values ("all teams" etc.) are ignored.
+    const teamScope = {};
+    if (isSpecificScope(teamName)) teamScope.teamName = icontains(teamName);
+    if (isSpecificScope(consultantName)) teamScope.consultantName = icontains(consultantName);
+
+    // REVENUE ranking must use real booked revenue (Student.courseFee), NOT
+    // Commitment.closedAmount — that field is essentially never populated, so
+    // ranking by it returned nonsense (wrong names + AED ~34k vs real ~628k).
+    // LUC-only, by closingDate, exactly matching get_revenue and the dashboards.
+    if (metric === 'revenue') {
+        const smatch = { organization: 'luc', admissionFeePaid: { $gt: 0 }, ...teamScope };
+        const r = inRange('closingDate', startDate, endDate);
+        if (r) Object.assign(smatch, r);
+        const sagg = await Student.aggregate([
+            { $match: smatch },
+            { $group: { _id: key, revenue: { $sum: { $ifNull: ['$courseFee', 0] } }, admissionsClosed: { $sum: 1 } } },
+            { $sort: { revenue: -1 } },
+        ]);
+        return {
+            scope,
+            metric,
+            currency: 'AED',
+            rows: sagg.slice(0, cap).map((x) => ({ name: x._id, revenue: x.revenue, admissionsClosed: x.admissionsClosed })),
+            note: 'Revenue = sum(Student.courseFee) for LUC closings in window — matches get_revenue and the dashboards. Skillhub revenue ranking not included.',
+        };
+    }
+
+    const match = { ...teamScope };
     if (organization) match.organization = organization;
     const range = inRange('commitmentDate', startDate, endDate);
     if (range) Object.assign(match, range);
-    const key = scope === 'team' ? '$teamName' : '$consultantName';
-    const cap = Math.min(Number(limit) || 10, 50);
 
     const agg = await Commitment.aggregate([
         { $match: match },
@@ -344,15 +383,6 @@ async function leaderboard({
                 },
                 meetings: { $sum: { $ifNull: ['$meetingsDone', 0] } },
                 closed: { $sum: { $cond: [{ $eq: ['$admissionClosed', true] }, 1, 0] } },
-                revenue: {
-                    $sum: {
-                        $cond: [
-                            { $eq: ['$admissionClosed', true] },
-                            { $ifNull: ['$closedAmount', 0] },
-                            0,
-                        ],
-                    },
-                },
             },
         },
         {
@@ -372,7 +402,6 @@ async function leaderboard({
         meetings: 'meetings',
         commitments: 'total',
         closed: 'closed',
-        revenue: 'revenue',
     }[metric] || 'achievementRate';
     agg.sort((a, b) => (b[field] || 0) - (a[field] || 0));
     return {
@@ -384,7 +413,6 @@ async function leaderboard({
             achieved: r.achieved,
             meetings: r.meetings,
             admissionsClosed: r.closed,
-            revenue: r.revenue,
             achievementRate: Math.round(r.achievementRate || 0),
         })),
     };
@@ -545,17 +573,11 @@ async function getRevenue({ startDate, endDate, organization, teamName, consulta
 
     // Team / consultant scope (denormalized string fields on both Commitment
     // and Student). WITHOUT this, a "revenue for Team X" question silently
-    // returns the WHOLE ORG — the #1 source of wrong chatbot numbers.
-    // Guard: ignore non-specific values ("all", "all teams", "everyone", …) so
-    // an org-wide question isn't filtered to a non-existent team (→ AED 0).
-    const GENERIC = new Set([
-        'all', 'all teams', 'all team', 'every team', 'everyone', 'all consultants',
-        'all consultant', 'team', 'teams', 'org', 'organization', 'company', 'overall', 'total', 'everybody',
-    ]);
-    const isSpecific = (v) => v && !GENERIC.has(String(v).trim().toLowerCase());
+    // returns the WHOLE ORG — the #1 source of wrong chatbot numbers. Generic
+    // values ("all teams" etc.) are ignored so org-wide questions still work.
     const teamScope = {};
-    if (isSpecific(teamName)) teamScope.teamName = icontains(teamName);
-    if (isSpecific(consultantName)) teamScope.consultantName = icontains(consultantName);
+    if (isSpecificScope(teamName)) teamScope.teamName = icontains(teamName);
+    if (isSpecificScope(consultantName)) teamScope.consultantName = icontains(consultantName);
 
     const scopeLuc =
         !organization || organization === 'all' || organization === 'luc';
@@ -1061,13 +1083,15 @@ const TOOL_SCHEMAS = [
         function: {
             name: 'leaderboard',
             description:
-                'Rank consultants or teams by a metric (achievement rate, meetings, commitments, admissions closed, revenue).',
+                'Rank consultants or teams by a metric. metric="revenue" ranks by real booked revenue (Student.courseFee, LUC) — use it for "top by revenue". Pass teamName to rank consultants WITHIN one team (e.g. top consultant in Team Anousha), or consultantName to focus one person.',
             parameters: {
                 type: 'object',
                 properties: {
                     metric: { type: 'string', enum: ['achievement', 'meetings', 'commitments', 'closed', 'revenue'], default: 'achievement' },
                     scope: { type: 'string', enum: ['consultant', 'team'], default: 'consultant' },
                     organization: { type: 'string' },
+                    teamName: { type: 'string', description: 'Restrict the ranking to ONE team (e.g. "Team Anousha"). Use scope:"consultant" + teamName to rank that team\'s consultants.' },
+                    consultantName: { type: 'string', description: 'Restrict to ONE consultant.' },
                     startDate: { type: 'string' },
                     endDate: { type: 'string' },
                     limit: { type: 'number', default: 10 },
