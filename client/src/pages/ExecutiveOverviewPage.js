@@ -543,15 +543,19 @@ const ExecutiveOverviewPage = () => {
                                 </Typography>
                                 <EChart
                                     height={300}
-                                    option={barOption({
-                                        categories: data.teamsYtd.map((t) => t.teamName.replace('Team ', '')),
-                                        valueFormatter: compactCurrencyFmt,
-                                        rotateLabels: 38,
-                                        series: [
-                                            { name: 'YTD Target', data: data.teamsYtd.map((t) => t.ytdTarget), color: '#C8C4BB' },
-                                            { name: 'YTD Achieved', data: data.teamsYtd.map((t) => t.ytdAchieved), color: '#1F7A35' },
-                                        ],
-                                    })}
+                                    option={(() => {
+                                        // Highest YTD target first, always.
+                                        const sorted = [...data.teamsYtd].sort((a, b) => b.ytdTarget - a.ytdTarget);
+                                        return barOption({
+                                            categories: sorted.map((t) => t.teamName.replace('Team ', '')),
+                                            valueFormatter: compactCurrencyFmt,
+                                            rotateLabels: 38,
+                                            series: [
+                                                { name: 'YTD Target', data: sorted.map((t) => t.ytdTarget), color: '#C8C4BB' },
+                                                { name: 'YTD Achieved', data: sorted.map((t) => t.ytdAchieved), color: '#1F7A35' },
+                                            ],
+                                        });
+                                    })()}
                                 />
                             </Paper>
                         </Grid>
@@ -562,16 +566,23 @@ const ExecutiveOverviewPage = () => {
                                 </Typography>
                                 <EChart
                                     height={300}
-                                    option={barOption({
-                                        horizontal: true,
-                                        barLabelFormatter: '{c}%',
-                                        categories: [...data.consultants].slice(0, 8).map((c) => c.name),
-                                        series: [{
-                                            name: 'YTD %',
-                                            data: [...data.consultants].slice(0, 8).map((c) => Math.round(c.ytdPercent * 100)),
-                                            color: '#6E40C9',
-                                        }],
-                                    })}
+                                    option={(() => {
+                                        // A distinct colour per bar.
+                                        const COLORS = ['#2383E2', '#1F7A35', '#6E40C9', '#D9730D', '#0E9F9F', '#C0392B', '#E6A817', '#DB2777'];
+                                        const top = [...data.consultants].slice(0, 8);
+                                        return barOption({
+                                            horizontal: true,
+                                            barLabelFormatter: '{c}%',
+                                            categories: top.map((c) => c.name),
+                                            series: [{
+                                                name: 'YTD %',
+                                                data: top.map((c, i) => ({
+                                                    value: Math.round(c.ytdPercent * 100),
+                                                    itemStyle: { color: COLORS[i % COLORS.length] },
+                                                })),
+                                            }],
+                                        });
+                                    })()}
                                 />
                             </Paper>
                         </Grid>
