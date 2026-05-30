@@ -16,7 +16,7 @@ export default function TierImageView({ data }) {
     const tiers = [...(data.tiers || [])].sort((a, b) => a.tier - b.tier);
     const lead = tiers.reduce((m, t) => (t.mtdAchieved > (m?.mtdAchieved ?? -1) ? t : m), null);
     return (
-        <Box sx={{ position: 'relative', width: '100%', borderRadius: '14px', overflow: 'hidden', boxShadow: 4, aspectRatio: '1792 / 1024', bgcolor: '#0b1020' }}>
+        <Box sx={{ position: 'relative', width: '100%', borderRadius: '14px', overflow: 'hidden', boxShadow: 4, aspectRatio: '1536 / 1024', bgcolor: '#0b1020' }}>
             <Box component="img" src={data.image} alt="Tier standings" sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.5) 100%)' }} />
             <Box sx={{ position: 'absolute', top: '4%', left: 0, right: 0, textAlign: 'center', px: 2 }}>

@@ -29,11 +29,10 @@ async function generateScene() {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
     const result = await client.images.generate({
-        model: 'dall-e-3',
+        model: 'gpt-image-1-mini',
         prompt: buildPrompt(theme),
-        size: '1792x1024',
-        quality: 'standard',
-        n: 1,
+        size: '1536x1024',
+        quality: 'low',
     });
     const item = result.data[0];
     let dataUrl;
