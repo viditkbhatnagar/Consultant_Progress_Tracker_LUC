@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Typography, Button, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Button, Snackbar, Alert, IconButton } from '@mui/material';
 import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { useAuth } from '../context/AuthContext';
 import { onSocketEvents, onSocketConnect } from '../services/socket';
 import announcementService from '../services/announcementService';
@@ -150,6 +151,14 @@ export default function AnnouncementBanner() {
                 >
                     Got it
                 </Button>
+                <IconButton
+                    size="small"
+                    aria-label="Dismiss announcement"
+                    onClick={() => dismiss(top._id)}
+                    sx={{ color: '#fff', flexShrink: 0, ml: 0.25, '&:hover': { bgcolor: 'rgba(255,255,255,0.18)' } }}
+                >
+                    <CloseRoundedIcon fontSize="small" />
+                </IconButton>
             </Box>
             {toastEl}
         </>
