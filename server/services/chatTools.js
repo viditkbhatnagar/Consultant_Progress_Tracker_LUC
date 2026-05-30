@@ -546,9 +546,16 @@ async function getRevenue({ startDate, endDate, organization, teamName, consulta
     // Team / consultant scope (denormalized string fields on both Commitment
     // and Student). WITHOUT this, a "revenue for Team X" question silently
     // returns the WHOLE ORG — the #1 source of wrong chatbot numbers.
+    // Guard: ignore non-specific values ("all", "all teams", "everyone", …) so
+    // an org-wide question isn't filtered to a non-existent team (→ AED 0).
+    const GENERIC = new Set([
+        'all', 'all teams', 'all team', 'every team', 'everyone', 'all consultants',
+        'all consultant', 'team', 'teams', 'org', 'organization', 'company', 'overall', 'total', 'everybody',
+    ]);
+    const isSpecific = (v) => v && !GENERIC.has(String(v).trim().toLowerCase());
     const teamScope = {};
-    if (teamName) teamScope.teamName = icontains(teamName);
-    if (consultantName) teamScope.consultantName = icontains(consultantName);
+    if (isSpecific(teamName)) teamScope.teamName = icontains(teamName);
+    if (isSpecific(consultantName)) teamScope.consultantName = icontains(consultantName);
 
     const scopeLuc =
         !organization || organization === 'all' || organization === 'luc';
@@ -1126,7 +1133,7 @@ const TOOL_SCHEMAS = [
                     },
                     teamName: {
                         type: 'string',
-                        description: 'Scope to ONE team, e.g. "Team Tony". REQUIRED whenever the user names a team — without it the answer is the whole org, not the team.',
+                        description: 'Scope to ONE specific team, e.g. "Team Tony". REQUIRED whenever the user names a team. OMIT for org-wide / "all teams" / total questions — do NOT pass "all" or "all teams" here.',
                     },
                     consultantName: {
                         type: 'string',

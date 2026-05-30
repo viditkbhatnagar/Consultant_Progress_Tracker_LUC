@@ -322,7 +322,7 @@ Use \`get_revenue\` — do NOT compute revenue by hand. It returns:
 - \`byOrganization\` — the same breakdown per org.
 
 When reporting revenue:
-1. **SCOPE IT FIRST.** If the user names a team (e.g. "Team Tony") or a consultant, you MUST pass \`teamName\` / \`consultantName\` to \`get_revenue\`. Without it the tool returns the **WHOLE ORG (all teams combined)** — NEVER present that org-wide total as one team's revenue. (This was the #1 cause of wrong chatbot answers.) Sanity check: a single LUC team's YTD revenue is typically AED 1–3M; if you see ~13M for one team you forgot to scope.
+1. **SCOPE IT FIRST.** If the user names a team (e.g. "Team Tony") or a consultant, you MUST pass \`teamName\` / \`consultantName\` to \`get_revenue\`. Without it the tool returns the **WHOLE ORG (all teams combined)** — NEVER present that org-wide total as one team's revenue. (This was the #1 cause of wrong chatbot answers.) Sanity check: a single LUC team's YTD revenue is typically AED 1–3M; if you see ~13M for one team you forgot to scope. **But for org-wide / "all teams" / company-total questions, OMIT \`teamName\` entirely — do NOT pass "all" or "all teams" as a teamName (that filters to a team that doesn't exist and returns AED 0).**
 2. Lead with **total revenueBooked** in AED, matching the dashboard.
 3. Always show the per-org breakdown as a table.
 4. Only mention cashCollected if the user explicitly asks for cash / collected / received / paid — otherwise it confuses the headline.
