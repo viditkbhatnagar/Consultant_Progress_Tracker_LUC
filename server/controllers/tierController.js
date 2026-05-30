@@ -2,6 +2,7 @@ const OpenAI = require('openai');
 const Tier = require('../models/Tier');
 const TierImage = require('../models/TierImage');
 const TeamMonthlyEntry = require('../models/TeamMonthlyEntry');
+const AIUsage = require('../models/AIUsage');
 const { emitToOrg } = require('../services/realtime');
 
 const MONTH_NAMES = [
@@ -9,28 +10,50 @@ const MONTH_NAMES = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-// Varied cartoon scene themes. The AI draws NO text — the exact tier labels and
-// amounts are overlaid as real text on the client, so they're always correct.
+// One scene theme PER DAY (cycles daily) — go-karts one day, mountain climb
+// the next, and so on. gpt-image-2 renders the title, amounts, taglines and
+// slogans crisply, so everything is baked into the image (no client overlay).
 const THEMES = [
-    'a high-energy cartoon go-kart race with three teams of cheering racers speeding toward a finish line, confetti everywhere, dynamic motion lines',
-    'a cartoon mountain-climbing race, three roped teams scrambling up a snowy peak toward a summit flag, bright blue sky',
-    'three cartoon rocket ships blasting off in a friendly space race toward a glowing planet, stars and fiery trails',
-    'a cartoon city marathon, three teams of runners sprinting down a sunny street toward a finish banner, motion and energy',
-    'a cartoon sailing regatta, three colourful sailboats racing across sparkling turquoise water toward a buoy',
-    'a cartoon stadium relay race, three teams sprinting and passing batons under bright stadium lights, a cheering crowd',
-    'a cartoon bicycle race, three teams of cyclists pedalling hard down a scenic road toward a checkered finish',
+    { key: 'gokart', scene: 'three teams racing colourful go-karts at top speed down a racetrack toward a checkered finish line, tyre smoke and speed lines' },
+    { key: 'mountain', scene: 'three teams of climbers scaling a tall snowy mountain toward a summit flag, ropes, ice axes and pure grit' },
+    { key: 'rowing', scene: 'three teams rowing colourful racing boats down a river toward a finish buoy, splashing water and synchronised oars' },
+    { key: 'relay', scene: 'three teams sprinting a stadium relay race, passing batons toward a finish banner under bright lights and a roaring crowd' },
+    { key: 'cycling', scene: 'three teams cycling hard up a scenic mountain road toward a checkered finish at the very top, jerseys flapping' },
+    { key: 'airrace', scene: 'three teams flying small colourful stunt planes in an air race through the clouds toward a glowing finish ring, vapour trails' },
+    { key: 'sailing', scene: 'three teams sailing colourful yachts across sparkling water toward a lighthouse finish, sails full and spray flying' },
+    { key: 'dunes', scene: 'three teams of runners in a desert dune marathon racing toward a finish flag at golden sunrise, sand kicking up' },
 ];
 
-function buildPrompt(theme) {
-    return `${theme}. Vibrant, bold comic-book / cartoon style, highly energetic and motivational, lots of dynamic action, speed and confetti. Three clearly distinct competing groups. Leave a clean, uncluttered horizontal band across the BOTTOM third of the image suitable for a scoreboard. IMPORTANT: do NOT render any text, letters, numbers, words, captions or logos anywhere in the image — imagery only.`;
+const TIER_TAGLINES = { 1: 'STRONG. FOCUSED. CLOSING THE GAP!', 2: 'IN THE RACE. ON THE MOVE!', 3: 'LEADING TODAY. INSPIRING EVERYDAY!' };
+const TIER_COLORS = { 1: 'GREEN', 2: 'BLUE', 3: 'GOLD/YELLOW' };
+
+// gpt-image-2 medium landscape (1536x1024) ≈ $0.041/image — for AI Usage cost tracking.
+const IMAGE_COST_USD = 0.041;
+
+function dailyTheme() {
+    const now = new Date();
+    const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+    const dayOfYear = Math.floor((now.getTime() - start) / 86400000);
+    return THEMES[dayOfYear % THEMES.length];
 }
 
-async function generateScene() {
+const grp = (n) => Number(n || 0).toLocaleString('en-US');
+
+function buildPrompt({ tiers, theme }) {
+    const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
+    const leader = [...tiers].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0))[0] || { tier: 3 };
+    const plaques = sorted
+        .map((t) => `a ${TIER_COLORS[t.tier]} scoreboard plaque reading "TIER ${t.tier}" with the big bold number "${grp(t.mtdAchieved)}" and below it the small tagline "${TIER_TAGLINES[t.tier] || ''}"`)
+        .join('; then ');
+    return `A vibrant, highly detailed comic-book / cartoon style motivational team-competition poster, landscape orientation. At the very top a huge bold 3D yellow-and-white title: "MONTH END RACE IS ON!". Just below it a small banner subtitle: "The finish line is near — every admission counts!". Main scene: ${theme.scene} — three teams of happy cheering cartoon characters, Tier 1 wearing GREEN, Tier 2 wearing BLUE, Tier 3 wearing GOLD/YELLOW, full of speed, confetti and motion. A shiny golden trophy near the top-right with a red flag reading "TIER ${leader.tier} LEADING THE WAY!". Across the bottom third, three large scoreboard plaques side by side: ${plaques}. A dark bottom strip with three motivational slogans "ONE TEAM. ONE GOAL.", "FINISH STRONG. FINISH TOGETHER.", "LET'S MAKE THIS OUR BEST MONTH YET!", and a bright red "LET'S GO!" starburst. Energetic, polished and professional. Render ALL text crisply and EXACTLY as written, with the tier numbers EXACTLY as given.`;
+}
+
+async function generateScene(tiers) {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+    const theme = dailyTheme();
     const result = await client.images.generate({
         model: 'gpt-image-2',
-        prompt: buildPrompt(theme),
+        prompt: buildPrompt({ tiers, theme }),
         size: '1536x1024',
         quality: 'medium',
     });
@@ -39,14 +62,13 @@ async function generateScene() {
     if (item.b64_json) {
         dataUrl = `data:image/png;base64,${item.b64_json}`;
     } else if (item.url) {
-        // dall-e-3 returns a (temporary) URL by default — fetch + inline it.
         const resp = await fetch(item.url);
         const buf = Buffer.from(await resp.arrayBuffer());
         dataUrl = `data:image/png;base64,${buf.toString('base64')}`;
     } else {
         throw new Error('OpenAI returned no image');
     }
-    return { theme, dataUrl };
+    return { theme: theme.key, dataUrl, usage: result.usage };
 }
 
 // Current MTD month = latest month with achieved revenue (mirrors the dashboard).
@@ -108,7 +130,7 @@ exports.generateImage = async (req, res, next) => {
         const { month, tiers } = await buildTiers(year);
         const snapshot = tiers.map((t) => ({ tier: t.tier, label: t.label || `Tier ${t.tier}`, mtdAchieved: t.mtdAchieved }));
 
-        const { theme, dataUrl } = await generateScene();
+        const { theme, dataUrl, usage } = await generateScene(snapshot);
         const doc = await TierImage.create({
             organization: 'luc',
             image: dataUrl,
@@ -119,6 +141,32 @@ exports.generateImage = async (req, res, next) => {
             tiers: snapshot,
             generatedBy: req.user._id || req.user.id,
         });
+
+        // Track image-generation cost on the AI Usage dashboard. gpt-image-2
+        // bills input ($8/1M) + output ($30/1M) tokens; fall back to the flat
+        // per-image price if the SDK didn't return a usage block.
+        try {
+            const promptTokens = usage?.input_tokens || 0;
+            const completionTokens = usage?.output_tokens || 0;
+            const totalTokens = usage?.total_tokens || promptTokens + completionTokens;
+            const cost = totalTokens
+                ? (promptTokens / 1e6) * 8 + (completionTokens / 1e6) * 30
+                : IMAGE_COST_USD;
+            await AIUsage.create({
+                user: req.user._id || req.user.id,
+                role: req.user.role,
+                type: 'image',
+                teamName: req.user.teamName || '',
+                organization: req.user.organization || 'luc',
+                model: 'gpt-image-2',
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                cost,
+            });
+        } catch (logErr) {
+            console.error('[tiers] AI usage log failed:', logErr.message);
+        }
 
         // Light socket ping — clients fetch /latest-image (the image is large).
         emitToOrg('luc', 'tier-image', { _id: doc._id, month, year, monthName: MONTH_NAMES[month - 1] });

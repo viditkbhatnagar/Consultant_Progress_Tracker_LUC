@@ -331,27 +331,23 @@ exports.getUsageStats = async (req, res, next) => {
         const bucket = () => ({ calls: 0, tokens: 0, cost: 0 });
 
         // Totals + per-type totals
+        const round6 = (n) => Math.round(n * 1_000_000) / 1_000_000;
         const analysis = bucket();
         const chat = bucket();
+        const image = bucket();
         for (const r of norm) {
-            const b = r.type === 'chat' ? chat : analysis;
+            const b = r.type === 'chat' ? chat : r.type === 'image' ? image : analysis;
             b.calls += 1;
             b.tokens += r.totalTokens || 0;
             b.cost += r.cost || 0;
         }
         const summary = {
-            analysis: {
-                ...analysis,
-                cost: Math.round(analysis.cost * 1_000_000) / 1_000_000,
-            },
-            chat: {
-                ...chat,
-                cost: Math.round(chat.cost * 1_000_000) / 1_000_000,
-            },
-            totalCalls: analysis.calls + chat.calls,
-            totalTokens: analysis.tokens + chat.tokens,
-            totalCost:
-                Math.round((analysis.cost + chat.cost) * 1_000_000) / 1_000_000,
+            analysis: { ...analysis, cost: round6(analysis.cost) },
+            chat: { ...chat, cost: round6(chat.cost) },
+            image: { ...image, cost: round6(image.cost) },
+            totalCalls: analysis.calls + chat.calls + image.calls,
+            totalTokens: analysis.tokens + chat.tokens + image.tokens,
+            totalCost: round6(analysis.cost + chat.cost + image.cost),
         };
 
         // --- By Team ---
@@ -367,11 +363,18 @@ exports.getUsageStats = async (req, res, next) => {
                 chatCalls: 0,
                 chatTokens: 0,
                 chatCost: 0,
+                imageCalls: 0,
+                imageTokens: 0,
+                imageCost: 0,
             };
             if (r.type === 'chat') {
                 row.chatCalls += 1;
                 row.chatTokens += r.totalTokens || 0;
                 row.chatCost += r.cost || 0;
+            } else if (r.type === 'image') {
+                row.imageCalls += 1;
+                row.imageTokens += r.totalTokens || 0;
+                row.imageCost += r.cost || 0;
             } else {
                 row.analysisCalls += 1;
                 row.analysisTokens += r.totalTokens || 0;
@@ -382,8 +385,8 @@ exports.getUsageStats = async (req, res, next) => {
         const byTeam = [...teamMap.values()]
             .map((r) => ({
                 ...r,
-                totalCalls: r.analysisCalls + r.chatCalls,
-                totalCost: r.analysisCost + r.chatCost,
+                totalCalls: r.analysisCalls + r.chatCalls + r.imageCalls,
+                totalCost: r.analysisCost + r.chatCost + r.imageCost,
             }))
             .sort((a, b) => b.totalCost - a.totalCost);
 
@@ -397,10 +400,12 @@ exports.getUsageStats = async (req, res, next) => {
                 team: r.teamName || '—',
                 analysisCalls: 0,
                 chatCalls: 0,
+                imageCalls: 0,
                 tokens: 0,
                 cost: 0,
             };
             if (r.type === 'chat') row.chatCalls += 1;
+            else if (r.type === 'image') row.imageCalls += 1;
             else row.analysisCalls += 1;
             row.tokens += r.totalTokens || 0;
             row.cost += r.cost || 0;
@@ -419,10 +424,12 @@ exports.getUsageStats = async (req, res, next) => {
                 date: day,
                 analysisCalls: 0,
                 chatCalls: 0,
+                imageCalls: 0,
                 tokens: 0,
                 cost: 0,
             };
             if (r.type === 'chat') row.chatCalls += 1;
+            else if (r.type === 'image') row.imageCalls += 1;
             else row.analysisCalls += 1;
             row.tokens += r.totalTokens || 0;
             row.cost += r.cost || 0;

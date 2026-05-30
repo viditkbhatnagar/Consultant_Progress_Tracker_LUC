@@ -15,11 +15,11 @@ import {
 import {
     AttachMoney as MoneyIcon,
     Token as TokenIcon,
-    Analytics as AnalyticsIcon,
     History as HistoryIcon,
     ChatBubbleOutline as ChatIcon,
     AutoAwesome as AnalysisIcon,
     Groups as TeamIcon,
+    Palette as ImageGenIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import aiService from '../services/aiService';
@@ -51,7 +51,9 @@ const StatCard = ({ title, value, subtitle, icon: Icon, accent = 'accent' }) => 
             ? 'var(--d-warm, #D97706)'
             : accent === 'success'
                 ? 'var(--d-success, #16A34A)'
-                : 'var(--d-accent, #2383E2)';
+                : accent === 'violet'
+                    ? 'var(--d-violet, #7C3AED)'
+                    : 'var(--d-accent, #2383E2)';
     return (
         <Surface sx={{ flex: '1 1 220px', minWidth: 220 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
@@ -122,27 +124,27 @@ const fmtCost = (usd) => {
 };
 const fmtTokens = (n) => (n || 0).toLocaleString();
 
+const CHIP_BY_TYPE = {
+    chat: { label: 'Chatbot', icon: ChatIcon, bg: 'var(--d-warm-bg, rgba(217,119,6,0.08))', text: 'var(--d-warm-text, #B45309)', iconColor: 'var(--d-warm, #D97706)' },
+    image: { label: 'Image', icon: ImageGenIcon, bg: 'var(--d-violet-bg, rgba(124,58,237,0.10))', text: 'var(--d-violet-text, #6D28D9)', iconColor: 'var(--d-violet, #7C3AED)' },
+    analysis: { label: 'Analysis', icon: AnalysisIcon, bg: 'var(--d-accent-bg, rgba(35,131,226,0.08))', text: 'var(--d-accent-text, #1F6FBF)', iconColor: 'var(--d-accent, #2383E2)' },
+};
+
 const TypeChip = ({ type }) => {
-    const chat = type === 'chat';
+    const c = CHIP_BY_TYPE[type] || CHIP_BY_TYPE.analysis;
+    const Icon = c.icon;
     return (
         <Chip
-            icon={chat ? <ChatIcon sx={{ fontSize: 14 }} /> : <AnalysisIcon sx={{ fontSize: 14 }} />}
-            label={chat ? 'Chatbot' : 'Analysis'}
+            icon={<Icon sx={{ fontSize: 14 }} />}
+            label={c.label}
             size="small"
             sx={{
                 fontWeight: 600,
                 fontSize: 11,
                 height: 22,
-                backgroundColor: chat
-                    ? 'var(--d-warm-bg, rgba(217,119,6,0.08))'
-                    : 'var(--d-accent-bg, rgba(35,131,226,0.08))',
-                color: chat
-                    ? 'var(--d-warm-text, #B45309)'
-                    : 'var(--d-accent-text, #1F6FBF)',
-                '& .MuiChip-icon': {
-                    color: chat ? 'var(--d-warm, #D97706)' : 'var(--d-accent, #2383E2)',
-                    ml: '6px',
-                },
+                backgroundColor: c.bg,
+                color: c.text,
+                '& .MuiChip-icon': { color: c.iconColor, ml: '6px' },
             }}
         />
     );
@@ -232,6 +234,15 @@ const APICostPanel = () => {
                     </motion.div>
                     <motion.div variants={item} style={{ flex: '1 1 220px', minWidth: 220, display: 'flex' }}>
                         <StatCard
+                            title="Image Generation"
+                            value={summary.image?.calls || 0}
+                            subtitle={`gpt-image-2 · ${fmtCost(summary.image?.cost || 0)}`}
+                            icon={ImageGenIcon}
+                            accent="violet"
+                        />
+                    </motion.div>
+                    <motion.div variants={item} style={{ flex: '1 1 220px', minWidth: 220, display: 'flex' }}>
+                        <StatCard
                             title="Total Tokens"
                             value={fmtTokens(summary.totalTokens)}
                             subtitle="Across all AI features"
@@ -276,6 +287,8 @@ const APICostPanel = () => {
                                     <TableCell align="right">Analysis cost</TableCell>
                                     <TableCell align="right">Chatbot queries</TableCell>
                                     <TableCell align="right">Chatbot cost</TableCell>
+                                    <TableCell align="right">Images</TableCell>
+                                    <TableCell align="right">Image cost</TableCell>
                                     <TableCell align="right">Total cost</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -304,6 +317,8 @@ const APICostPanel = () => {
                                         <TableCell align="right" sx={numSx}>{fmtCost(t.analysisCost)}</TableCell>
                                         <TableCell align="right" sx={numSx}>{t.chatCalls}</TableCell>
                                         <TableCell align="right" sx={numSx}>{fmtCost(t.chatCost)}</TableCell>
+                                        <TableCell align="right" sx={numSx}>{t.imageCalls || 0}</TableCell>
+                                        <TableCell align="right" sx={numSx}>{fmtCost(t.imageCost)}</TableCell>
                                         <TableCell align="right" sx={{ ...numSx, fontWeight: 600 }}>
                                             {fmtCost(t.totalCost)}
                                         </TableCell>
@@ -338,6 +353,7 @@ const APICostPanel = () => {
                                     <TableCell>Team</TableCell>
                                     <TableCell align="right">Analysis queries</TableCell>
                                     <TableCell align="right">Chatbot queries</TableCell>
+                                    <TableCell align="right">Images</TableCell>
                                     <TableCell align="right">Tokens</TableCell>
                                     <TableCell align="right">Cost</TableCell>
                                 </TableRow>
@@ -377,6 +393,7 @@ const APICostPanel = () => {
                                         <TableCell>{u.team || '—'}</TableCell>
                                         <TableCell align="right" sx={numSx}>{u.analysisCalls || 0}</TableCell>
                                         <TableCell align="right" sx={numSx}>{u.chatCalls || 0}</TableCell>
+                                        <TableCell align="right" sx={numSx}>{u.imageCalls || 0}</TableCell>
                                         <TableCell align="right" sx={numSx}>{fmtTokens(u.tokens)}</TableCell>
                                         <TableCell align="right" sx={{ ...numSx, fontWeight: 600 }}>
                                             {fmtCost(u.cost)}
@@ -410,6 +427,7 @@ const APICostPanel = () => {
                                     <TableCell>Date</TableCell>
                                     <TableCell align="right">Analysis queries</TableCell>
                                     <TableCell align="right">Chatbot queries</TableCell>
+                                    <TableCell align="right">Images</TableCell>
                                     <TableCell align="right">Tokens</TableCell>
                                     <TableCell align="right">Cost</TableCell>
                                 </TableRow>
@@ -420,6 +438,7 @@ const APICostPanel = () => {
                                         <TableCell>{d.date}</TableCell>
                                         <TableCell align="right" sx={numSx}>{d.analysisCalls || 0}</TableCell>
                                         <TableCell align="right" sx={numSx}>{d.chatCalls || 0}</TableCell>
+                                        <TableCell align="right" sx={numSx}>{d.imageCalls || 0}</TableCell>
                                         <TableCell align="right" sx={numSx}>{fmtTokens(d.tokens)}</TableCell>
                                         <TableCell align="right" sx={{ ...numSx, fontWeight: 600 }}>
                                             {fmtCost(d.cost)}

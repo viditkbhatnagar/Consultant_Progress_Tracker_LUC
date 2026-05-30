@@ -20,7 +20,7 @@ const AIUsageSchema = new mongoose.Schema(
         // AI-analysis dashboard tool was the only consumer back then.
         type: {
             type: String,
-            enum: ['analysis', 'chat'],
+            enum: ['analysis', 'chat', 'image'],
             default: 'analysis',
             index: true,
         },
