@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box, Button, Typography, CircularProgress, Snackbar, Alert,
     FormControl, InputLabel, Select, MenuItem, TextField, Chip,
+    FormControlLabel, Checkbox,
 } from '@mui/material';
 import {
     AutoAwesome as GenerateIcon,
@@ -28,7 +29,9 @@ export default function TierBoard({ isAdmin = false, mode = 'light' }) {
     // Admin generation controls.
     const [themes, setThemes] = useState([]);
     const [themeKey, setThemeKey] = useState('');
-    const [thoughts, setThoughts] = useState('');
+    const [title, setTitle] = useState('');
+    const [message, setMessage] = useState('');
+    const [includeTiers, setIncludeTiers] = useState(true);
     const [imageFile, setImageFile] = useState(null);
 
     const load = useCallback(async () => {
@@ -56,7 +59,7 @@ export default function TierBoard({ isAdmin = false, mode = 'light' }) {
         setGenerating(true);
         setError('');
         try {
-            const res = await tierService.generateImage({ theme: themeKey, thoughts: thoughts.trim(), image: imageFile });
+            const res = await tierService.generateImage({ theme: themeKey, title: title.trim(), message: message.trim(), includeTiers, image: imageFile });
             setLatest(res.data);
             bumpData();
         } catch (e) {
@@ -70,6 +73,20 @@ export default function TierBoard({ isAdmin = false, mode = 'light' }) {
         <Box>
             {isAdmin ? (
                 <Box sx={{ mb: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <TextField
+                            size="small"
+                            label="Headline (optional — defaults to “TIER FIGHT IS ON!”)"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            inputProps={{ maxLength: 80 }}
+                            sx={{ flex: 1, minWidth: 280 }}
+                        />
+                        <FormControlLabel
+                            control={<Checkbox checked={includeTiers} onChange={(e) => setIncludeTiers(e.target.checked)} />}
+                            label="Include tier standings"
+                        />
+                    </Box>
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
                         <FormControl size="small" sx={{ minWidth: 210 }}>
                             <InputLabel>Scene</InputLabel>
@@ -94,11 +111,13 @@ export default function TierBoard({ isAdmin = false, mode = 'light' }) {
                     </Box>
                     <TextField
                         size="small"
-                        label="Your thoughts (optional — added onto the poster)"
-                        value={thoughts}
-                        onChange={(e) => setThoughts(e.target.value)}
+                        label="Message / inspirational text (optional — rendered onto the poster)"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
                         inputProps={{ maxLength: 240 }}
                         fullWidth
+                        multiline
+                        maxRows={2}
                     />
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Button variant="contained" startIcon={generating ? <CircularProgress size={16} color="inherit" /> : <GenerateIcon />} onClick={generate} disabled={generating}>

@@ -33,6 +33,12 @@ const THEMES = [
     { key: 'superhero', label: 'Superhero showdown', scene: 'three teams of cartoon superheroes flying and dashing toward a glowing city-rooftop finish, capes and energy trails' },
     { key: 'horse', label: 'Horse derby', scene: 'three teams galloping horses neck-and-neck down a derby track toward the finish post, turf flying' },
     { key: 'f1', label: 'Formula 1 race', scene: 'three teams racing sleek Formula 1 cars wheel-to-wheel around a grand-prix circuit, sparks and speed' },
+    // Non-competition / inspirational backdrops (good for general posters).
+    { key: 'celebration', label: 'Team celebration', scene: 'a joyful team celebrating together with confetti, balloons and raised arms in a bright hall' },
+    { key: 'sunrise', label: 'Sunrise / new dawn', scene: 'a hopeful sunrise over mountains with a person standing triumphantly on a peak, golden light' },
+    { key: 'summit', label: 'Reaching the summit', scene: 'a team reaching a mountain summit together at golden hour, a flag planted, arms raised in triumph' },
+    { key: 'fireworks', label: 'Fireworks celebration', scene: 'a dazzling fireworks display over a city skyline with a cheering crowd celebrating' },
+    { key: 'office', label: 'Office high-fives', scene: 'a happy modern office team giving high-fives and celebrating a win at their desks, warm light' },
 ];
 
 const TIER_TAGLINES = { 1: 'STRONG. FOCUSED. CLOSING THE GAP!', 2: 'IN THE FIGHT. ON THE MOVE!', 3: 'LEADING TODAY. INSPIRING EVERYDAY!' };
@@ -52,27 +58,41 @@ function pickTheme(key) {
 
 const grp = (n) => Number(n || 0).toLocaleString('en-US');
 
-function buildPrompt({ tiers, theme, thoughts, hasBaseImage }) {
-    const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
-    const leader = [...tiers].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0))[0] || { tier: 3 };
-    const plaques = sorted
-        .map((t) => `a ${TIER_COLORS[t.tier]} scoreboard plaque reading "TIER ${t.tier}" with the big bold number "${grp(t.mtdAchieved)}" and below it the small tagline "${TIER_TAGLINES[t.tier] || ''}"`)
-        .join('; then ');
-    const msg = thoughts && String(thoughts).trim() ? String(thoughts).trim().slice(0, 240) : '';
+// General poster prompt. Works for a tier-standings poster (includeTiers=true,
+// shows the live amounts) OR any custom message / inspirational poster
+// (includeTiers=false, just the headline + message + scene).
+function buildPrompt({ tiers, theme, title, message, hasBaseImage, includeTiers }) {
+    const heading = title && String(title).trim()
+        ? String(title).trim().slice(0, 80).toUpperCase()
+        : 'TIER FIGHT IS ON!';
+    const msg = message && String(message).trim() ? String(message).trim().slice(0, 240) : '';
     const subtitle = msg
         ? `Just below it a clean banner with this exact message: "${msg}".`
-        : `Just below it a small banner subtitle: "The fight for the top — every admission counts!".`;
+        : (includeTiers ? `Just below it a small banner subtitle: "The fight for the top — every admission counts!".` : '');
     const baseLine = hasBaseImage
-        ? 'Reimagine the people in the provided photo as the cheering cartoon team members competing in this scene, keeping their likeness recognisable. '
+        ? 'Reimagine the people in the provided photo as the cheering cartoon characters in this scene, keeping their likeness recognisable. '
         : '';
-    return `A vibrant, highly detailed comic-book / cartoon style motivational team-competition poster, landscape orientation. ${baseLine}At the very top a huge bold 3D yellow-and-white title: "TIER FIGHT IS ON!". ${subtitle} Main scene: ${theme.scene} — three teams of happy cheering cartoon characters, Tier 1 wearing GREEN, Tier 2 wearing BLUE, Tier 3 wearing GOLD/YELLOW, full of energy, confetti and motion. A shiny golden trophy near the top-right with a red flag reading "TIER ${leader.tier} LEADING THE FIGHT!". Across the bottom third, three large scoreboard plaques side by side: ${plaques}. A dark bottom strip with three motivational slogans "ONE TEAM. ONE GOAL.", "FIGHT TOGETHER. WIN TOGETHER.", "LET'S MAKE THIS OUR BEST PUSH YET!", and a bright red "LET'S GO!" starburst. Energetic, polished and professional. Render ALL text crisply and EXACTLY as written, with the tier numbers EXACTLY as given.`;
+
+    let sceneLine = `${theme.scene}, full of energy, warmth, confetti and motion.`;
+    let tierPart = '';
+    if (includeTiers && tiers && tiers.length) {
+        const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
+        const leader = [...tiers].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0))[0] || { tier: 3 };
+        const plaques = sorted
+            .map((t) => `a ${TIER_COLORS[t.tier]} scoreboard plaque reading "TIER ${t.tier}" with the big bold number "${grp(t.mtdAchieved)}" and below it the small tagline "${TIER_TAGLINES[t.tier] || ''}"`)
+            .join('; then ');
+        sceneLine = `${theme.scene} — three teams of happy cheering cartoon characters, Tier 1 wearing GREEN, Tier 2 wearing BLUE, Tier 3 wearing GOLD/YELLOW, full of energy, confetti and motion.`;
+        tierPart = ` A shiny golden trophy near the top-right with a red flag reading "TIER ${leader.tier} LEADING THE FIGHT!". Across the bottom third, three large scoreboard plaques side by side: ${plaques}.`;
+    }
+
+    return `A vibrant, highly detailed comic-book / cartoon style motivational poster, landscape orientation. ${baseLine}At the very top a huge bold 3D yellow-and-white title: "${heading}". ${subtitle} Main scene: ${sceneLine}${tierPart} A dark bottom strip with upbeat motivational slogans and a bright red "LET'S GO!" starburst. Energetic, polished and professional. Render ALL text crisply and EXACTLY as written${includeTiers ? ', with the tier numbers EXACTLY as given' : ''}.`;
 }
 
 async function generateScene(tiers, opts = {}) {
-    const { themeKey, thoughts, baseImageBuffer } = opts;
+    const { themeKey, title, message, baseImageBuffer, includeTiers } = opts;
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const theme = pickTheme(themeKey);
-    const prompt = buildPrompt({ tiers, theme, thoughts, hasBaseImage: !!baseImageBuffer });
+    const prompt = buildPrompt({ tiers, theme, title, message, hasBaseImage: !!baseImageBuffer, includeTiers });
 
     let result;
     if (baseImageBuffer) {
@@ -176,9 +196,18 @@ exports.generateImage = async (req, res, next) => {
         const { month, tiers } = await buildTiers(year);
         const snapshot = tiers.map((t) => ({ tier: t.tier, label: t.label || `Tier ${t.tier}`, mtdAchieved: t.mtdAchieved }));
 
+        // Generalised: an optional custom title + message let the admin make ANY
+        // poster / inspirational announcement, not just a tier-standings one.
+        // includeTiers (default true) controls whether the live tier amounts show.
+        const title = String(req.body?.title || '').trim();
+        const message = String(req.body?.message ?? req.body?.thoughts ?? '').trim();
+        const includeTiers = String(req.body?.includeTiers ?? 'true') !== 'false';
+
         const { theme, dataUrl, usage } = await generateScene(snapshot, {
             themeKey: req.body?.theme,
-            thoughts: req.body?.thoughts,
+            title,
+            message,
+            includeTiers,
             baseImageBuffer: req.file?.buffer,
         });
 
@@ -208,7 +237,7 @@ exports.generateImage = async (req, res, next) => {
             image: inlineFallback,
             s3Key: storedKey,
             theme,
-            headline: 'Tier Fight Is On!',
+            headline: title || 'Tier Fight Is On!',
             month,
             year,
             tiers: snapshot,
@@ -247,7 +276,7 @@ exports.generateImage = async (req, res, next) => {
         // Org-wide dismissable banner so EVERY user (not just the TL modal) is
         // alerted wherever they are in the app. Best-effort — never block the image.
         try {
-            await announceTierImage({ organization: 'luc', tiers: snapshot, monthName: MONTH_NAMES[month - 1], year, actorName: req.user.name });
+            await announceTierImage({ organization: 'luc', tiers: snapshot, monthName: MONTH_NAMES[month - 1], year, actorName: req.user.name, headline: title, message, includeTiers });
         } catch (annErr) {
             console.error('[tiers] announce failed:', annErr.message);
         }

@@ -17,7 +17,9 @@ const getImageHistory = async () => (await axios.get(`${API_URL}/images`)).data;
 const generateImage = async (opts = {}) => {
     const form = new FormData();
     if (opts.theme) form.append('theme', opts.theme);
-    if (opts.thoughts) form.append('thoughts', opts.thoughts);
+    if (opts.title) form.append('title', opts.title);
+    if (opts.message) form.append('message', opts.message);
+    if (opts.includeTiers !== undefined) form.append('includeTiers', String(opts.includeTiers));
     if (opts.image) form.append('image', opts.image);
     return (await axios.post(`${API_URL}/generate-image`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
