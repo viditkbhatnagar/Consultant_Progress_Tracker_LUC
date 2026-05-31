@@ -337,7 +337,7 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                                 sx={{ ...navItemSx, pl: 3 }}
                             >
                                 <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-                                <ListItemText primary="Month-End Race" />
+                                <ListItemText primary="Tier Fight" />
                             </ListItemButton>
                         </ListItem>
                     </List>

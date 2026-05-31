@@ -25,7 +25,7 @@ export default function TierPage() {
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <Typography sx={{ fontSize: 28, fontWeight: 800, color: 'var(--d-text, #191918)', lineHeight: 1.1 }}>
-                Month-End Race
+Tier Fight
             </Typography>
             <Typography sx={{ fontSize: 14, color: 'var(--d-text-3, #57564E)', mb: 2 }}>
                 Tier standings — {isAdmin ? 'generate & post a fresh image to everyone' : 'live tier leaderboard'}

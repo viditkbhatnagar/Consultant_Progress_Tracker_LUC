@@ -12,53 +12,77 @@ const MONTH_NAMES = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-// One scene theme PER DAY (cycles daily) — go-karts one day, mountain climb
-// the next, and so on. gpt-image-2 renders the title, amounts, taglines and
-// slogans crisply, so everything is baked into the image (no client overlay).
+// "Tier Fight" poster scenes. A theme is picked at RANDOM each generation
+// (dynamic + varied) unless the admin chooses one from the dropdown. THEMES is
+// also exposed to the client so the dropdown stays in sync. gpt-image-2 renders
+// the title, amounts, taglines and slogans crisply (baked in, no overlay).
 const THEMES = [
-    { key: 'gokart', scene: 'three teams racing colourful go-karts at top speed down a racetrack toward a checkered finish line, tyre smoke and speed lines' },
-    { key: 'mountain', scene: 'three teams of climbers scaling a tall snowy mountain toward a summit flag, ropes, ice axes and pure grit' },
-    { key: 'rowing', scene: 'three teams rowing colourful racing boats down a river toward a finish buoy, splashing water and synchronised oars' },
-    { key: 'relay', scene: 'three teams sprinting a stadium relay race, passing batons toward a finish banner under bright lights and a roaring crowd' },
-    { key: 'cycling', scene: 'three teams cycling hard up a scenic mountain road toward a checkered finish at the very top, jerseys flapping' },
-    { key: 'airrace', scene: 'three teams flying small colourful stunt planes in an air race through the clouds toward a glowing finish ring, vapour trails' },
-    { key: 'sailing', scene: 'three teams sailing colourful yachts across sparkling water toward a lighthouse finish, sails full and spray flying' },
-    { key: 'dunes', scene: 'three teams of runners in a desert dune marathon racing toward a finish flag at golden sunrise, sand kicking up' },
+    { key: 'gokart', label: 'Go-kart race', scene: 'three teams racing colourful go-karts at top speed down a racetrack toward a checkered finish line, tyre smoke and speed lines' },
+    { key: 'mountain', label: 'Mountain climb', scene: 'three teams of climbers scaling a tall snowy mountain toward a summit flag, ropes, ice axes and pure grit' },
+    { key: 'rowing', label: 'Boat / rowing race', scene: 'three teams rowing colourful racing boats down a river toward a finish buoy, splashing water and synchronised oars' },
+    { key: 'relay', label: 'Stadium relay', scene: 'three teams sprinting a stadium relay race, passing batons toward a finish banner under bright lights and a roaring crowd' },
+    { key: 'cycling', label: 'Cycling race', scene: 'three teams cycling hard up a scenic mountain road toward a checkered finish at the top, jerseys flapping' },
+    { key: 'airrace', label: 'Air race (planes)', scene: 'three teams flying small colourful stunt planes in an air race through the clouds toward a glowing finish ring, vapour trails' },
+    { key: 'sailing', label: 'Sailing race', scene: 'three teams sailing colourful yachts across sparkling water toward a lighthouse finish, sails full and spray flying' },
+    { key: 'dunes', label: 'Desert dune marathon', scene: 'three teams of runners in a desert dune marathon racing toward a finish flag at golden sunrise, sand kicking up' },
+    { key: 'space', label: 'Space rocket race', scene: 'three teams piloting colourful rockets in a space race toward a glowing planet, stars, asteroids and fiery trails' },
+    { key: 'dragonboat', label: 'Dragon-boat festival', scene: 'three teams paddling fierce decorated dragon boats in a festival race, drummers pounding and water spraying' },
+    { key: 'knights', label: 'Medieval tournament', scene: 'three teams as armoured knights charging and jousting in a grand medieval tournament arena, colourful banners and dust' },
+    { key: 'bobsled', label: 'Bobsled / snow race', scene: 'three teams hurtling down an icy bobsled track at breakneck speed, snow spray and motion blur' },
+    { key: 'jungle', label: 'Jungle obstacle race', scene: 'three teams swinging on vines and sprinting through a wild jungle obstacle course toward a finish gate' },
+    { key: 'superhero', label: 'Superhero showdown', scene: 'three teams of cartoon superheroes flying and dashing toward a glowing city-rooftop finish, capes and energy trails' },
+    { key: 'horse', label: 'Horse derby', scene: 'three teams galloping horses neck-and-neck down a derby track toward the finish post, turf flying' },
+    { key: 'f1', label: 'Formula 1 race', scene: 'three teams racing sleek Formula 1 cars wheel-to-wheel around a grand-prix circuit, sparks and speed' },
 ];
 
-const TIER_TAGLINES = { 1: 'STRONG. FOCUSED. CLOSING THE GAP!', 2: 'IN THE RACE. ON THE MOVE!', 3: 'LEADING TODAY. INSPIRING EVERYDAY!' };
+const TIER_TAGLINES = { 1: 'STRONG. FOCUSED. CLOSING THE GAP!', 2: 'IN THE FIGHT. ON THE MOVE!', 3: 'LEADING TODAY. INSPIRING EVERYDAY!' };
 const TIER_COLORS = { 1: 'GREEN', 2: 'BLUE', 3: 'GOLD/YELLOW' };
 
 // gpt-image-2 medium landscape (1536x1024) ≈ $0.041/image — for AI Usage cost tracking.
 const IMAGE_COST_USD = 0.041;
 
-function dailyTheme() {
-    const now = new Date();
-    const start = Date.UTC(now.getUTCFullYear(), 0, 0);
-    const dayOfYear = Math.floor((now.getTime() - start) / 86400000);
-    return THEMES[dayOfYear % THEMES.length];
+// Admin can force a theme; otherwise pick a RANDOM one for variety.
+function pickTheme(key) {
+    if (key) {
+        const found = THEMES.find((t) => t.key === key);
+        if (found) return found;
+    }
+    return THEMES[Math.floor(Math.random() * THEMES.length)];
 }
 
 const grp = (n) => Number(n || 0).toLocaleString('en-US');
 
-function buildPrompt({ tiers, theme }) {
+function buildPrompt({ tiers, theme, thoughts, hasBaseImage }) {
     const sorted = [...tiers].sort((a, b) => a.tier - b.tier);
     const leader = [...tiers].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0))[0] || { tier: 3 };
     const plaques = sorted
         .map((t) => `a ${TIER_COLORS[t.tier]} scoreboard plaque reading "TIER ${t.tier}" with the big bold number "${grp(t.mtdAchieved)}" and below it the small tagline "${TIER_TAGLINES[t.tier] || ''}"`)
         .join('; then ');
-    return `A vibrant, highly detailed comic-book / cartoon style motivational team-competition poster, landscape orientation. At the very top a huge bold 3D yellow-and-white title: "MONTH END RACE IS ON!". Just below it a small banner subtitle: "The finish line is near — every admission counts!". Main scene: ${theme.scene} — three teams of happy cheering cartoon characters, Tier 1 wearing GREEN, Tier 2 wearing BLUE, Tier 3 wearing GOLD/YELLOW, full of speed, confetti and motion. A shiny golden trophy near the top-right with a red flag reading "TIER ${leader.tier} LEADING THE WAY!". Across the bottom third, three large scoreboard plaques side by side: ${plaques}. A dark bottom strip with three motivational slogans "ONE TEAM. ONE GOAL.", "FINISH STRONG. FINISH TOGETHER.", "LET'S MAKE THIS OUR BEST MONTH YET!", and a bright red "LET'S GO!" starburst. Energetic, polished and professional. Render ALL text crisply and EXACTLY as written, with the tier numbers EXACTLY as given.`;
+    const msg = thoughts && String(thoughts).trim() ? String(thoughts).trim().slice(0, 240) : '';
+    const subtitle = msg
+        ? `Just below it a clean banner with this exact message: "${msg}".`
+        : `Just below it a small banner subtitle: "The fight for the top — every admission counts!".`;
+    const baseLine = hasBaseImage
+        ? 'Reimagine the people in the provided photo as the cheering cartoon team members competing in this scene, keeping their likeness recognisable. '
+        : '';
+    return `A vibrant, highly detailed comic-book / cartoon style motivational team-competition poster, landscape orientation. ${baseLine}At the very top a huge bold 3D yellow-and-white title: "TIER FIGHT IS ON!". ${subtitle} Main scene: ${theme.scene} — three teams of happy cheering cartoon characters, Tier 1 wearing GREEN, Tier 2 wearing BLUE, Tier 3 wearing GOLD/YELLOW, full of energy, confetti and motion. A shiny golden trophy near the top-right with a red flag reading "TIER ${leader.tier} LEADING THE FIGHT!". Across the bottom third, three large scoreboard plaques side by side: ${plaques}. A dark bottom strip with three motivational slogans "ONE TEAM. ONE GOAL.", "FIGHT TOGETHER. WIN TOGETHER.", "LET'S MAKE THIS OUR BEST PUSH YET!", and a bright red "LET'S GO!" starburst. Energetic, polished and professional. Render ALL text crisply and EXACTLY as written, with the tier numbers EXACTLY as given.`;
 }
 
-async function generateScene(tiers) {
+async function generateScene(tiers, opts = {}) {
+    const { themeKey, thoughts, baseImageBuffer } = opts;
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const theme = dailyTheme();
-    const result = await client.images.generate({
-        model: 'gpt-image-2',
-        prompt: buildPrompt({ tiers, theme }),
-        size: '1536x1024',
-        quality: 'medium',
-    });
+    const theme = pickTheme(themeKey);
+    const prompt = buildPrompt({ tiers, theme, thoughts, hasBaseImage: !!baseImageBuffer });
+
+    let result;
+    if (baseImageBuffer) {
+        // Admin uploaded a base image — transform it into the Tier Fight scene.
+        const file = await OpenAI.toFile(baseImageBuffer, 'base.png', { type: 'image/png' });
+        result = await client.images.edit({ model: 'gpt-image-2', image: file, prompt, size: '1536x1024', quality: 'medium' });
+    } else {
+        result = await client.images.generate({ model: 'gpt-image-2', prompt, size: '1536x1024', quality: 'medium' });
+    }
+
     const item = result.data[0];
     let dataUrl;
     if (item.b64_json) {
@@ -135,7 +159,8 @@ exports.getTiers = async (req, res, next) => {
     try {
         const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
         const [base, trend] = await Promise.all([buildTiers(year), buildTierTrend(year)]);
-        res.json({ success: true, data: { ...base, trend } });
+        const themes = THEMES.map((t) => ({ key: t.key, label: t.label }));
+        res.json({ success: true, data: { ...base, trend, themes } });
     } catch (err) {
         next(err);
     }
@@ -151,7 +176,11 @@ exports.generateImage = async (req, res, next) => {
         const { month, tiers } = await buildTiers(year);
         const snapshot = tiers.map((t) => ({ tier: t.tier, label: t.label || `Tier ${t.tier}`, mtdAchieved: t.mtdAchieved }));
 
-        const { theme, dataUrl, usage } = await generateScene(snapshot);
+        const { theme, dataUrl, usage } = await generateScene(snapshot, {
+            themeKey: req.body?.theme,
+            thoughts: req.body?.thoughts,
+            baseImageBuffer: req.file?.buffer,
+        });
 
         // Archive the PNG to S3 under a date-structured key. Keep the base64
         // inline only as a fallback when S3 is unconfigured / the upload fails,
@@ -179,7 +208,7 @@ exports.generateImage = async (req, res, next) => {
             image: inlineFallback,
             s3Key: storedKey,
             theme,
-            headline: 'Month-End Race Is On!',
+            headline: 'Tier Fight Is On!',
             month,
             year,
             tiers: snapshot,

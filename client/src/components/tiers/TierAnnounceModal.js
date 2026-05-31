@@ -38,7 +38,7 @@ export default function TierAnnounceModal() {
     return (
         <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: '18px', overflow: 'hidden' } }}>
             <Box sx={{ bgcolor: '#C0392B', color: '#fff', textAlign: 'center', py: 1.75, position: 'relative' }}>
-                <Typography sx={{ fontWeight: 900, fontSize: 20, letterSpacing: '0.02em' }}>🏁 Month-End Race Update!</Typography>
+                <Typography sx={{ fontWeight: 900, fontSize: 20, letterSpacing: '0.02em' }}>🥊 Tier Fight Update!</Typography>
                 <IconButton onClick={() => setOpen(false)} aria-label="Close" sx={{ position: 'absolute', right: 8, top: 8, color: '#fff' }}>
                     <CloseIcon />
                 </IconButton>

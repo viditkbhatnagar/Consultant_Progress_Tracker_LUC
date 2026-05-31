@@ -12,8 +12,17 @@ const getLatestImage = async () => (await axios.get(`${API_URL}/latest-image`)).
 // Past tier images (newest first) for the date-wise history view.
 const getImageHistory = async () => (await axios.get(`${API_URL}/images`)).data;
 
-// Admin: generate a fresh tier-standings image (calls OpenAI server-side).
-const generateImage = async () => (await axios.post(`${API_URL}/generate-image`)).data;
+// Admin: generate a fresh Tier Fight image. Optional { theme, thoughts, image
+// (File) } ride along as multipart so an uploaded base image is supported.
+const generateImage = async (opts = {}) => {
+    const form = new FormData();
+    if (opts.theme) form.append('theme', opts.theme);
+    if (opts.thoughts) form.append('thoughts', opts.thoughts);
+    if (opts.image) form.append('image', opts.image);
+    return (await axios.post(`${API_URL}/generate-image`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })).data;
+};
 
 // Admin: replace a tier's member list (array of consultant ids).
 const updateTier = async (tier, members) => (await axios.put(`${API_URL}/${tier}`, { members })).data;

@@ -281,7 +281,7 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                         <ListItem disablePadding sx={{ mb: 0.5 }}>
                             <ListItemButton onClick={() => navigate('/tiers')} sx={{ ...navItemSx, pl: 3 }}>
                                 <ListItemIcon><RaceIcon sx={{ fontSize: 18 }} /></ListItemIcon>
-                                <ListItemText primary="Month-End Race" />
+                                <ListItemText primary="Tier Fight" />
                             </ListItemButton>
                         </ListItem>
                     </List>
