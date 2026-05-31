@@ -383,7 +383,9 @@ const TeamDetailPage = () => {
     // One month is shown at a time, chosen from a dropdown (defaults to the
     // current calendar month). Keeps the editable grid light (one month's
     // inputs instead of all 12) and matches the requested UX.
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getUTCMonth() + 1);
+    // Default to the CURRENT month (local time, so it matches the user's
+    // calendar — UTC could lag a day near month-end in the UAE's timezone).
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     // Team-lead's own row is hidden by default (counted in totals, never shown);
     // admin can flip this to reveal it for data entry.
     const [showHiddenLead, setShowHiddenLead] = useState(false);
