@@ -514,6 +514,33 @@ exports.updateStudent = async (req, res, next) => {
             }
         });
 
+        // ── Skillhub fields ─────────────────────────────────────────────
+        // The allow-list above is LUC-era and silently dropped every
+        // Skillhub-only field on edit — most visibly `registrationFee`, so a
+        // counselor could never correct a fee (the typed value was ignored
+        // and the previously stored number stuck, looking like "2-3 AED less
+        // every time"). Pass the Skillhub field set through for Skillhub
+        // students. Unknown keys are dropped by schema strictness, so this
+        // only ever writes real Student paths.
+        if (isSkillhub(student.organization)) {
+            const SKILLHUB_EDITABLE = [
+                'dob', 'phones', 'emails', 'addressEmirate', 'school',
+                'enrollmentNumber', 'curriculum', 'academicYear', 'yearOrGrade',
+                'subjects', 'mode', 'courseDuration', 'registrationFee', 'emis',
+                'leadSource', 'dateOfEnrollment',
+            ];
+            SKILLHUB_EDITABLE.forEach((field) => {
+                if (req.body[field] !== undefined) updateFields[field] = req.body[field];
+            });
+            // curriculumSlug is normally derived by a pre('validate') document
+            // hook, which findByIdAndUpdate does NOT run — derive it here when
+            // the curriculum changes so the CBSE/IGCSE bucket stays correct.
+            if (req.body.curriculum !== undefined) {
+                updateFields.curriculumSlug =
+                    String(req.body.curriculum).startsWith('IGCSE') ? 'IGCSE' : 'CBSE';
+            }
+        }
+
         // Recalculate conversion time and month if dates changed
         if (updateFields.enquiryDate && updateFields.closingDate) {
             const enquiry = new Date(updateFields.enquiryDate);
