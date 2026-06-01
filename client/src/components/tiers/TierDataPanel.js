@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, CircularProgress,
+    TableContainer, TableHead, TableRow, CircularProgress, Chip,
 } from '@mui/material';
 import tierService from '../../services/tierService';
 import EChart from '../charts/EChart';
-import { lineOption, compactCurrencyFmt } from '../charts/presets';
+import { lineOption, barOption, donutOption, compactCurrencyFmt } from '../charts/presets';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const TIER_META = {
@@ -14,10 +14,13 @@ const TIER_META = {
     3: { color: '#C99700', label: 'Tier 3' },
 };
 const fmtAED = (n) => `AED ${Number(n || 0).toLocaleString('en-US')}`;
+const tierLabel = (t) => t.label || TIER_META[t.tier]?.label || `Tier ${t.tier}`;
+const tierColor = (t) => TIER_META[t.tier]?.color || '#8A887E';
 
-// Below the poster: a 3-line month-by-month trend (one line per tier) plus a
-// per-tier table so the raw numbers behind the image are visible. Reloads when
-// `version` changes (admin generates / edits tiers).
+// Tier Fight data view. The per-tier standings tables come first, then a set of
+// visual breakdowns: tier totals (horizontal bar), each tier's share of the
+// combined MTD (donut), and a month-by-month trend (one line per tier).
+// Reloads when `version` changes (admin edits tiers).
 export default function TierDataPanel({ version = 0, mode = 'light' }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -33,7 +36,45 @@ export default function TierDataPanel({ version = 0, mode = 'light' }) {
         return () => { alive = false; };
     }, [version]);
 
-    const chartOpt = useMemo(() => {
+    const sortedTiers = useMemo(
+        () => (data?.tiers ? [...data.tiers].sort((a, b) => a.tier - b.tier) : []),
+        [data],
+    );
+
+    // Horizontal bar — total MTD per tier, colored per tier, value at bar end.
+    const barOpt = useMemo(() => {
+        if (!sortedTiers.length) return null;
+        return barOption({
+            categories: sortedTiers.map(tierLabel),
+            series: [{
+                name: 'MTD achieved',
+                data: sortedTiers.map((t) => ({
+                    value: Math.round(t.mtdAchieved || 0),
+                    itemStyle: { color: tierColor(t) },
+                })),
+            }],
+            horizontal: true,
+            barLabelFormatter: ({ value }) => `AED ${compactCurrencyFmt(value)}`,
+        });
+    }, [sortedTiers]);
+
+    // Donut — each tier's share of the combined MTD; center shows the total.
+    const donutOpt = useMemo(() => {
+        if (!sortedTiers.length) return null;
+        const total = sortedTiers.reduce((s, t) => s + (t.mtdAchieved || 0), 0);
+        if (total <= 0) return null;
+        return donutOption({
+            data: sortedTiers.map((t) => ({
+                name: tierLabel(t),
+                value: Math.round(t.mtdAchieved || 0),
+                color: tierColor(t),
+            })),
+            centerText: `AED ${compactCurrencyFmt(total)}`,
+        });
+    }, [sortedTiers]);
+
+    // Month-by-month trend — one line per tier.
+    const trendOpt = useMemo(() => {
         if (!data?.trend?.series?.length) return null;
         const categories = data.trend.months.map((m) => MONTHS[m - 1]);
         const series = data.trend.series.map((s) => ({
@@ -48,33 +89,33 @@ export default function TierDataPanel({ version = 0, mode = 'light' }) {
     if (loading && !data) {
         return <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={22} /></Box>;
     }
-    if (!data?.tiers?.length) return null;
+    if (!sortedTiers.length) return null;
 
-    const tiers = [...data.tiers].sort((a, b) => a.tier - b.tier);
-    const grand = tiers.reduce((s, t) => s + (t.mtdAchieved || 0), 0);
+    const grand = sortedTiers.reduce((s, t) => s + (t.mtdAchieved || 0), 0);
     const monthLabel = data.month ? `${MONTHS[data.month - 1]} ${data.year}` : data.year;
 
     return (
-        <Box sx={{ mt: 3 }}>
-            {/* 3-line trend chart */}
-            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mb: 3 }}>
-                <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1, color: 'var(--d-text, #191918)' }}>
-                    Tier performance — month by month · {data.year}
+        <Box>
+            {/* Header */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+                <Typography sx={{ fontSize: 18, fontWeight: 800, color: 'var(--d-text, #191918)' }}>
+                    Tier standings · {monthLabel}
                 </Typography>
-                {chartOpt
-                    ? <EChart height={320} option={chartOpt} mode={mode} />
-                    : <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted, #8A887E)' }}>No monthly data yet.</Typography>}
-            </Paper>
+                <Chip
+                    label={`Combined MTD: ${fmtAED(grand)}`}
+                    sx={{ fontWeight: 700, bgcolor: 'var(--d-surface-muted, #F1EFEA)', color: 'var(--d-text, #191918)' }}
+                />
+            </Box>
 
-            {/* Per-tier member tables */}
+            {/* 1 — Per-tier standings tables (first) */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
-                {tiers.map((t) => {
-                    const meta = TIER_META[t.tier] || TIER_META[1];
+                {sortedTiers.map((t) => {
+                    const color = tierColor(t);
                     const members = [...(t.members || [])].sort((a, b) => (b.mtdAchieved || 0) - (a.mtdAchieved || 0));
                     return (
-                        <Paper key={t.tier} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', borderTop: `3px solid ${meta.color}` }}>
+                        <Paper key={t.tier} variant="outlined" sx={{ borderRadius: '14px', overflow: 'hidden', borderTop: `3px solid ${color}` }}>
                             <Box sx={{ px: 2, py: 1.25, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1 }}>
-                                <Typography sx={{ fontSize: 15, fontWeight: 800, color: meta.color }}>{t.label || meta.label}</Typography>
+                                <Typography sx={{ fontSize: 15, fontWeight: 800, color }}>{tierLabel(t)}</Typography>
                                 <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'var(--d-text, #191918)', fontVariantNumeric: 'tabular-nums' }}>{fmtAED(t.mtdAchieved)}</Typography>
                             </Box>
                             <TableContainer>
@@ -108,9 +149,39 @@ export default function TierDataPanel({ version = 0, mode = 'light' }) {
                 })}
             </Box>
 
-            <Typography sx={{ mt: 1.5, fontSize: 13, fontWeight: 700, color: 'var(--d-text-muted, #8A887E)' }}>
-                Combined MTD across all tiers: {fmtAED(grand)}
+            {/* 2 — Visual breakdowns (below the tables) */}
+            <Typography sx={{ mt: 3, mb: 1.5, fontSize: 14, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--d-text-muted, #8A887E)' }}>
+                Visual breakdown
             </Typography>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.25fr 1fr' }, gap: 2 }}>
+                <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1, color: 'var(--d-text, #191918)' }}>
+                        Tier totals · {monthLabel}
+                    </Typography>
+                    {barOpt
+                        ? <EChart height={220} option={barOpt} mode={mode} />
+                        : <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted, #8A887E)' }}>No tier totals yet.</Typography>}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1, color: 'var(--d-text, #191918)' }}>
+                        Share of combined MTD
+                    </Typography>
+                    {donutOpt
+                        ? <EChart height={220} option={donutOpt} mode={mode} />
+                        : <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted, #8A887E)' }}>No achievement to split yet.</Typography>}
+                </Paper>
+            </Box>
+
+            <Paper variant="outlined" sx={{ borderRadius: '14px', p: 2, mt: 2 }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1, color: 'var(--d-text, #191918)' }}>
+                    Tier performance — month by month · {data.year}
+                </Typography>
+                {trendOpt
+                    ? <EChart height={320} option={trendOpt} mode={mode} />
+                    : <Typography sx={{ fontSize: 13, color: 'var(--d-text-muted, #8A887E)' }}>No monthly data yet.</Typography>}
+            </Paper>
         </Box>
     );
 }
