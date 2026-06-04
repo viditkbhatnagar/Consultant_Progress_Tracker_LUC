@@ -32,6 +32,28 @@ function leaderboardConsultantScope(req) {
     return buildScopeFilter(req);
 }
 
+// A team lead's "self-consultant" is a Consultant doc named after the lead
+// (the row where their personal sales land — see fixTeamLeadSelfConsultants.js).
+// Those rows must never surface in the Hourly Tracker: not in the grid, the AI
+// analysis, or the leaderboards. Identify them the same way that script does —
+// the consultant's name equals its team lead's name (case-insensitive, trimmed).
+// Requires `teamLead` to be populated with `name`; unpopulated docs are treated
+// as normal consultants.
+function isTeamLeadSelfConsultant(consultant) {
+    const leadName = consultant && consultant.teamLead && consultant.teamLead.name;
+    if (!leadName || !consultant.name) return false;
+    return consultant.name.trim().toLowerCase() === leadName.trim().toLowerCase();
+}
+
+// Drop team-lead self-consultant rows from a populated consultant list.
+function excludeSelfConsultants(consultants) {
+    return consultants.filter((c) => !isTeamLeadSelfConsultant(c));
+}
+
+// Exported for unit testing the Hourly Tracker self-consultant guard.
+exports.isTeamLeadSelfConsultant = isTeamLeadSelfConsultant;
+exports.excludeSelfConsultants = excludeSelfConsultants;
+
 let openai;
 const getOpenAIClient = () => {
     if (!openai) {
@@ -222,7 +244,12 @@ exports.getConsultants = async (req, res, next) => {
             .populate('teamLead', 'name teamName')
             .sort('name');
 
-        res.status(200).json({ success: true, data: consultants });
+        // Hide team-lead self-consultant rows (name === their lead's name) from
+        // the tracker grid — they hold the lead's personal sales and are not
+        // meant to be tracked hourly.
+        const visibleConsultants = excludeSelfConsultants(consultants);
+
+        res.status(200).json({ success: true, data: visibleConsultants });
     } catch (error) {
         next(error);
     }
@@ -1071,7 +1098,9 @@ exports.getAIAnalysis = async (req, res, next) => {
 
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
         const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
-        const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
+        const consultants = excludeSelfConsultants(
+            await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName')
+        );
 
         if (isSkillhub(viewOrg)) {
             return await runSkillhubAnalysis(req, res, {
@@ -1297,7 +1326,9 @@ exports.getLeaderboard = async (req, res, next) => {
         const viewOrg = resolveViewOrg(req);
         const activities = await HourlyActivity.find({ ...scope, date: dateObj, isContinuation: { $ne: true } });
         const dayAdmissions = await DailyAdmission.find({ ...scope, date: dateObj });
-        const consultants = await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName');
+        const consultants = excludeSelfConsultants(
+            await Consultant.find({ ...consultantScope, isActive: true }).populate('teamLead', 'name teamName')
+        );
 
         if (isSkillhub(viewOrg)) {
             return await runSkillhubLeaderboard(req, res, {
@@ -1605,10 +1636,12 @@ exports.getWeeklyLeaderboard = async (req, res, next) => {
             ...scope,
             date: { $gte: start, $lte: end },
         });
-        const consultants = await Consultant.find({
-            ...consultantScope,
-            isActive: true,
-        }).populate('teamLead', 'name teamName');
+        const consultants = excludeSelfConsultants(
+            await Consultant.find({
+                ...consultantScope,
+                isActive: true,
+            }).populate('teamLead', 'name teamName')
+        );
 
         if (isSkillhub(viewOrg)) {
             return await runSkillhubWeeklyLeaderboard(req, res, {
