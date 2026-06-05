@@ -4,12 +4,13 @@ import { Box, Typography } from '@mui/material';
 // Single-hue → rgba for the heatmap intensity (ECharts-free, pure CSS grid).
 const heatRgba = (a) => `rgba(35, 131, 226, ${a})`;
 
-// Program × Month admissions heatmap. Rows = programs (AGI excluded), columns =
-// months, cell colour scales with the admissions count. Used on the Leadership
-// Dashboard and the All Teams page. `rows` is [{ program, monthly:[12], isAgi }];
-// `months` is a 12-length array of short month labels.
+// Program × Month admissions heatmap. Rows = programs (separately-tracked
+// buckets like KHDA + AGI excluded), columns = months, cell colour scales with
+// the admissions count. Used on the Leadership Dashboard and the All Teams page.
+// `rows` is [{ program, monthly:[12], excludedFromTotal }]; `months` is a
+// 12-length array of short month labels.
 const ProgramMonthHeatmap = ({ rows, months }) => {
-    const data = (rows || []).filter((r) => !r.isAgi);
+    const data = (rows || []).filter((r) => !r.excludedFromTotal);
     const maxCount = data.reduce((mx, r) => Math.max(mx, ...r.monthly.map((v) => v || 0)), 0);
     if (data.length === 0) {
         return (

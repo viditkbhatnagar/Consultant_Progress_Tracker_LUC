@@ -70,7 +70,7 @@ async function seed() {
             organization: 'luc', teamLead: tonyId, consultant: elizabethId,
             consultantName: 'Elizabeth', year: 2025, month: 2,
             monthlyTarget: 110000, achievedRevenue: 100000,
-            agi: 4, knights_mba: 2, knights_bba: 2,
+            agi: 4, khda: 5, knights_mba: 2, knights_bba: 2,
         },
     ]);
 }
@@ -97,14 +97,15 @@ describe('getTeamDetail', () => {
         expect(jan.teamTotal.totalAdmissions).toBe(7 + 8); // Swetha: 2+2+3+1=8
     });
 
-    test('AGI counts in its column but never in totalAdmissions', async () => {
+    test('AGI and KHDA count in their columns but never in totalAdmissions', async () => {
         await seed();
         const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
         const feb = out.months[1];
         const elizabethFeb = feb.members.find((m) => m.consultantName === 'Elizabeth');
-        // Feb: knights_mba=2 + knights_bba=2 = 4 (agi=4 stays out of total).
+        // Feb: knights_mba=2 + knights_bba=2 = 4 (agi=4 and khda=5 stay out of total).
         expect(elizabethFeb.totalAdmissions).toBe(4);
         expect(elizabethFeb.buckets['AGI']).toBe(4);
+        expect(elizabethFeb.buckets['KHDA']).toBe(5);
         expect(elizabethFeb.buckets['KNIGHTS MBA']).toBe(2);
     });
 
@@ -164,15 +165,23 @@ describe('getExecutiveOverview', () => {
         expect(out.kpi.ytdAchieved).toBe(417000 + 100000);
     });
 
-    test('program × month matrix uses bucket slugs server-side and excludes AGI from grand total', async () => {
+    test('program × month matrix excludes AGI and KHDA from grand total', async () => {
         await seed();
         const out = await getExecutiveOverview({ year: 2025 });
         const agi = out.programs.find((p) => p.program === 'AGI');
         expect(agi.isAgi).toBe(true);
+        expect(agi.excludedFromTotal).toBe(true);
         expect(agi.ytdTotal).toBe(4);
         expect(agi.share).toBeNull();
 
-        // Grand total YTD = sum of all program buckets (excluding AGI/AGI Std).
+        // KHDA is tracked in its own column but excluded from the grand total.
+        const khda = out.programs.find((p) => p.program === 'KHDA');
+        expect(khda.excludedFromTotal).toBe(true);
+        expect(khda.isAgi).toBe(false);
+        expect(khda.ytdTotal).toBe(5);
+        expect(khda.share).toBeNull();
+
+        // Grand total YTD = sum of program buckets only (AGI + KHDA excluded).
         // Jan: knights_mba=4+3=7, dba=3+1=4, ssm_mba=2, ssm_bba=2 → 15
         // Feb: knights_mba=2, knights_bba=2 → 4
         // Grand = 19.
@@ -203,20 +212,26 @@ describe('getTeamDetail — memberWiseRevenue + consolidatedAdmissions', () => {
         expect(eliz.ytdPercent).toBeCloseTo(308000 / 220000, 4);
     });
 
-    test('consolidatedAdmissions: program×month with AGI listed but excluded from Total Admissions', async () => {
+    test('consolidatedAdmissions: KHDA + AGI listed first but excluded from Total Admissions', async () => {
         await seed();
         const out = await getTeamDetail({ teamLeadId: tonyId, year: 2025 });
         const ca = out.consolidatedAdmissions;
-        // AGI rows come first.
-        expect(ca.rows[0].program).toBe('AGI');
-        expect(ca.rows[0].isAgi).toBe(true);
+        // Excluded buckets come first, KHDA before AGI.
+        expect(ca.rows[0].program).toBe('KHDA');
+        expect(ca.rows[0].excludedFromTotal).toBe(true);
+        expect(ca.rows[0].isAgi).toBe(false);
+        expect(ca.rows[1].program).toBe('AGI');
+        // KHDA total = 5 (Feb), tracked in its own column.
+        const khda = ca.rows.find((r) => r.program === 'KHDA');
+        expect(khda.total).toBe(5);
         // KNIGHTS MBA total = Jan 4+3=7 + Feb 2 = 9.
         const km = ca.rows.find((r) => r.program === 'KNIGHTS MBA');
         expect(km.total).toBe(9);
         // AGI total = 4 (Feb).
         const agi = ca.rows.find((r) => r.program === 'AGI');
         expect(agi.total).toBe(4);
-        // Total Admissions Jan = 7 (Eliz) + 8 (Swetha) = 15; Feb = 4 (AGI excluded).
+        expect(agi.excludedFromTotal).toBe(true);
+        // Total Admissions Jan = 7 (Eliz) + 8 (Swetha) = 15; Feb = 4 (AGI + KHDA excluded).
         expect(ca.totalAdmissions.monthly[0]).toBe(15);
         expect(ca.totalAdmissions.monthly[1]).toBe(4);
         expect(ca.totalAdmissions.total).toBe(19);

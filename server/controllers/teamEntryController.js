@@ -258,12 +258,15 @@ exports.deleteEntry = async (req, res, next) => {
 // Re-export bucket meta so the client can ask the server for the
 // canonical column order without hard-coding it.
 exports.getBucketMeta = (req, res) => {
-    const { PROGRAM_BUCKETS, AGI_BUCKETS } = require('../services/execOverview/bucketing');
+    const { PROGRAM_BUCKETS, AGI_BUCKETS, KHDA_BUCKETS, EXCLUDED_BUCKETS, ALL_BUCKETS } = require('../services/execOverview/bucketing');
     res.status(200).json({
         success: true,
         data: {
+            buckets: ALL_BUCKETS,
             programBuckets: PROGRAM_BUCKETS,
             agiBuckets: AGI_BUCKETS,
+            khdaBuckets: KHDA_BUCKETS,
+            excludedBuckets: EXCLUDED_BUCKETS,
             bucketSlugs: BUCKET_SLUGS,
         },
     });

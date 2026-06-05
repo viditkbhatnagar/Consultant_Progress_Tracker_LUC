@@ -1,8 +1,8 @@
 // Program bucketing for the Executive Overview / Team Detail dashboards.
 //
-// The Excel groups every (university, program) combination into one of 16
-// buckets: 14 program buckets (counted toward Total Admissions) and 2 AGI
-// buckets (tracked separately, NEVER counted toward totals).
+// The Excel groups every (university, program) combination into program
+// buckets: 14 counted toward Total Admissions, plus separately-tracked
+// buckets (KHDA + 2 AGI) that are NEVER counted toward totals.
 //
 // Bucket order matches the column order in the source Excel
 // (DASHBOARD_changes.xlsx) so the UI can render columns identically.
@@ -26,7 +26,15 @@ const PROGRAM_BUCKETS = [
 
 const AGI_BUCKETS = ['AGI', 'AGI Standalone'];
 
-const ALL_BUCKETS = [...PROGRAM_BUCKETS, ...AGI_BUCKETS];
+// KHDA — a separately-counted bucket like AGI: tracked in its own column but
+// NEVER added to Total Admissions. Manual entry only (bucketProgram never
+// classifies a student into KHDA; it's filled by hand in the team tables).
+const KHDA_BUCKETS = ['KHDA'];
+
+// Buckets excluded from Total Admissions, in display order (KHDA before AGI).
+const EXCLUDED_BUCKETS = [...KHDA_BUCKETS, ...AGI_BUCKETS];
+
+const ALL_BUCKETS = [...PROGRAM_BUCKETS, ...EXCLUDED_BUCKETS];
 
 // Stable slugs for use as Mongoose field names + JSON keys. Several of
 // the display names contain characters (space, +, comma) that don't
@@ -46,6 +54,7 @@ const BUCKET_SLUGS = {
     'OTHM Ext L5': 'othm_ext_l5',
     'OTHM-4,5': 'othm_4_5',
     'OTHM-6': 'othm_6',
+    'KHDA': 'khda',
     'AGI': 'agi',
     'AGI Standalone': 'agi_standalone',
 };
@@ -54,13 +63,20 @@ const SLUG_TO_BUCKET = Object.fromEntries(
 );
 const PROGRAM_SLUGS = PROGRAM_BUCKETS.map((b) => BUCKET_SLUGS[b]);
 const AGI_SLUGS = AGI_BUCKETS.map((b) => BUCKET_SLUGS[b]);
-const ALL_SLUGS = [...PROGRAM_SLUGS, ...AGI_SLUGS];
+const KHDA_SLUGS = KHDA_BUCKETS.map((b) => BUCKET_SLUGS[b]);
+const EXCLUDED_SLUGS = [...KHDA_SLUGS, ...AGI_SLUGS];
+const ALL_SLUGS = [...PROGRAM_SLUGS, ...EXCLUDED_SLUGS];
 
 const bucketToSlug = (bucket) => BUCKET_SLUGS[bucket] || null;
 const slugToBucket = (slug) => SLUG_TO_BUCKET[slug] || null;
 
 const isAgiBucket = (bucket) => AGI_BUCKETS.includes(bucket);
 const isAgiSlug = (slug) => AGI_SLUGS.includes(slug);
+const isKhdaBucket = (bucket) => KHDA_BUCKETS.includes(bucket);
+const isKhdaSlug = (slug) => KHDA_SLUGS.includes(slug);
+// "Excluded" = tracked separately, never summed into Total Admissions (KHDA + AGI).
+const isExcludedBucket = (bucket) => EXCLUDED_BUCKETS.includes(bucket);
+const isExcludedSlug = (slug) => EXCLUDED_SLUGS.includes(slug);
 
 // Lowercase normalization helper. Trims, collapses whitespace, removes the
 // "diploma" word so "OTHM Diploma Level 7" and "Level 7" both reduce to
@@ -132,14 +148,22 @@ function bucketProgram({ university, program } = {}) {
 module.exports = {
     PROGRAM_BUCKETS,
     AGI_BUCKETS,
+    KHDA_BUCKETS,
+    EXCLUDED_BUCKETS,
     ALL_BUCKETS,
     BUCKET_SLUGS,
     PROGRAM_SLUGS,
     AGI_SLUGS,
+    KHDA_SLUGS,
+    EXCLUDED_SLUGS,
     ALL_SLUGS,
     bucketToSlug,
     slugToBucket,
     isAgiBucket,
     isAgiSlug,
+    isKhdaBucket,
+    isKhdaSlug,
+    isExcludedBucket,
+    isExcludedSlug,
     bucketProgram,
 };

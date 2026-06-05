@@ -12,12 +12,15 @@ const TeamMonthlyEntry = require('../../models/TeamMonthlyEntry');
 const {
     PROGRAM_BUCKETS,
     AGI_BUCKETS,
+    KHDA_BUCKETS,
+    EXCLUDED_BUCKETS,
     ALL_BUCKETS,
     PROGRAM_SLUGS,
     AGI_SLUGS,
     ALL_SLUGS,
     BUCKET_SLUGS,
     isAgiSlug,
+    isExcludedSlug,
 } = require('./bucketing');
 
 const MONTH_NAMES = [
@@ -246,7 +249,7 @@ async function getTeamDetail({ teamLeadId, year }) {
     // Program × month counts. AGI rows listed first (matching Excel), then
     // the 14 program buckets. The Total Admissions row sums ONLY program
     // buckets (AGI excluded), mirroring Excel =SUM(program rows).
-    const consolidatedOrder = [...AGI_BUCKETS, ...PROGRAM_BUCKETS];
+    const consolidatedOrder = [...EXCLUDED_BUCKETS, ...PROGRAM_BUCKETS];
     const consolidatedAdmissions = {
         rows: consolidatedOrder.map((bucket) => {
             const monthly = [];
@@ -256,7 +259,13 @@ async function getTeamDetail({ teamLeadId, year }) {
                 monthly.push(v);
                 total += v;
             }
-            return { program: bucket, monthly, total, isAgi: AGI_BUCKETS.includes(bucket) };
+            return {
+                program: bucket,
+                monthly,
+                total,
+                isAgi: AGI_BUCKETS.includes(bucket),
+                excludedFromTotal: EXCLUDED_BUCKETS.includes(bucket),
+            };
         }),
         totalAdmissions: (() => {
             const monthly = [];
@@ -280,6 +289,8 @@ async function getTeamDetail({ teamLeadId, year }) {
         buckets: ALL_BUCKETS,
         programBuckets: PROGRAM_BUCKETS,
         agiBuckets: AGI_BUCKETS,
+        khdaBuckets: KHDA_BUCKETS,
+        excludedBuckets: EXCLUDED_BUCKETS,
         bucketSlugs: BUCKET_SLUGS,
         monthNames: MONTH_NAMES,
         ytd: {
@@ -430,19 +441,26 @@ async function getExecutiveOverview({ year, month }) {
             counts.push(programMatrix[slug][m]);
             ytd += programMatrix[slug][m];
         }
-        return { program: bucket, slug, monthly: counts, ytdTotal: ytd, isAgi: isAgiSlug(slug) };
+        return {
+            program: bucket,
+            slug,
+            monthly: counts,
+            ytdTotal: ytd,
+            isAgi: isAgiSlug(slug),
+            excludedFromTotal: isExcludedSlug(slug),
+        };
     });
 
     const grandTotalRow = Array.from({ length: 12 }, () => 0);
     let grandYtd = 0;
     for (const row of programRows) {
-        if (row.isAgi) continue;
+        if (row.excludedFromTotal) continue;
         for (let m = 0; m < 12; m++) grandTotalRow[m] += row.monthly[m];
         grandYtd += row.ytdTotal;
     }
     const denom = grandYtd || 1;
     for (const row of programRows) {
-        row.share = row.isAgi ? null : row.ytdTotal / denom;
+        row.share = row.excludedFromTotal ? null : row.ytdTotal / denom;
     }
 
     return {
@@ -465,6 +483,8 @@ async function getExecutiveOverview({ year, month }) {
         buckets: ALL_BUCKETS,
         programBuckets: PROGRAM_BUCKETS,
         agiBuckets: AGI_BUCKETS,
+        khdaBuckets: KHDA_BUCKETS,
+        excludedBuckets: EXCLUDED_BUCKETS,
         bucketSlugs: BUCKET_SLUGS,
         monthNames: MONTH_NAMES,
     };

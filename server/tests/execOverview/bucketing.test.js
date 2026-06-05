@@ -6,18 +6,32 @@ const {
     PROGRAM_SLUGS,
     AGI_SLUGS,
     ALL_SLUGS,
+    KHDA_BUCKETS,
+    EXCLUDED_BUCKETS,
+    KHDA_SLUGS,
+    EXCLUDED_SLUGS,
     bucketToSlug,
     slugToBucket,
     isAgiBucket,
     isAgiSlug,
+    isKhdaBucket,
+    isExcludedBucket,
+    isExcludedSlug,
     bucketProgram,
 } = require('../../services/execOverview/bucketing');
 
 describe('execOverview bucketing', () => {
-    test('exposes 14 program + 2 AGI buckets', () => {
+    test('exposes 14 program + KHDA + 2 AGI buckets', () => {
         expect(PROGRAM_BUCKETS).toHaveLength(14);
         expect(AGI_BUCKETS).toEqual(['AGI', 'AGI Standalone']);
-        expect(ALL_BUCKETS).toHaveLength(16);
+        expect(KHDA_BUCKETS).toEqual(['KHDA']);
+        // Excluded-from-total buckets, KHDA listed before AGI.
+        expect(EXCLUDED_BUCKETS).toEqual(['KHDA', 'AGI', 'AGI Standalone']);
+        expect(ALL_BUCKETS).toHaveLength(17);
+        // KHDA renders immediately before AGI in the column order.
+        expect(ALL_BUCKETS.indexOf('KHDA')).toBe(ALL_BUCKETS.indexOf('AGI') - 1);
+        // KHDA is NOT a program bucket, so it never enters Total Admissions.
+        expect(PROGRAM_BUCKETS).not.toContain('KHDA');
     });
 
     test('isAgiBucket flags AGI variants only', () => {
@@ -25,6 +39,21 @@ describe('execOverview bucketing', () => {
         expect(isAgiBucket('AGI Standalone')).toBe(true);
         expect(isAgiBucket('SSM MBA')).toBe(false);
         expect(isAgiBucket('MUST')).toBe(false);
+        expect(isAgiBucket('KHDA')).toBe(false);
+    });
+
+    test('KHDA is its own excluded bucket, distinct from AGI', () => {
+        expect(isKhdaBucket('KHDA')).toBe(true);
+        expect(isKhdaBucket('AGI')).toBe(false);
+        // Both KHDA and AGI are excluded from Total Admissions.
+        expect(isExcludedBucket('KHDA')).toBe(true);
+        expect(isExcludedBucket('AGI')).toBe(true);
+        expect(isExcludedBucket('AGI Standalone')).toBe(true);
+        expect(isExcludedBucket('SSM MBA')).toBe(false);
+        expect(isExcludedSlug('khda')).toBe(true);
+        expect(isExcludedSlug('agi')).toBe(true);
+        expect(isExcludedSlug('knights_mba')).toBe(false);
+        expect(BUCKET_SLUGS['KHDA']).toBe('khda');
     });
 
     describe('bucket slugs (safe DB field names)', () => {
@@ -34,10 +63,13 @@ describe('execOverview bucketing', () => {
                 expect(BUCKET_SLUGS[b]).toMatch(/^[a-z0-9_]+$/);
             }
         });
-        test('PROGRAM_SLUGS + AGI_SLUGS = ALL_SLUGS, no dupes', () => {
+        test('PROGRAM + KHDA + AGI slugs = ALL_SLUGS, no dupes', () => {
             expect(PROGRAM_SLUGS).toHaveLength(14);
             expect(AGI_SLUGS).toEqual(['agi', 'agi_standalone']);
-            expect(new Set(ALL_SLUGS).size).toBe(16);
+            expect(KHDA_SLUGS).toEqual(['khda']);
+            expect(EXCLUDED_SLUGS).toEqual(['khda', 'agi', 'agi_standalone']);
+            expect(new Set(ALL_SLUGS).size).toBe(17);
+            expect(PROGRAM_SLUGS).not.toContain('khda');
         });
         test('bucketToSlug / slugToBucket round-trip', () => {
             for (const b of ALL_BUCKETS) {

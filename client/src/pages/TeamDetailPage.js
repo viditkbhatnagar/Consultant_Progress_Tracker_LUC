@@ -145,7 +145,7 @@ const EntryRow = React.memo(function EntryRow({
     initial,
     bucketSlugs,
     buckets,
-    agiBuckets,
+    excludedBuckets,
     onPersisted,
     onPaste,
     canEdit,
@@ -158,7 +158,7 @@ const EntryRow = React.memo(function EntryRow({
     // Re-sync when initial changes (e.g. after a bulk paste).
     useEffect(() => { setRow(initial); }, [initial]);
 
-    const programSlugs = buckets.filter((b) => !agiBuckets.includes(b)).map((b) => bucketSlugs[b]);
+    const programSlugs = buckets.filter((b) => !excludedBuckets.includes(b)).map((b) => bucketSlugs[b]);
 
     const totalAdmissions = programSlugs.reduce((acc, slug) => acc + (row[slug] || 0), 0);
     const percentRevenue =
@@ -237,12 +237,12 @@ const EntryRow = React.memo(function EntryRow({
             </TableCell>
             {buckets.map((b) => {
                 const slug = bucketSlugs[b];
-                const isAgi = agiBuckets.includes(b);
+                const isExcluded = excludedBuckets.includes(b);
                 return (
                     <TableCell
                         key={b}
                         align="right"
-                        sx={{ ...cellSx, bgcolor: isAgi ? 'rgba(217,119,6,0.04)' : undefined }}
+                        sx={{ ...cellSx, bgcolor: isExcluded ? 'rgba(217,119,6,0.04)' : undefined }}
                         onPasteCapture={(e) => handlePaste(e, slug)}
                     >
                         <NumCell value={row[slug]} onCommit={handleCommit} fieldSlug={slug} readOnly={!canEdit} />
@@ -317,9 +317,9 @@ const TeamSummaryTables = ({ data }) => {
                         </TableHead>
                         <TableBody>
                             {ca.rows.map((r) => (
-                                <TableRow key={r.program} hover sx={r.isAgi ? { bgcolor: 'rgba(217,119,6,0.05)' } : null}>
-                                    <TableCell sx={{ position: 'sticky', left: 0, bgcolor: r.isAgi ? '#FDF5E6' : 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
-                                        {r.program}{r.isAgi ? ' (excl.)' : ''}
+                                <TableRow key={r.program} hover sx={r.excludedFromTotal ? { bgcolor: 'rgba(217,119,6,0.05)' } : null}>
+                                    <TableCell sx={{ position: 'sticky', left: 0, bgcolor: r.excludedFromTotal ? '#FDF5E6' : 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
+                                        {r.program}{r.excludedFromTotal ? ' (excl.)' : ''}
                                     </TableCell>
                                     {r.monthly.map((v, i) => (
                                         <TableCell key={i} align="right">{v || '—'}</TableCell>
@@ -479,7 +479,7 @@ const TeamDetailPage = () => {
     // same row — matches the most common Excel copy pattern).
     const handlePaste = useCallback(async ({ consultantId, month, startSlug, text }) => {
         if (!data) return;
-        const allSlugs = ['monthlyTarget', 'achievedRevenue', ...data.programBuckets.map((b) => data.bucketSlugs[b]), ...data.agiBuckets.map((b) => data.bucketSlugs[b])];
+        const allSlugs = ['monthlyTarget', 'achievedRevenue', ...data.buckets.map((b) => data.bucketSlugs[b])];
         const startIdx = allSlugs.indexOf(startSlug);
         if (startIdx < 0) return;
 
@@ -587,7 +587,7 @@ const TeamDetailPage = () => {
             { key: 'total', lbl: 'Total' },
         ];
         const caRows = data.consolidatedAdmissions.rows.map((r) => ({
-            program: r.program + (r.isAgi ? ' (excl.)' : ''),
+            program: r.program + (r.excludedFromTotal ? ' (excl.)' : ''),
             ...Object.fromEntries(r.monthly.map((v, i) => [`m${i}`, v || 0])),
             total: r.total,
         }));
@@ -791,7 +791,7 @@ const TeamDetailPage = () => {
                                                 <TableCell align="right" sx={{ fontWeight: 700 }}>% Rev</TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 700 }}>Adm.</TableCell>
                                                 {data.buckets.map((b) => (
-                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, fontSize: 11, bgcolor: data.agiBuckets.includes(b) ? 'rgba(217,119,6,0.06)' : undefined }}>
+                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, fontSize: 11, bgcolor: data.excludedBuckets.includes(b) ? 'rgba(217,119,6,0.06)' : undefined }}>
                                                         {b}
                                                     </TableCell>
                                                 ))}
@@ -825,7 +825,7 @@ const TeamDetailPage = () => {
                                                         initial={initial}
                                                         bucketSlugs={data.bucketSlugs}
                                                         buckets={data.buckets}
-                                                        agiBuckets={data.agiBuckets}
+                                                        excludedBuckets={data.excludedBuckets}
                                                         onPersisted={handlePersisted}
                                                         onPaste={handlePaste}
                                                         canEdit={canEdit}
@@ -839,7 +839,7 @@ const TeamDetailPage = () => {
                                                 <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtPct(block.teamTotal.percentRevenue)}</TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 700 }}>{block.teamTotal.totalAdmissions || '—'}</TableCell>
                                                 {data.buckets.map((b) => (
-                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, bgcolor: data.agiBuckets.includes(b) ? 'rgba(217,119,6,0.08)' : undefined }}>
+                                                    <TableCell key={b} align="right" sx={{ fontWeight: 700, bgcolor: data.excludedBuckets.includes(b) ? 'rgba(217,119,6,0.08)' : undefined }}>
                                                         {block.teamTotal.buckets[b] || '—'}
                                                     </TableCell>
                                                 ))}

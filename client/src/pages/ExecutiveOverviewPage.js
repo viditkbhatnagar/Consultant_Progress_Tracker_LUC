@@ -250,7 +250,7 @@ const ExecutiveOverviewPage = () => {
             { key: 'ytd', lbl: 'YTD' }, { key: 'share', lbl: '% Share' },
         ];
         const progRows = data.programs.map((r) => ({
-            program: r.program + (r.isAgi ? ' (excl.)' : ''),
+            program: r.program + (r.excludedFromTotal ? ' (excl.)' : ''),
             ...Object.fromEntries(r.monthly.map((v, i) => [`m${i}`, v || 0])),
             ytd: r.ytdTotal,
             share: r.share == null ? '' : pctStr(r.share),
@@ -499,11 +499,11 @@ const ExecutiveOverviewPage = () => {
                                 </TableHead>
                                 <TableBody>
                                     {data.programs.map((row) => (
-                                        <TableRow key={row.program} hover sx={row.isAgi ? { bgcolor: 'rgba(217,119,6,0.05)' } : null}>
-                                            <TableCell sx={{ position: 'sticky', left: 0, bgcolor: row.isAgi ? '#FDF5E6' : 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
+                                        <TableRow key={row.program} hover sx={row.excludedFromTotal ? { bgcolor: 'rgba(217,119,6,0.05)' } : null}>
+                                            <TableCell sx={{ position: 'sticky', left: 0, bgcolor: row.excludedFromTotal ? '#FDF5E6' : 'var(--d-surface, #FFFFFF)', fontWeight: 600 }}>
                                                 {row.program}
-                                                {row.isAgi ? (
-                                                    <Tooltip title="AGI rows are tracked separately and NOT counted in the grand total — matches Excel.">
+                                                {row.excludedFromTotal ? (
+                                                    <Tooltip title="KHDA and AGI rows are tracked separately and NOT counted in the grand total — matches Excel.">
                                                         <Typography component="span" sx={{ ml: 0.5, fontSize: 10, color: '#A35A06', fontWeight: 700 }}>
                                                             (excl.)
                                                         </Typography>
