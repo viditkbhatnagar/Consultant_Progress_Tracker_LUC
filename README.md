@@ -153,9 +153,10 @@ sequenceDiagram
     A->>DB: find user (+select hidden password)
     A->>A: bcrypt compare, check isActive
     A-->>U: JWT + minimal user object
-    Note over U: token + user cached client-side;<br/>Axios sends Authorization: Bearer <token>
+    Note over U: token + user cached client-side
+    Note over U: Axios sends the bearer token on each request
 
-    U->>A: GET /api/<resource> (Bearer token)
+    U->>A: GET a protected /api route (bearer token)
     A->>A: protect — verify JWT
     A->>DB: load full user (live org + isActive)
     A->>A: authorize(roles) + orgGate(tenant)
