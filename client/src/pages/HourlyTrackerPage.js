@@ -305,6 +305,19 @@ const LucHourlyTrackerPage = () => {
         loadTeamLeads();
     }, [loadConsultants, loadTeamLeads]);
 
+    // Team leads get a second, whole-organisation stat row beneath their team
+    // cards. Load the org-wide consultant list once (date-independent) so org
+    // averages have a denominator; the activity/admission/reference data is
+    // already org-wide for a team lead (the hourly scope filter is org-only).
+    useEffect(() => {
+        if (user?.role !== 'team_lead') return undefined;
+        let active = true;
+        hourlyService.getConsultants('org')
+            .then((res) => { if (active) setOrgConsultants(res.data || []); })
+            .catch(() => {});
+        return () => { active = false; };
+    }, [user]);
+
     useEffect(() => {
         loadDayActivities(currentDate);
         loadDayAdmissions(currentDate);
@@ -882,6 +895,96 @@ const LucHourlyTrackerPage = () => {
         return t;
     })() : {};
 
+    const isTeamLead = user?.role === 'team_lead';
+
+    // Daily team-scoped reference/admission totals (only this team's
+    // consultants). The underlying maps are org-wide for a team lead, so we sum
+    // per displayed consultant rather than over the whole map.
+    const teamReferences = displayConsultants.reduce((sum, c) => sum + getReference(c._id), 0);
+    const teamAdmissions = displayConsultants.reduce((sum, c) => sum + getAdmission(c._id), 0);
+    const teamAdmissionsList = admissionsList.filter((a) =>
+        displayConsultants.some((c) => String(c._id) === String(a.consultant)));
+
+    // Whole-organisation daily totals (team leads only): same shape/computation
+    // as teamTotals, summed across every org consultant (activities are already
+    // org-wide for a team lead).
+    const orgTotals = isTeamLead && currentView === 'daily' ? (() => {
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0 };
+        orgConsultants.forEach((c) => {
+            const s = getStats(c._id);
+            Object.keys(t).forEach((k) => (t[k] += s[k]));
+        });
+        t.meetHrs = +t.meetHrs.toFixed(1);
+        return t;
+    })() : null;
+    // Whole-org reference/admission totals — the maps are already org-wide for a
+    // team lead, so these full-map totals are the true organisation numbers.
+    const orgReferences = getTotalReferences();
+    const orgAdmissions = getTotalAdmissions();
+    const orgAdmissionsList = admissionsList;
+
+    // Whole-organisation monthly totals (team leads only): aggregate org-wide
+    // month data directly (monthActivities/Admissions/References are org-wide).
+    const getOrgMonthlyTotals = () => {
+        const t = { calls: 0, followups: 0, noshows: 0, drips: 0, offlineMtgs: 0, zoomMtgs: 0, outMtgs: 0, teamMtgs: 0, tlMtgs: 0, meetHrs: 0, references: 0, admissions: 0 };
+        monthActivities.forEach((a) => {
+            if (!a || a.isContinuation) return;
+            const hrs = (a.duration || 60) / 60;
+            if (a.activityType === 'call') t.calls += a.count || 1;
+            else if (a.activityType === 'followup') t.followups += a.count || 1;
+            else if (a.activityType === 'call_followup') { t.calls += a.count || 1; t.followups += a.followupCount || 0; }
+            else if (a.activityType === 'noshow') t.noshows++;
+            else if (a.activityType === 'drip') t.drips++;
+            else if (a.activityType === 'meeting') { t.offlineMtgs++; t.meetHrs += hrs; }
+            else if (a.activityType === 'outmeet') { t.outMtgs++; t.meetHrs += hrs; }
+            else if (a.activityType === 'zoom') { t.zoomMtgs++; t.meetHrs += hrs; }
+            else if (a.activityType === 'teammeet') { t.teamMtgs++; t.meetHrs += hrs; }
+            else if (a.activityType === 'tlmeet') { t.tlMtgs++; t.meetHrs += hrs; }
+        });
+        monthAdmissions.forEach((a) => { t.admissions += a.count || 0; });
+        monthReferences.forEach((a) => { t.references += a.count || 0; });
+        t.meetHrs = +t.meetHrs.toFixed(1);
+        return t;
+    };
+
+    // Shared card renderers (used by both the team row and the org row).
+    const renderKpiCard = (kpi) => (
+        <Box key={kpi.l} sx={{ ...S.kpi, flex: kpi.wide ? 1.8 : 1, width: 'auto', minWidth: 0, maxWidth: 'none', position: 'relative' }}>
+            <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: kpi.wide ? 22 : 18, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
+            <Typography sx={{ fontSize: kpi.wide ? 9 : 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
+            {kpi.sub && <Typography sx={{ fontSize: 12, color: '#444', fontWeight: 800, textAlign: 'center', lineHeight: 1, mt: 0.3 }}>{kpi.sub}</Typography>}
+            {kpi.admData && kpi.admData.length > 0 && (
+                <Tooltip
+                    title={
+                        <Box sx={{ p: 1, fontSize: 12 }}>
+                            <Box sx={{ fontWeight: 700, mb: 0.5, borderBottom: '1px solid rgba(255,255,255,.15)', pb: 0.5 }}>Admissions (by entry order)</Box>
+                            {kpi.admData.map((a, i) => (
+                                <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.3 }}>
+                                    <span>{i + 1}. {a.consultantName}</span>
+                                    <span style={{ fontWeight: 700 }}>×{a.count}</span>
+                                </Box>
+                            ))}
+                        </Box>
+                    }
+                    arrow
+                    placement="bottom"
+                >
+                    <Typography sx={{ fontSize: 9, color: '#be185d', fontWeight: 600, textAlign: 'center', mt: 0.2, cursor: 'pointer', opacity: 0.7, '&:hover': { opacity: 1 } }}>
+                        {kpi.admData.map((a) => a.consultantName.split(' ')[0]).join(', ')}
+                    </Typography>
+                </Tooltip>
+            )}
+        </Box>
+    );
+
+    const renderMonthlyCard = (card) => (
+        <Box key={card.l} sx={{ flex: card.wide ? '1.8 1 0' : '1 1 0', minWidth: card.wide ? 160 : 100, background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
+            <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: card.wide ? 30 : 24, fontWeight: 700, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
+            <Typography sx={{ fontSize: card.wide ? 11 : 9, color: '#8a9ab0', textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 600 }}>{card.l}</Typography>
+            <Typography sx={{ fontSize: card.wide ? 13 : 11, color: '#444', mt: 0.3, fontWeight: 700, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
+        </Box>
+    );
+
     // ─── RENDER ──────────────────────────────────────
     return (
         <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f3f8', fontFamily: '"Plus Jakarta Sans",sans-serif' }}>
@@ -1069,42 +1172,35 @@ const LucHourlyTrackerPage = () => {
                         {[
                             { v: teamTotals.calls, l: 'Calls', c: '#2563eb', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.calls / displayConsultants.length)}` : '' },
                             { v: teamTotals.followups, l: 'Follow-ups', c: '#0891b2', wide: true, sub: displayConsultants.length ? `Avg ${Math.round(teamTotals.followups / displayConsultants.length)}` : '' },
-                            { v: getTotalReferences(), l: 'Reference', c: '#be185d' },
-                            { v: getTotalAdmissions(), l: 'Admissions', c: '#be185d', wide: true, admList: true },
+                            { v: teamReferences, l: 'Reference', c: '#be185d' },
+                            { v: teamAdmissions, l: 'Admissions', c: '#be185d', wide: true, admData: teamAdmissionsList },
                             { v: teamTotals.noshows, l: 'Operations', c: '#dc2626' },
                             { v: teamTotals.drips, l: 'Drips', c: '#d97706' },
                             { v: teamTotals.offlineMtgs, l: 'Offline Mtg', c: '#16a34a' },
                             { v: teamTotals.zoomMtgs, l: 'Zoom', c: '#4f46e5' },
                             { v: teamTotals.outMtgs, l: 'Out Mtg', c: '#7c3aed' },
                             { v: teamTotals.tlMtgs, l: "TL's Mtg", c: '#0d9488' },
-                        ].map((kpi) => (
-                            <Box key={kpi.l} sx={{ ...S.kpi, flex: kpi.wide ? 1.8 : 1, width: 'auto', minWidth: 0, maxWidth: 'none', position: 'relative' }}>
-                                <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: kpi.wide ? 22 : 18, fontWeight: 700, color: kpi.c, lineHeight: 1.2 }}>{kpi.v}</Typography>
-                                <Typography sx={{ fontSize: kpi.wide ? 9 : 8, color: '#999', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{kpi.l}</Typography>
-                                {kpi.sub && <Typography sx={{ fontSize: 12, color: '#444', fontWeight: 800, textAlign: 'center', lineHeight: 1, mt: 0.3 }}>{kpi.sub}</Typography>}
-                                {kpi.admList && admissionsList.length > 0 && (
-                                    <Tooltip
-                                        title={
-                                            <Box sx={{ p: 1, fontSize: 12 }}>
-                                                <Box sx={{ fontWeight: 700, mb: 0.5, borderBottom: '1px solid rgba(255,255,255,.15)', pb: 0.5 }}>Admissions (by entry order)</Box>
-                                                {admissionsList.map((a, i) => (
-                                                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.3 }}>
-                                                        <span>{i + 1}. {a.consultantName}</span>
-                                                        <span style={{ fontWeight: 700 }}>×{a.count}</span>
-                                                    </Box>
-                                                ))}
-                                            </Box>
-                                        }
-                                        arrow
-                                        placement="bottom"
-                                    >
-                                        <Typography sx={{ fontSize: 9, color: '#be185d', fontWeight: 600, textAlign: 'center', mt: 0.2, cursor: 'pointer', opacity: 0.7, '&:hover': { opacity: 1 } }}>
-                                            {admissionsList.map((a) => a.consultantName.split(' ')[0]).join(', ')}
-                                        </Typography>
-                                    </Tooltip>
-                                )}
-                            </Box>
-                        ))}
+                        ].map(renderKpiCard)}
+                    </Box>
+                )}
+                {currentView === 'daily' && isTeamLead && orgTotals && orgConsultants.length > 0 && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '5px', px: 2, pb: 1, pt: 0.2, borderTop: '1px dashed rgba(99,102,241,.3)' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 72, flexShrink: 0, pr: 0.5 }}>
+                            <Typography sx={{ fontSize: 9, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '.04em', lineHeight: 1.15 }}>🏢 Whole Org</Typography>
+                            <Typography sx={{ fontSize: 8, color: '#999', fontWeight: 600 }}>{orgConsultants.length} cons · view only</Typography>
+                        </Box>
+                        {[
+                            { v: orgTotals.calls, l: 'Calls', c: '#2563eb', wide: true, sub: orgConsultants.length ? `Avg ${Math.round(orgTotals.calls / orgConsultants.length)}` : '' },
+                            { v: orgTotals.followups, l: 'Follow-ups', c: '#0891b2', wide: true, sub: orgConsultants.length ? `Avg ${Math.round(orgTotals.followups / orgConsultants.length)}` : '' },
+                            { v: orgReferences, l: 'Reference', c: '#be185d' },
+                            { v: orgAdmissions, l: 'Admissions', c: '#be185d', wide: true, admData: orgAdmissionsList },
+                            { v: orgTotals.noshows, l: 'Operations', c: '#dc2626' },
+                            { v: orgTotals.drips, l: 'Drips', c: '#d97706' },
+                            { v: orgTotals.offlineMtgs, l: 'Offline Mtg', c: '#16a34a' },
+                            { v: orgTotals.zoomMtgs, l: 'Zoom', c: '#4f46e5' },
+                            { v: orgTotals.outMtgs, l: 'Out Mtg', c: '#7c3aed' },
+                            { v: orgTotals.tlMtgs, l: "TL's Mtg", c: '#0d9488' },
+                        ].map(renderKpiCard)}
                     </Box>
                 )}
             </Box>
@@ -1309,10 +1405,10 @@ const LucHourlyTrackerPage = () => {
                                     </td>
                                 ))}
                                 <td style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
-                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: getTotalReferences() === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{getTotalReferences() || '—'}</span>
+                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: teamReferences === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{teamReferences || '—'}</span>
                                 </td>
                                 <td style={{ minWidth: 80, background: '#1a2840', borderBottom: 'none', height: 40, textAlign: 'center' }}>
-                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: getTotalAdmissions() === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{getTotalAdmissions() || '—'}</span>
+                                    <span style={{ fontFamily: '"JetBrains Mono",monospace', fontSize: 16, fontWeight: 700, color: teamAdmissions === 0 ? 'rgba(255,255,255,.2)' : '#f9a8d4' }}>{teamAdmissions || '—'}</span>
                                 </td>
                             </tr>
                         </tfoot>
@@ -1355,14 +1451,36 @@ const LucHourlyTrackerPage = () => {
                                 { v: teamTot.zoomMtgs, l: 'Zoom', sub: 'Virtual Meetings', c: '#4f46e5', bc: '#4f46e5' },
                                 { v: teamTot.outMtgs, l: 'Out Meetings', sub: 'Outside Meetings', c: '#7c3aed', bc: '#7c3aed' },
                                 { v: teamTot.tlMtgs, l: "TL's Team Meeting", sub: 'Team Lead Meetings', c: '#0d9488', bc: '#0d9488' },
-                            ].map((card) => (
-                                <Box key={card.l} sx={{ flex: card.wide ? '1.8 1 0' : '1 1 0', minWidth: card.wide ? 160 : 100, background: '#fff', border: '1px solid #dde3ed', borderRadius: '11px', p: 1.5, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: card.bc } }}>
-                                    <Typography sx={{ fontFamily: '"JetBrains Mono",monospace', fontSize: card.wide ? 30 : 24, fontWeight: 700, lineHeight: 1, mb: 0.5, color: card.c }}>{card.v}</Typography>
-                                    <Typography sx={{ fontSize: card.wide ? 11 : 9, color: '#8a9ab0', textTransform: 'uppercase', letterSpacing: '.07em', fontWeight: 600 }}>{card.l}</Typography>
-                                    <Typography sx={{ fontSize: card.wide ? 13 : 11, color: '#444', mt: 0.3, fontWeight: 700, fontFamily: '"JetBrains Mono",monospace' }}>{card.sub}</Typography>
-                                </Box>
-                            ))}
+                            ].map(renderMonthlyCard)}
                         </Box>
+
+                        {isTeamLead && orgConsultants.length > 0 && (() => {
+                            const org = getOrgMonthlyTotals();
+                            const n = orgConsultants.length;
+                            const avg = (x) => (n ? Math.round(x / n) : 0);
+                            return (
+                                <Box sx={{ mb: 2.5 }}>
+                                    <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '.05em', mb: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                        🏢 Whole Organisation
+                                        <span style={{ fontSize: 11, color: '#8a9ab0', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>· {n} consultants · view only</span>
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1.2, flexWrap: 'wrap' }}>
+                                        {[
+                                            { v: org.calls, l: 'Total Calls', sub: `Average ${avg(org.calls)} / Consultant`, c: '#2563eb', bc: '#2563eb', wide: true },
+                                            { v: org.followups, l: 'Follow-Ups', sub: `Average ${avg(org.followups)} / Consultant`, c: '#0891b2', bc: '#0891b2', wide: true },
+                                            { v: org.references, l: 'Reference', sub: 'Total References', c: '#be185d', bc: '#be185d' },
+                                            { v: org.admissions, l: 'Admissions', sub: 'Total Conversions', c: '#be185d', bc: '#be185d', wide: true },
+                                            { v: org.noshows, l: 'Operations', sub: 'Total Logged', c: '#dc2626', bc: '#dc2626' },
+                                            { v: org.drips, l: 'Drip Steps', sub: 'Campaigns Executed', c: '#d97706', bc: '#d97706' },
+                                            { v: org.offlineMtgs, l: 'Offline Meetings', sub: 'Physical Meetings', c: '#16a34a', bc: '#16a34a' },
+                                            { v: org.zoomMtgs, l: 'Zoom', sub: 'Virtual Meetings', c: '#4f46e5', bc: '#4f46e5' },
+                                            { v: org.outMtgs, l: 'Out Meetings', sub: 'Outside Meetings', c: '#7c3aed', bc: '#7c3aed' },
+                                            { v: org.tlMtgs, l: "TL's Team Meeting", sub: 'Team Lead Meetings', c: '#0d9488', bc: '#0d9488' },
+                                        ].map(renderMonthlyCard)}
+                                    </Box>
+                                </Box>
+                            );
+                        })()}
 
                         {/* Monthly table */}
                         <Box sx={{ background: '#fff', border: '1px solid #dde3ed', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 1px 3px rgba(0,0,0,.07),0 2px 8px rgba(0,0,0,.05)', '&::-webkit-scrollbar': { height: 12 }, '&::-webkit-scrollbar-track': { background: '#e8ecf2' }, '&::-webkit-scrollbar-thumb': { background: '#9aa5b8', borderRadius: 10, '&:hover': { background: '#7a8598' } } }}>
