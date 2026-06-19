@@ -489,6 +489,7 @@ exports.updateStudent = async (req, res, next) => {
             university: req.body.university,
             courseFee: req.body.courseFee,
             admissionFeePaid: req.body.admissionFeePaid,
+            feesPaid: req.body.feesPaid,
             source: req.body.source,
             referredBy: req.body.referredBy,
             campaignName: req.body.campaignName,

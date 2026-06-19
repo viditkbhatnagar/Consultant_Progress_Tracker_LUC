@@ -17,6 +17,7 @@ export const LUC_COLUMNS = [
     { key: 'university', lbl: 'University', width: 160, export: true, chip: true },
     { key: 'courseFee', lbl: 'Course Fee', width: 130, align: 'right', money: true, export: true, exportLbl: 'Course Fee (AED)' },
     { key: 'admissionFeePaid', lbl: 'Admission Fee', width: 140, align: 'right', money: true, export: true, exportLbl: 'Admission Fee Paid (AED)' },
+    { key: 'feesPaid', lbl: 'Fees Paid', width: 180, chip: true, export: true, exportLbl: 'Fees Paid' },
     { key: 'source', lbl: 'Source', width: 120, chip: true, export: true },
     { key: 'openDay', lbl: 'Open Day', width: 120, export: true },
     { key: 'openDayLocation', lbl: 'Open Day Location', width: 160, export: true, exportLbl: 'Open Day Location' },
@@ -96,6 +97,18 @@ export const SOURCE_PALETTE = {
     Seo: '#EA580C',
     B2C: '#0D9488',
     're-Registration': '#BE185D',
+};
+
+// LUC "Fees Paid" dropdown — registration-fee payment status. Single source
+// of truth for the form options and the table/cards chip colors.
+export const LUC_FEES_PAID_OPTIONS = [
+    'Partial registration fees',
+    'Full registration fees',
+];
+
+export const FEES_PAID_PALETTE = {
+    'Full registration fees': '#16A34A',
+    'Partial registration fees': '#D97706',
 };
 
 export const UNIVERSITY_PALETTE = {

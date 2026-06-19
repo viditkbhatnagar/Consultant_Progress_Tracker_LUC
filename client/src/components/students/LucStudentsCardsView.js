@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import {
     UNIVERSITY_PALETTE,
     SOURCE_PALETTE,
+    FEES_PAID_PALETTE,
     shortUniversity,
     conversionColor,
 } from '../../utils/studentDesign';
@@ -228,6 +229,19 @@ const LucStudentsCardsView = ({
                                         height: 22,
                                         backgroundColor: `${convColor}20`,
                                         color: convColor,
+                                        fontWeight: 600,
+                                    }}
+                                />
+                            )}
+                            {s.feesPaid && (
+                                <Chip
+                                    label={s.feesPaid}
+                                    size="small"
+                                    sx={{
+                                        fontSize: 10.5,
+                                        height: 22,
+                                        backgroundColor: `${(FEES_PAID_PALETTE[s.feesPaid] || 'var(--t-text-3)')}20`,
+                                        color: FEES_PAID_PALETTE[s.feesPaid] || 'var(--t-text-3)',
                                         fontWeight: 600,
                                     }}
                                 />

@@ -27,6 +27,7 @@ import {
     shortUniversity,
     conversionColor,
     SOURCE_PALETTE,
+    FEES_PAID_PALETTE,
 } from '../../utils/studentDesign';
 
 const headerCell = (col, idx) => ({
@@ -99,6 +100,22 @@ const renderCell = (col, student, row, onRowClick) => {
     if (col.key === 'source') {
         if (!raw) return '—';
         const color = SOURCE_PALETTE[raw] || 'var(--t-text-3)';
+        return (
+            <Chip
+                label={raw}
+                size="small"
+                sx={{
+                    fontSize: 11,
+                    backgroundColor: `${color}20`,
+                    color,
+                    fontWeight: 600,
+                }}
+            />
+        );
+    }
+    if (col.key === 'feesPaid') {
+        if (!raw) return '—';
+        const color = FEES_PAID_PALETTE[raw] || 'var(--t-text-3)';
         return (
             <Chip
                 label={raw}

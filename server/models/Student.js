@@ -168,6 +168,13 @@ const StudentSchema = new mongoose.Schema(
             default: 0,
         },
         admissionFeePaid: { type: Number, default: 0, min: 0 },
+        // LUC: whether the registration fee was paid partially or in full.
+        // Optional so existing rows pass without backfill; the form sends one
+        // of the two enum values (or omits it entirely).
+        feesPaid: {
+            type: String,
+            enum: ['Partial registration fees', 'Full registration fees'],
+        },
         registrationFee: { type: Number, default: 0, min: 0 },
         emis: { type: [EmiSchema], default: [] },
 

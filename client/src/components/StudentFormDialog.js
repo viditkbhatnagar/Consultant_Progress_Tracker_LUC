@@ -23,6 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate } from 'date-fns';
 import commitmentService from '../services/commitmentService';
 import { compareNames } from '../utils/nameSimilarity';
+import { LUC_FEES_PAID_OPTIONS } from '../utils/studentDesign';
 import PhoneFieldWithCode from './PhoneFieldWithCode';
 
 // Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
@@ -206,6 +207,7 @@ const StudentFormDialog = ({
         program: '',
         courseFee: '',
         admissionFeePaid: '',
+        feesPaid: '',
         source: '',
         referredBy: '',
         openDay: '',
@@ -253,6 +255,7 @@ const StudentFormDialog = ({
                 program: student.program || '',
                 courseFee: student.courseFee || '',
                 admissionFeePaid: student.admissionFeePaid || '',
+                feesPaid: student.feesPaid || '',
                 source: student.source || '',
                 referredBy: student.referredBy || '',
                 openDay: student.openDay || '',
@@ -289,6 +292,7 @@ const StudentFormDialog = ({
                 program: '',
                 courseFee: '',
                 admissionFeePaid: '',
+                feesPaid: '',
                 source: '',
                 referredBy: '',
                 openDay: '',
@@ -519,6 +523,7 @@ const StudentFormDialog = ({
                 dateOfEnrollment: toUtcMidnight(formData.dateOfEnrollment),
                 courseFee: Number(formData.courseFee),
                 admissionFeePaid: Number(formData.admissionFeePaid) || 0,
+                feesPaid: formData.feesPaid || undefined,
                 experience: Number(formData.experience),
                 // Strip empty commitmentId so the server doesn't try to
                 // ObjectId-cast an empty string. Pass manualEntry only when
@@ -942,6 +947,22 @@ const StudentFormDialog = ({
                                     })}
                                 </Box>
                             </Box>
+                        </Box>
+                        <Box sx={rowStyle}>
+                            <TextField
+                                sx={fieldStyle}
+                                select
+                                label="Fees Paid"
+                                value={formData.feesPaid}
+                                onChange={handleChange('feesPaid')}
+                                InputLabelProps={{ shrink: true }}
+                                SelectProps={{ native: true }}
+                            >
+                                <option value="">Select Fees Paid</option>
+                                {LUC_FEES_PAID_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </TextField>
                         </Box>
                     </Box>
 
