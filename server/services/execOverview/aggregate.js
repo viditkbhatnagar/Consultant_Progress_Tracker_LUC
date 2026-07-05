@@ -490,8 +490,10 @@ async function getExecutiveOverview({ year, month }) {
     };
 }
 
-// Category split threshold (Excel: "Category A — Monthly Target ≥ 90,000").
-const CATEGORY_A_THRESHOLD = 90000;
+// Category split threshold: Category A — Monthly Target ≥ 100,000;
+// Category B — Monthly Target < 100,000. (Raised from 90,000 per the
+// business rule updated 2026-07.)
+const CATEGORY_A_THRESHOLD = 100000;
 
 // Consultant Performance rankings (Excel "Consultant Performance" sheet).
 // Per active consultant (excluding team-lead-as-consultant rows): a
@@ -506,6 +508,18 @@ async function getConsultantPerformance({ year }) {
     ]);
 
     const cutoff = await orgWideEffectiveMonth({ year });
+
+    // YTD must reflect a freshly-entered target for the *current* calendar
+    // month even before any revenue is logged against it — otherwise adding
+    // this month's target leaves YTD showing last month's total. For the
+    // current year, extend the YTD window to the current calendar month
+    // (future-planning months beyond it stay excluded so they don't inflate
+    // YTD). Past/future years keep the revenue-bounded `cutoff` unchanged.
+    // MTD always stays on `cutoff` (the latest month with actual revenue).
+    const nowTs = new Date();
+    const ytdCutoff = nowTs.getUTCFullYear() === year
+        ? Math.max(cutoff, nowTs.getUTCMonth() + 1)
+        : cutoff;
 
     // Team-lead display names keyed by lead id — used to drop the
     // team-lead's own self-consultant row from the rankings.
@@ -533,7 +547,7 @@ async function getConsultantPerformance({ year }) {
             const e = months[m];
             if (!e) continue;
             if ((e.monthlyTarget || 0) > repMonthly) repMonthly = e.monthlyTarget || 0;
-            if (m <= cutoff) {
+            if (m <= ytdCutoff) {
                 ytdTarget += e.monthlyTarget || 0;
                 ytdAchieved += e.achievedRevenue || 0;
             }

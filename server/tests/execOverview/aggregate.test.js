@@ -259,7 +259,7 @@ describe('getConsultantPerformance', () => {
         ]);
     }
 
-    test('splits Category A (>=90k) / B (<90k) by representative monthly target', async () => {
+    test('splits Category A (>=100k) / B (<100k) by representative monthly target', async () => {
         await seedPerf();
         const out = await getConsultantPerformance({ year: 2025 });
         const aNames = out.categoryA.map((r) => r.name).sort();

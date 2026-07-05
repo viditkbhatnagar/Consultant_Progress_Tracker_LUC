@@ -175,6 +175,12 @@ const ConsultantPerformancePage = () => {
         <Sidebar onLogout={handleLogout} onDashboard={() => navigate('/team-lead/dashboard')} />
     );
 
+    // Category-split labels derive from the backend threshold so they never
+    // drift from the actual A/B split (CATEGORY_A_THRESHOLD in aggregate.js).
+    const catThreshold = data?.categoryAThreshold ?? 100000;
+    const catALabel = `Monthly Target ≥ ${fmtCurrency(catThreshold)}`;
+    const catBLabel = `Monthly Target < ${fmtCurrency(catThreshold)}`;
+
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <DashboardHero
@@ -209,14 +215,14 @@ const ConsultantPerformancePage = () => {
 
                     {/* Category A/B ranking tables — above the chart */}
                     <Box sx={{ mt: 3 }}>
-                        <CategoryTable title="Category A" subtitle="Monthly Target ≥ AED 90,000" accent="#1F7A35" rows={data.categoryA} />
-                        <CategoryTable title="Category B" subtitle="Monthly Target < AED 90,000" accent="#6E40C9" rows={data.categoryB} />
+                        <CategoryTable title="Category A" subtitle={catALabel} accent="#1F7A35" rows={data.categoryA} />
+                        <CategoryTable title="Category B" subtitle={catBLabel} accent="#6E40C9" rows={data.categoryB} />
                     </Box>
 
-                    {/* Consultants Revenue YTD% — split into two charts: Category A (≥90k) and B (<90k), bigger bars */}
+                    {/* Consultants Revenue YTD% — split into two charts: Category A and B (threshold from API), bigger bars */}
                     {[
-                        { rows: data.categoryA, color: '#1F7A35', title: 'Category A — Revenue YTD % (Monthly Target ≥ AED 90,000)' },
-                        { rows: data.categoryB, color: '#6E40C9', title: 'Category B — Revenue YTD % (Monthly Target < AED 90,000)' },
+                        { rows: data.categoryA, color: '#1F7A35', title: `Category A — Revenue YTD % (${catALabel})` },
+                        { rows: data.categoryB, color: '#6E40C9', title: `Category B — Revenue YTD % (${catBLabel})` },
                     ].map(({ rows, title, color }) => {
                         const ranked = [...rows]
                             .filter((r) => r.isActive !== false)
