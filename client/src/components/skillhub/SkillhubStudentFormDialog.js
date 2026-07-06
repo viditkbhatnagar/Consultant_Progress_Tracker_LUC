@@ -510,12 +510,14 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField fullWidth type="number" label="Course Fee"
                             value={formData.courseFee}
-                            onChange={(e) => set('courseFee', Number(e.target.value))} />
+                            inputProps={{ step: 1, min: 0 }}
+                            onChange={(e) => set('courseFee', Math.round(Number(e.target.value) || 0))} />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                         <TextField fullWidth type="number" label="Registration Fee"
                             value={formData.registrationFee}
-                            onChange={(e) => set('registrationFee', Number(e.target.value))} />
+                            inputProps={{ step: 1, min: 0 }}
+                            onChange={(e) => set('registrationFee', Math.round(Number(e.target.value) || 0))} />
                     </Grid>
                 </Grid>
 
@@ -535,7 +537,8 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             <Grid size={{ xs: 2 }}>
                                 <TextField fullWidth size="small" type="number" label="Amount"
                                     value={emi.amount}
-                                    onChange={(e) => updateEmi(idx, 'amount', Number(e.target.value))} />
+                                    inputProps={{ step: 1, min: 0 }}
+                                    onChange={(e) => updateEmi(idx, 'amount', Math.round(Number(e.target.value) || 0))} />
                             </Grid>
                             <Grid size={{ xs: 3 }}>
                                 <TextField fullWidth size="small" type="date" label="Paid On"
@@ -546,7 +549,8 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             <Grid size={{ xs: 3 }}>
                                 <TextField fullWidth size="small" type="number" label="Paid Amount"
                                     value={emi.paidAmount}
-                                    onChange={(e) => updateEmi(idx, 'paidAmount', Number(e.target.value))} />
+                                    inputProps={{ step: 1, min: 0 }}
+                                    onChange={(e) => updateEmi(idx, 'paidAmount', Math.round(Number(e.target.value) || 0))} />
                             </Grid>
                             <Grid size={{ xs: 1 }}>
                                 <IconButton size="small" onClick={() => removeEmi(idx)}>
