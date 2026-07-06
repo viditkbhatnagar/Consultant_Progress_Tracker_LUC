@@ -11,7 +11,7 @@ const PAYMENT_PLAN_STATUSES = [
     'Pending from TL',
     'Pending from SM',
     'Pending from FD',
-    'Submitted',
+    'Approved and Submitted',
     'Pending from Student',
     'Drop Out',
 ];

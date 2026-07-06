@@ -20,13 +20,17 @@ import {
     DialogContentText,
     DialogActions,
     Typography,
+    Menu,
+    MenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import FileDownloadIcon from '@mui/icons-material/FileDownloadOutlined';
 import SectionCard from '../dashboard/SectionCard';
 import useRealtimeRefresh from '../../hooks/useRealtimeRefresh';
 import paymentPlanService from '../../services/paymentPlanService';
+import { exportRawSheet } from '../../services/xlsxBuilder';
 import { statusMeta } from '../../utils/paymentPlanDesign';
 import { MONTHS } from '../../utils/studentDesign';
 import PaymentPlanFilters from './PaymentPlanFilters';
@@ -34,7 +38,7 @@ import PaymentPlanFormDialog from './PaymentPlanFormDialog';
 
 const HEAD = ['#', 'Month', 'Student Name', 'Program', 'Consultant', 'Team Leader (TL)', 'Status', 'Remarks / Notes', ''];
 
-const EMPTY_FILTERS = { search: '', status: '', team: '', consultant: '', month: '', program: '' };
+const EMPTY_FILTERS = { search: '', status: '', team: '', consultant: '', month: '' };
 
 const StatusChip = ({ status }) => {
     const meta = statusMeta(status);
@@ -57,6 +61,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
     const [toDelete, setToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
     const [toast, setToast] = useState(null);
+    const [downloadAnchor, setDownloadAnchor] = useState(null);
 
     const load = useCallback(() => {
         paymentPlanService
@@ -85,7 +90,6 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         return {
             teams: uniq(plans.map((p) => p.teamName)),
             consultants: uniq(plans.map((p) => p.consultantName)),
-            programs: uniq(plans.map((p) => p.program)),
             months: MONTHS.filter((m) => plans.some((p) => p.month === m)), // calendar order
         };
     }, [plans]);
@@ -98,7 +102,6 @@ const PaymentPlanPanel = ({ isAdmin }) => {
             if (filters.team && (p.teamName || '') !== filters.team) return false;
             if (filters.consultant && (p.consultantName || '') !== filters.consultant) return false;
             if (filters.month && (p.month || '') !== filters.month) return false;
-            if (filters.program && (p.program || '') !== filters.program) return false;
             if (q) {
                 const hay = [p.studentName, p.consultantName, p.program, p.remarks, p.teamLeadName]
                     .filter(Boolean)
@@ -142,10 +145,50 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         }
     };
 
-    const addButton = (
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openCreate}>
-            New Payment Plan
-        </Button>
+    const exportColumns = useMemo(
+        () => [
+            { key: '__n', lbl: '#', format: (_r, i) => i + 1 },
+            { key: 'month', lbl: 'Month' },
+            { key: 'studentName', lbl: 'Student Name' },
+            { key: 'program', lbl: 'Program' },
+            { key: 'consultantName', lbl: 'Consultant' },
+            { key: 'teamLeadName', lbl: 'Team Leader (TL)' },
+            ...(isAdmin ? [{ key: 'teamName', lbl: 'Team' }] : []),
+            { key: 'status', lbl: 'Status' },
+            { key: 'remarks', lbl: 'Remarks / Notes' },
+        ],
+        [isAdmin]
+    );
+
+    // Exports the currently-filtered rows (= the whole scoped dataset when no
+    // filter is active), as xlsx or csv.
+    const handleDownload = (kind) => {
+        setDownloadAnchor(null);
+        exportRawSheet(filtered, exportColumns, 'payment-plans', kind, { sheetName: 'Payment Plans' });
+    };
+
+    const headerActions = (
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {plans.length > 0 && (
+                <>
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<FileDownloadIcon />}
+                        onClick={(e) => setDownloadAnchor(e.currentTarget)}
+                    >
+                        Download
+                    </Button>
+                    <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
+                        <MenuItem onClick={() => handleDownload('xlsx')}>Excel (.xlsx)</MenuItem>
+                        <MenuItem onClick={() => handleDownload('csv')}>CSV (.csv)</MenuItem>
+                    </Menu>
+                </>
+            )}
+            <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={openCreate}>
+                New Payment Plan
+            </Button>
+        </Box>
     );
 
     let rowNumber = 0;
@@ -176,7 +219,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
     };
 
     return (
-        <SectionCard title="Payment Plan Tracker" eyebrow="Pending approvals" right={addButton}>
+        <SectionCard title="Payment Plan Tracker" eyebrow="Pending approvals" right={headerActions}>
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
             ) : error ? (

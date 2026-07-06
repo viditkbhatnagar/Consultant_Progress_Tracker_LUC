@@ -33,9 +33,9 @@ const Dropdown = ({ label, value, onChange, options, minWidth = 150 }) => (
 const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin, resultCount, totalCount }) => {
     const set = (key) => (val) => setFilters((f) => ({ ...f, [key]: val }));
     const anyActive =
-        filters.search || filters.status || filters.team || filters.consultant || filters.month || filters.program;
+        filters.search || filters.status || filters.team || filters.consultant || filters.month;
     const clearAll = () =>
-        setFilters({ search: '', status: '', team: '', consultant: '', month: '', program: '' });
+        setFilters({ search: '', status: '', team: '', consultant: '', month: '' });
 
     return (
         <Box sx={{ mb: 2 }}>
@@ -58,7 +58,6 @@ const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin, resultCount
                 )}
                 <Dropdown label="Consultant" value={filters.consultant} onChange={set('consultant')} options={options.consultants} />
                 <Dropdown label="Month" value={filters.month} onChange={set('month')} options={options.months} minWidth={120} />
-                <Dropdown label="Program" value={filters.program} onChange={set('program')} options={options.programs} minWidth={180} />
                 {anyActive && (
                     <Button size="small" startIcon={<ClearIcon />} onClick={clearAll} color="inherit">
                         Clear
