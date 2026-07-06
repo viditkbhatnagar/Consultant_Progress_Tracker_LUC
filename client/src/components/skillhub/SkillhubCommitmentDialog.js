@@ -157,7 +157,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
 
     const validate = () => {
         if (!formData.consultantName) return 'Please select a counselor.';
-        if (!formData.commitmentMade.trim()) return 'Commitment description is required.';
+        if (!formData.commitmentMade.trim()) return 'Comments are required.';
         for (const d of formData.demos) {
             if (d.done && !d.scheduledAt) {
                 return `${d.slot}: cannot be marked Done without a scheduled time.`;
@@ -272,7 +272,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                     <Grid size={{ xs: 12 }}>
                         <TextField
                             fullWidth required multiline minRows={2}
-                            label="Commitment"
+                            label="Comments"
                             value={formData.commitmentMade}
                             onChange={(e) => set('commitmentMade', e.target.value)}
                         />
@@ -299,7 +299,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                         re-derived from whatever date is picked. */}
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
-                            fullWidth type="date" label="Commitment Date" required
+                            fullWidth type="date" label="Commitment Date"
                             InputLabelProps={{ shrink: true }}
                             inputProps={{ max: format(new Date(), 'yyyy-MM-dd') }}
                             value={formData.selectedDate}
@@ -316,7 +316,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                     weekNumber: getWeek(dt, { weekStartsOn: 1 }),
                                 }));
                             }}
-                            helperText="Pick any past date — the week / month roll-up is computed automatically."
+                            helperText="Optional — defaults to today. Pick any past date; the week / month roll-up is computed automatically."
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
