@@ -28,9 +28,13 @@ import SectionCard from '../dashboard/SectionCard';
 import useRealtimeRefresh from '../../hooks/useRealtimeRefresh';
 import paymentPlanService from '../../services/paymentPlanService';
 import { statusMeta } from '../../utils/paymentPlanDesign';
+import { MONTHS } from '../../utils/studentDesign';
+import PaymentPlanFilters from './PaymentPlanFilters';
 import PaymentPlanFormDialog from './PaymentPlanFormDialog';
 
 const HEAD = ['#', 'Month', 'Student Name', 'Program', 'Consultant', 'Team Leader (TL)', 'Status', 'Remarks / Notes', ''];
+
+const EMPTY_FILTERS = { search: '', status: '', team: '', consultant: '', month: '', program: '' };
 
 const StatusChip = ({ status }) => {
     const meta = statusMeta(status);
@@ -47,6 +51,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
     const [plans, setPlans] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [filters, setFilters] = useState(EMPTY_FILTERS);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [toDelete, setToDelete] = useState(null);
@@ -74,11 +79,42 @@ const PaymentPlanPanel = ({ isAdmin }) => {
 
     useRealtimeRefresh(['paymentPlan:created', 'paymentPlan:updated', 'paymentPlan:deleted'], load);
 
+    // Distinct dropdown options from the loaded (scoped) dataset.
+    const options = useMemo(() => {
+        const uniq = (vals) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        return {
+            teams: uniq(plans.map((p) => p.teamName)),
+            consultants: uniq(plans.map((p) => p.consultantName)),
+            programs: uniq(plans.map((p) => p.program)),
+            months: MONTHS.filter((m) => plans.some((p) => p.month === m)), // calendar order
+        };
+    }, [plans]);
+
+    // Apply the active filters + free-text search (client-side).
+    const filtered = useMemo(() => {
+        const q = filters.search.trim().toLowerCase();
+        return plans.filter((p) => {
+            if (filters.status && p.status !== filters.status) return false;
+            if (filters.team && (p.teamName || '') !== filters.team) return false;
+            if (filters.consultant && (p.consultantName || '') !== filters.consultant) return false;
+            if (filters.month && (p.month || '') !== filters.month) return false;
+            if (filters.program && (p.program || '') !== filters.program) return false;
+            if (q) {
+                const hay = [p.studentName, p.consultantName, p.program, p.remarks, p.teamLeadName]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            return true;
+        });
+    }, [plans, filters]);
+
     // Admin view groups rows by team; team lead sees a single flat list.
     const groups = useMemo(() => {
-        if (!isAdmin) return [{ team: null, rows: plans }];
+        if (!isAdmin) return [{ team: null, rows: filtered }];
         const byTeam = new Map();
-        for (const p of plans) {
+        for (const p of filtered) {
             const key = p.teamName || p.teamLeadName || 'Unassigned';
             if (!byTeam.has(key)) byTeam.set(key, []);
             byTeam.get(key).push(p);
@@ -86,7 +122,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         return [...byTeam.entries()]
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([team, rows]) => ({ team, rows }));
-    }, [plans, isAdmin]);
+    }, [filtered, isAdmin]);
 
     const openCreate = () => { setEditing(null); setDialogOpen(true); };
     const openEdit = (plan) => { setEditing(plan); setDialogOpen(true); };
@@ -151,33 +187,50 @@ const PaymentPlanPanel = ({ isAdmin }) => {
                     <Typography variant="caption">Click “New Payment Plan” to link a student and track its approval.</Typography>
                 </Box>
             ) : (
-                <TableContainer sx={{ overflowX: 'auto' }}>
-                    <Table size="small">
-                        <TableHead>
-                            <TableRow sx={{ bgcolor: 'var(--d-surface-muted, #F1EFEA)' }}>
-                                {HEAD.map((h, i) => (
-                                    <TableCell key={i} sx={{ fontWeight: 700, whiteSpace: 'nowrap' }} align={i === HEAD.length - 1 ? 'right' : 'left'}>
-                                        {h}
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {groups.map((g) => (
-                                <React.Fragment key={g.team || 'all'}>
-                                    {g.team && (
-                                        <TableRow>
-                                            <TableCell colSpan={HEAD.length} sx={{ bgcolor: 'rgba(35,131,226,0.06)', fontWeight: 800, color: 'var(--d-text-2, #2A2927)', letterSpacing: '0.02em' }}>
-                                                {g.team}
+                <>
+                    <PaymentPlanFilters
+                        filters={filters}
+                        setFilters={setFilters}
+                        options={options}
+                        isAdmin={isAdmin}
+                        resultCount={filtered.length}
+                        totalCount={plans.length}
+                    />
+                    {filtered.length === 0 ? (
+                        <Box sx={{ textAlign: 'center', py: 5, color: 'var(--d-text-muted, #8A887E)' }}>
+                            <Typography sx={{ mb: 0.5 }}>No payment plans match your filters.</Typography>
+                            <Typography variant="caption">Try clearing or widening the filters above.</Typography>
+                        </Box>
+                    ) : (
+                        <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ bgcolor: 'var(--d-surface-muted, #F1EFEA)' }}>
+                                        {HEAD.map((h, i) => (
+                                            <TableCell key={i} sx={{ fontWeight: 700, whiteSpace: 'nowrap' }} align={i === HEAD.length - 1 ? 'right' : 'left'}>
+                                                {h}
                                             </TableCell>
-                                        </TableRow>
-                                    )}
-                                    {g.rows.map(renderRow)}
-                                </React.Fragment>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                        ))}
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {groups.map((g) => (
+                                        <React.Fragment key={g.team || 'all'}>
+                                            {g.team && (
+                                                <TableRow>
+                                                    <TableCell colSpan={HEAD.length} sx={{ bgcolor: 'rgba(35,131,226,0.06)', fontWeight: 800, color: 'var(--d-text-2, #2A2927)', letterSpacing: '0.02em' }}>
+                                                        {g.team}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                            {g.rows.map(renderRow)}
+                                        </React.Fragment>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
+                </>
             )}
 
             <PaymentPlanFormDialog
