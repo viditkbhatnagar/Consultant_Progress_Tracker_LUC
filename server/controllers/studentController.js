@@ -170,6 +170,13 @@ exports.getStudents = async (req, res, next) => {
             filter.month = { $in: months };
         }
 
+        // Name search (used by the Payment Plan student picker). Escaped to
+        // avoid regex injection / ReDoS.
+        if (req.query.search) {
+            const safe = String(req.query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (safe) filter.studentName = { $regex: safe, $options: 'i' };
+        }
+
         // Program filter
         if (program) {
             filter.program = program;

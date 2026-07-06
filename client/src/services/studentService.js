@@ -22,6 +22,7 @@ const getStudents = async (filters = {}) => {
     if (filters.studentStatus) params.append('studentStatus', filters.studentStatus);
     if (filters.organization) params.append('organization', filters.organization);
     if (filters.curriculumSlug) params.append('curriculumSlug', filters.curriculumSlug);
+    if (filters.search) params.append('search', filters.search);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);
 
