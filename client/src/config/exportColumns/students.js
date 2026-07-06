@@ -44,6 +44,7 @@ export const skillhubColumns = [
   },
   { key: 'source',            lbl: 'Source',                                          defaultExport: true },
   { key: 'campaignName',      lbl: 'Campaign',                                        defaultExport: true },
+  { key: 'modeOfPayment',     lbl: 'Mode of Payment',                                 defaultExport: true },
   { key: 'enquiryDate',       lbl: 'Enquiry Date',       date: true,                  defaultExport: true },
   { key: 'closingDate',       lbl: 'Closing Date',       date: true,                  defaultExport: true },
   { key: 'leadSource',        lbl: 'Lead Source (legacy)',                            defaultExport: true },

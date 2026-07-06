@@ -18,6 +18,7 @@ export const LUC_COLUMNS = [
     { key: 'courseFee', lbl: 'Course Fee', width: 130, align: 'right', money: true, export: true, exportLbl: 'Course Fee (AED)' },
     { key: 'admissionFeePaid', lbl: 'Admission Fee', width: 140, align: 'right', money: true, export: true, exportLbl: 'Admission Fee Paid (AED)' },
     { key: 'feesPaid', lbl: 'Fees Paid', width: 180, chip: true, export: true, exportLbl: 'Fees Paid' },
+    { key: 'modeOfPayment', lbl: 'Mode of Payment', width: 160, export: true, exportLbl: 'Mode of Payment' },
     { key: 'source', lbl: 'Source', width: 120, chip: true, export: true },
     { key: 'openDay', lbl: 'Open Day', width: 120, export: true },
     { key: 'openDayLocation', lbl: 'Open Day Location', width: 160, export: true, exportLbl: 'Open Day Location' },
@@ -63,6 +64,17 @@ export const LUC_SOURCES = [
     'Instagram',
     'Reference',
     'Re-Registration',
+];
+
+// Mode of Payment — shared across LUC + both Skillhub branches. Single source
+// of truth for the form dropdowns (kept in sync with the Student model enum).
+export const MODE_OF_PAYMENT_OPTIONS = [
+    'Gateway',
+    'Cash',
+    'Bank Transfer',
+    'Tabby',
+    'Installment Payments',
+    'POS',
 ];
 
 export const MONTHS = [

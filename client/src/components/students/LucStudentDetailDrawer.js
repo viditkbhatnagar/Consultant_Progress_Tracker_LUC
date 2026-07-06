@@ -304,6 +304,7 @@ const LucStudentDetailDrawer = ({
                         value={<span style={{ color: '#2563EB', fontWeight: 700 }}>AED {(student.admissionFeePaid || 0).toLocaleString()}</span>}
                     />
                     <Field label="Fees Paid" value={student.feesPaid} />
+                    <Field label="Mode of Payment" value={student.modeOfPayment} />
                     <Field label="Campaign" value={student.campaignName} full />
                 </Section>
 

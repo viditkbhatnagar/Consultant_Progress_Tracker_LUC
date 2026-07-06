@@ -36,7 +36,7 @@ import {
     composeCurriculum,
     getCurrentAcademicYear,
 } from '../../utils/constants';
-import { LUC_SOURCES } from '../../utils/studentDesign';
+import { LUC_SOURCES, MODE_OF_PAYMENT_OPTIONS } from '../../utils/studentDesign';
 import PhoneFieldWithCode from '../PhoneFieldWithCode';
 
 const emptyEmi = () => ({ dueDate: '', amount: 0, paidOn: '', paidAmount: 0 });
@@ -61,6 +61,7 @@ const blankForm = {
     courseDuration: 'OneYear',
     courseFee: 0,
     registrationFee: 0,
+    modeOfPayment: '',
     emis: [],
     leadSource: 'Google',
     source: '',
@@ -536,6 +537,21 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
                             value={formData.registrationFee}
                             inputProps={{ step: 1, min: 0 }}
                             onChange={(e) => set('registrationFee', Math.round(Number(e.target.value) || 0))} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                        <FormControl fullWidth>
+                            <InputLabel>Mode of Payment</InputLabel>
+                            <Select
+                                label="Mode of Payment"
+                                value={formData.modeOfPayment}
+                                onChange={(e) => set('modeOfPayment', e.target.value)}
+                            >
+                                <MenuItem value=""><em>—</em></MenuItem>
+                                {MODE_OF_PAYMENT_OPTIONS.map((o) => (
+                                    <MenuItem key={o} value={o}>{o}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
                     </Grid>
                 </Grid>
 

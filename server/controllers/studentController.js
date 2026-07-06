@@ -497,6 +497,7 @@ exports.updateStudent = async (req, res, next) => {
             courseFee: req.body.courseFee,
             admissionFeePaid: req.body.admissionFeePaid,
             feesPaid: req.body.feesPaid,
+            modeOfPayment: req.body.modeOfPayment,
             source: req.body.source,
             referredBy: req.body.referredBy,
             campaignName: req.body.campaignName,
@@ -535,7 +536,7 @@ exports.updateStudent = async (req, res, next) => {
                 'dob', 'phones', 'emails', 'addressEmirate', 'school',
                 'enrollmentNumber', 'curriculum', 'academicYear', 'yearOrGrade',
                 'subjects', 'mode', 'courseDuration', 'registrationFee', 'emis',
-                'leadSource', 'dateOfEnrollment',
+                'leadSource', 'dateOfEnrollment', 'modeOfPayment',
             ];
             SKILLHUB_EDITABLE.forEach((field) => {
                 if (req.body[field] !== undefined) updateFields[field] = req.body[field];

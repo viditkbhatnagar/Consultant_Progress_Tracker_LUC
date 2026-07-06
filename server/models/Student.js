@@ -175,6 +175,12 @@ const StudentSchema = new mongoose.Schema(
             type: String,
             enum: ['Partial registration fees', 'Full registration fees'],
         },
+        // Mode of Payment — applies to LUC and both Skillhub branches.
+        // Optional so existing rows pass without backfill.
+        modeOfPayment: {
+            type: String,
+            enum: ['Gateway', 'Cash', 'Bank Transfer', 'Tabby', 'Installment Payments', 'POS'],
+        },
         registrationFee: { type: Number, default: 0, min: 0 },
         emis: { type: [EmiSchema], default: [] },
 

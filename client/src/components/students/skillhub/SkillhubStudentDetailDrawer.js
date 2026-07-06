@@ -346,6 +346,7 @@ const SkillhubStudentDetailDrawer = ({
                         label="Registration Fee"
                         value={`AED ${(student.registrationFee || 0).toLocaleString()}`}
                     />
+                    <Field label="Mode of Payment" value={student.modeOfPayment} />
                     <Field label="EMIs Paid" value={`AED ${totalEmiPaid.toLocaleString()}`} />
                     <Field
                         label="EMIs"

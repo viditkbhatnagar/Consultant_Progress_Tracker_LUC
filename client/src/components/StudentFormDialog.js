@@ -23,7 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate } from 'date-fns';
 import commitmentService from '../services/commitmentService';
 import { compareNames } from '../utils/nameSimilarity';
-import { LUC_FEES_PAID_OPTIONS } from '../utils/studentDesign';
+import { LUC_FEES_PAID_OPTIONS, MODE_OF_PAYMENT_OPTIONS } from '../utils/studentDesign';
 import PhoneFieldWithCode from './PhoneFieldWithCode';
 
 // Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
@@ -208,6 +208,7 @@ const StudentFormDialog = ({
         courseFee: '',
         admissionFeePaid: '',
         feesPaid: '',
+        modeOfPayment: '',
         source: '',
         referredBy: '',
         openDay: '',
@@ -256,6 +257,7 @@ const StudentFormDialog = ({
                 courseFee: student.courseFee || '',
                 admissionFeePaid: student.admissionFeePaid || '',
                 feesPaid: student.feesPaid || '',
+                modeOfPayment: student.modeOfPayment || '',
                 source: student.source || '',
                 referredBy: student.referredBy || '',
                 openDay: student.openDay || '',
@@ -293,6 +295,7 @@ const StudentFormDialog = ({
                 courseFee: '',
                 admissionFeePaid: '',
                 feesPaid: '',
+                modeOfPayment: '',
                 source: '',
                 referredBy: '',
                 openDay: '',
@@ -524,6 +527,7 @@ const StudentFormDialog = ({
                 courseFee: Number(formData.courseFee),
                 admissionFeePaid: Number(formData.admissionFeePaid) || 0,
                 feesPaid: formData.feesPaid || undefined,
+                modeOfPayment: formData.modeOfPayment || undefined,
                 experience: Number(formData.experience),
                 // Strip empty commitmentId so the server doesn't try to
                 // ObjectId-cast an empty string. Pass manualEntry only when
@@ -960,6 +964,20 @@ const StudentFormDialog = ({
                             >
                                 <option value="">Select Fees Paid</option>
                                 {LUC_FEES_PAID_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                            </TextField>
+                            <TextField
+                                sx={fieldStyle}
+                                select
+                                label="Mode of Payment"
+                                value={formData.modeOfPayment}
+                                onChange={handleChange('modeOfPayment')}
+                                InputLabelProps={{ shrink: true }}
+                                SelectProps={{ native: true }}
+                            >
+                                <option value="">Select Mode of Payment</option>
+                                {MODE_OF_PAYMENT_OPTIONS.map((opt) => (
                                     <option key={opt} value={opt}>{opt}</option>
                                 ))}
                             </TextField>
