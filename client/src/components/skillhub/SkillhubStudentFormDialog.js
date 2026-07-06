@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -109,6 +109,17 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
         setError('');
     }, [student, open]);
 
+    // Scroll the dialog back to the top whenever a validation error is set, so
+    // a blocked save is always visible — the EMI section + Save button sit far
+    // below the error banner, and a counselor working at the bottom would
+    // otherwise never see why their save (incl. EMI edits) didn't persist.
+    const contentRef = useRef(null);
+    useEffect(() => {
+        if (error && contentRef.current) {
+            contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [error]);
+
     const set = (field, value) => setFormData((f) => ({ ...f, [field]: value }));
     const setContact = (group, who, value) =>
         setFormData((f) => ({ ...f, [group]: { ...f[group], [who]: value } }));
@@ -203,10 +214,16 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
 
         setSaving(true);
         try {
+            // Drop fully-empty EMI rows (no dates + zero amounts) so blank
+            // placeholder rows never persist and confuse the next editor.
+            const cleanEmis = (formData.emis || []).filter(
+                (e) => e.dueDate || e.paidOn || Number(e.amount) > 0 || Number(e.paidAmount) > 0
+            );
             const payload = {
                 ...formData,
                 curriculum,
                 enrollmentNumber: formData.enrollmentNumber.trim(),
+                emis: cleanEmis,
             };
             // For new students, honor the button the counselor clicked
             // (New Admission / New Active / New Inactive). On edit we never
@@ -257,6 +274,7 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
             </DialogTitle>
             <DialogContent
                 dividers
+                ref={contentRef}
                 sx={{
                     backgroundColor: 'var(--d-surface-muted, var(--t-surface-muted, #F7F9FC))',
                     color: 'var(--d-text, var(--t-text, #1F2937))',
