@@ -19,6 +19,7 @@ import {
     School as SchoolIcon,
     AutoAwesome as AutoAwesomeIcon,
     AttachMoney as MoneyIcon,
+    Payments as PaymentPlanIcon,
     AccessTime as AccessTimeIcon,
     VideoCall as VideoCallIcon,
     FactCheck as CommitmentsIcon,
@@ -82,7 +83,8 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
         location.pathname.startsWith('/leadership-dashboard') ||
         location.pathname.startsWith('/consultant-performance') ||
         location.pathname.startsWith('/monthly-targets') ||
-        location.pathname.startsWith('/tiers')
+        location.pathname.startsWith('/tiers') ||
+        location.pathname.startsWith('/payment-plans')
     );
     const [teams, setTeams] = useState([]);
 
@@ -338,6 +340,16 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                             >
                                 <ListItemIcon><TargetIcon sx={{ fontSize: 18 }} /></ListItemIcon>
                                 <ListItemText primary="Tier Fight" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton
+                                onClick={() => navigate('/payment-plans')}
+                                selected={location.pathname === '/payment-plans'}
+                                sx={{ ...navItemSx, pl: 3 }}
+                            >
+                                <ListItemIcon><PaymentPlanIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Payment Plans" />
                             </ListItemButton>
                         </ListItem>
                     </List>

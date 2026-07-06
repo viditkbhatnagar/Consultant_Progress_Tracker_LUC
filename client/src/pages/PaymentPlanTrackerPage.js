@@ -6,10 +6,9 @@ import { useDashboardThemeState } from '../utils/dashboardTheme';
 import AdminSidebar from '../components/AdminSidebar';
 import Sidebar from '../components/Sidebar';
 import DashboardShell from '../components/dashboard/DashboardShell';
-import SectionCard from '../components/dashboard/SectionCard';
-import TierBoard from '../components/tiers/TierBoard';
+import PaymentPlanPanel from '../components/paymentPlans/PaymentPlanPanel';
 
-export default function TierPage() {
+export default function PaymentPlanTrackerPage() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const themeState = useDashboardThemeState('dashboard-theme-mode');
@@ -25,14 +24,12 @@ export default function TierPage() {
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <Typography sx={{ fontSize: 28, fontWeight: 800, color: 'var(--d-text, #191918)', lineHeight: 1.1 }}>
-                Tier Fight
+                Payment Plans
             </Typography>
             <Typography sx={{ fontSize: 14, color: 'var(--d-text-3, #57564E)', mb: 2 }}>
-                Tier standings — {isAdmin ? 'generate & post a fresh image to everyone' : 'live tier leaderboard'}
+                Payment Plan Tracker — {isAdmin ? 'every team, grouped by team' : "your team's admissions"}
             </Typography>
-            <SectionCard title="Tier Standings" eyebrow="Live MTD by tier">
-                <TierBoard isAdmin={isAdmin} mode={themeState.mode} />
-            </SectionCard>
+            <PaymentPlanPanel isAdmin={isAdmin} />
         </DashboardShell>
     );
 }

@@ -19,6 +19,7 @@ import ExecutiveOverviewPage from './pages/ExecutiveOverviewPage';
 import ConsultantPerformancePage from './pages/ConsultantPerformancePage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import TierPage from './pages/TierPage';
+import PaymentPlanTrackerPage from './pages/PaymentPlanTrackerPage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import AnnouncementBanner from './components/AnnouncementBanner';
@@ -223,6 +224,15 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <TierPage />
+                </PrivateRoute>
+              }
+            />
+
+            <Route
+              path="/payment-plans"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                  <PaymentPlanTrackerPage />
                 </PrivateRoute>
               }
             />

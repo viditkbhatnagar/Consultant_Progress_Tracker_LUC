@@ -27,6 +27,7 @@ import {
     Groups as TeamIcon,
     AttachMoney as MoneyIcon,
     EmojiEvents as RaceIcon,
+    Payments as PaymentPlanIcon,
     ExpandLess,
     ExpandMore,
 } from '@mui/icons-material';
@@ -282,6 +283,12 @@ const Sidebar = ({ onAddCommitment, onLogout, onAIAnalysis, onDashboard, aiAnaly
                             <ListItemButton onClick={() => navigate('/tiers')} sx={{ ...navItemSx, pl: 3 }}>
                                 <ListItemIcon><RaceIcon sx={{ fontSize: 18 }} /></ListItemIcon>
                                 <ListItemText primary="Tier Fight" />
+                            </ListItemButton>
+                        </ListItem>
+                        <ListItem disablePadding sx={{ mb: 0.5 }}>
+                            <ListItemButton onClick={() => navigate('/payment-plans')} sx={{ ...navItemSx, pl: 3 }}>
+                                <ListItemIcon><PaymentPlanIcon sx={{ fontSize: 18 }} /></ListItemIcon>
+                                <ListItemText primary="Payment Plans" />
                             </ListItemButton>
                         </ListItem>
                     </List>
