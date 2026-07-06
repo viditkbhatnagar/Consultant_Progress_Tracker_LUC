@@ -35,7 +35,6 @@ import {
     splitCurriculum,
     composeCurriculum,
     getCurrentAcademicYear,
-    toTitleCase,
 } from '../../utils/constants';
 import { LUC_SOURCES } from '../../utils/studentDesign';
 import PhoneFieldWithCode from '../PhoneFieldWithCode';
@@ -114,11 +113,11 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
     const setContact = (group, who, value) =>
         setFormData((f) => ({ ...f, [group]: { ...f[group], [who]: value } }));
 
-    // Mobile autocapitalize hint + force Title Case on blur so stored values stay
-    // consistent regardless of how the counselor typed. Email/phone/numbers skip this.
-    const capProps = (field) => ({
+    // Mobile keyboards get an autocapitalize hint. We deliberately no longer
+    // force Title Case on blur — that was rewriting what a counselor typed in
+    // caps (e.g. "MOHAMMED" → "Mohammed"). Keep the value exactly as typed.
+    const capProps = () => ({
         inputProps: { autoCapitalize: 'words' },
-        onBlur: () => set(field, toTitleCase(formData[field])),
     });
     const updateEmi = (idx, field, value) =>
         setFormData((f) => ({
@@ -158,7 +157,6 @@ const SkillhubStudentFormDialog = ({ open, onClose, onSave, student, counselors 
         // they came in on, and the enquiry/closing dates so reporting and
         // exports line up with LUC.
         if (!formData.source) return setError('Source is required');
-        if (!formData.campaignName.trim()) return setError('Campaign name is required');
         if (!formData.enquiryDate) return setError('Enquiry date is required');
         if (!formData.closingDate) return setError('Closing date is required');
 

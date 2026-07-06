@@ -434,7 +434,7 @@ const StudentFormDialog = ({
     const validateForm = () => {
         const requiredFields = [
             'studentName', 'gender', 'phone', 'email', 'university', 'program', 'courseFee',
-            'source', 'campaignName', 'enquiryDate', 'closingDate', 'consultantName',
+            'source', 'enquiryDate', 'closingDate', 'consultantName',
             'residence', 'area', 'nationality', 'region', 'companyName', 'designation',
             'experience', 'industryType', 'deptType'
         ];
@@ -1018,7 +1018,6 @@ const StudentFormDialog = ({
                             label="Campaign Name"
                             value={formData.campaignName}
                             onChange={handleChange('campaignName')}
-                            required
                             placeholder="Enter campaign name"
                         />
                     </Box>

@@ -205,7 +205,6 @@ const StudentSchema = new mongoose.Schema(
         openDayLocation: { type: String, default: '', trim: true },
         campaignName: {
             type: String,
-            required: lucOnly,
             trim: true,
             default: '',
         },
