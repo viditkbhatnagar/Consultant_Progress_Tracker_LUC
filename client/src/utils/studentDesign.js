@@ -79,7 +79,7 @@ export const MODE_OF_PAYMENT_OPTIONS = [
 ];
 
 // LUC: certifying body (KHDA / AGI). Optional.
-export const CERTIFICATE_OPTIONS = ['KHDA', 'AGI'];
+export const CERTIFICATE_OPTIONS = ['KHDA', 'AGI', 'KHDA + AGI'];
 
 export const MONTHS = [
     'January',
