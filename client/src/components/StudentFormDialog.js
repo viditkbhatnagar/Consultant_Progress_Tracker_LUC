@@ -23,7 +23,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { format as formatDate } from 'date-fns';
 import commitmentService from '../services/commitmentService';
 import { compareNames } from '../utils/nameSimilarity';
-import { LUC_FEES_PAID_OPTIONS, MODE_OF_PAYMENT_OPTIONS } from '../utils/studentDesign';
+import { LUC_FEES_PAID_OPTIONS, MODE_OF_PAYMENT_OPTIONS, CERTIFICATE_OPTIONS } from '../utils/studentDesign';
 import PhoneFieldWithCode from './PhoneFieldWithCode';
 
 // Quick-pick tier chips shown below "Admission Fee Paid". Derived from the
@@ -205,6 +205,7 @@ const StudentFormDialog = ({
         email: '',
         university: '',
         program: '',
+        certificate: '',
         courseFee: '',
         admissionFeePaid: '',
         feesPaid: '',
@@ -254,6 +255,7 @@ const StudentFormDialog = ({
                 email: student.email || '',
                 university: student.university || '',
                 program: student.program || '',
+                certificate: student.certificate || '',
                 courseFee: student.courseFee || '',
                 admissionFeePaid: student.admissionFeePaid || '',
                 feesPaid: student.feesPaid || '',
@@ -292,6 +294,7 @@ const StudentFormDialog = ({
                 email: '',
                 university: '',
                 program: '',
+                certificate: '',
                 courseFee: '',
                 admissionFeePaid: '',
                 feesPaid: '',
@@ -528,6 +531,7 @@ const StudentFormDialog = ({
                 admissionFeePaid: Number(formData.admissionFeePaid) || 0,
                 feesPaid: formData.feesPaid || undefined,
                 modeOfPayment: formData.modeOfPayment || undefined,
+                certificate: formData.certificate || undefined,
                 experience: Number(formData.experience),
                 // Strip empty commitmentId so the server doesn't try to
                 // ObjectId-cast an empty string. Pass manualEntry only when
@@ -848,6 +852,21 @@ const StudentFormDialog = ({
                             <option value="">Select University</option>
                             {UNIVERSITIES.map(uni => (
                                 <option key={uni} value={uni}>{uni}</option>
+                            ))}
+                        </TextField>
+
+                        <TextField
+                            sx={fullWidthStyle}
+                            select
+                            label="Certificate"
+                            value={formData.certificate}
+                            onChange={handleChange('certificate')}
+                            InputLabelProps={{ shrink: true }}
+                            SelectProps={{ native: true }}
+                        >
+                            <option value="">Select Certificate</option>
+                            {CERTIFICATE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
                             ))}
                         </TextField>
 

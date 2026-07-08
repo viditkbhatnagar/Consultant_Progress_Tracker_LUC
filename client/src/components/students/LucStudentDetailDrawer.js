@@ -294,6 +294,7 @@ const LucStudentDetailDrawer = ({
 
                 <Section title="Enrollment">
                     <Field label="Program" value={student.program} full />
+                    <Field label="Certificate" value={student.certificate} />
                     <Field label="University" value={student.university} full />
                     <Field
                         label="Course Fee"

@@ -102,6 +102,11 @@ const StudentSchema = new mongoose.Schema(
 
         // ── LUC academic info ───────────────────────────────────────────
         program: { type: String, required: lucOnly, trim: true },
+        // LUC: certifying body for the program. Optional.
+        certificate: {
+            type: String,
+            enum: ['KHDA', 'AGI'],
+        },
         university: {
             type: String,
             enum: [

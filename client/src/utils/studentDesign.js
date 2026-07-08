@@ -14,6 +14,7 @@ export const LUC_COLUMNS = [
     { key: 'phone', lbl: 'Phone', width: 140, export: true },
     { key: 'email', lbl: 'Email', width: 200, export: true, truncate: 180 },
     { key: 'program', lbl: 'Program', width: 200, export: true, truncate: 180 },
+    { key: 'certificate', lbl: 'Certificate', width: 120, export: true, exportLbl: 'Certificate' },
     { key: 'university', lbl: 'University', width: 160, export: true, chip: true },
     { key: 'courseFee', lbl: 'Course Fee', width: 130, align: 'right', money: true, export: true, exportLbl: 'Course Fee (AED)' },
     { key: 'admissionFeePaid', lbl: 'Admission Fee', width: 140, align: 'right', money: true, export: true, exportLbl: 'Admission Fee Paid (AED)' },
@@ -76,6 +77,9 @@ export const MODE_OF_PAYMENT_OPTIONS = [
     'Installment Payments',
     'POS',
 ];
+
+// LUC: certifying body (KHDA / AGI). Optional.
+export const CERTIFICATE_OPTIONS = ['KHDA', 'AGI'];
 
 export const MONTHS = [
     'January',

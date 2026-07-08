@@ -494,6 +494,7 @@ exports.updateStudent = async (req, res, next) => {
             email: req.body.email,
             program: req.body.program,
             university: req.body.university,
+            certificate: req.body.certificate,
             courseFee: req.body.courseFee,
             admissionFeePaid: req.body.admissionFeePaid,
             feesPaid: req.body.feesPaid,
