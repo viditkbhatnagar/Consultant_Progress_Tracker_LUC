@@ -8,7 +8,6 @@ import {
     MenuItem,
     InputAdornment,
     Button,
-    Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -30,7 +29,7 @@ const Dropdown = ({ label, value, onChange, options, minWidth = 150 }) => (
 // get the Team dropdown (their data is already scoped to their own team);
 // admin does, to slice across teams. Dropdown options are the distinct values
 // present in the current dataset (passed in via `options`).
-const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin, resultCount, totalCount }) => {
+const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin }) => {
     const set = (key) => (val) => setFilters((f) => ({ ...f, [key]: val }));
     const anyActive =
         filters.search || filters.status || filters.team || filters.consultant || filters.month;
@@ -54,7 +53,12 @@ const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin, resultCount
                 />
                 <Dropdown label="Status" value={filters.status} onChange={set('status')} options={PAYMENT_PLAN_STATUSES} minWidth={170} />
                 {isAdmin && (
-                    <Dropdown label="Team" value={filters.team} onChange={set('team')} options={options.teams} />
+                    <Dropdown
+                        label="Team"
+                        value={filters.team}
+                        onChange={(val) => setFilters((f) => ({ ...f, team: val, consultant: '' }))}
+                        options={options.teams}
+                    />
                 )}
                 <Dropdown label="Consultant" value={filters.consultant} onChange={set('consultant')} options={options.consultants} />
                 <Dropdown label="Month" value={filters.month} onChange={set('month')} options={options.months} minWidth={120} />
@@ -64,9 +68,6 @@ const PaymentPlanFilters = ({ filters, setFilters, options, isAdmin, resultCount
                     </Button>
                 )}
             </Box>
-            <Typography sx={{ mt: 1, fontSize: 12, color: 'var(--d-text-muted, #8A887E)' }}>
-                Showing {resultCount} of {totalCount}
-            </Typography>
         </Box>
     );
 };

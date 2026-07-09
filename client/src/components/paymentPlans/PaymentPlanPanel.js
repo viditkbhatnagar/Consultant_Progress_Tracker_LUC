@@ -22,6 +22,7 @@ import {
     Typography,
     Menu,
     MenuItem,
+    TablePagination,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -39,6 +40,8 @@ import PaymentPlanFormDialog from './PaymentPlanFormDialog';
 const HEAD = ['#', 'Month', 'Student Name', 'Program', 'Consultant', 'Team Leader (TL)', 'Status', 'Remarks / Notes', ''];
 
 const EMPTY_FILTERS = { search: '', status: '', team: '', consultant: '', month: '' };
+
+const PAGE_SIZE = 100;
 
 const StatusChip = ({ status }) => {
     const meta = statusMeta(status);
@@ -62,6 +65,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
     const [deleting, setDeleting] = useState(false);
     const [toast, setToast] = useState(null);
     const [downloadAnchor, setDownloadAnchor] = useState(null);
+    const [page, setPage] = useState(0);
 
     const load = useCallback(() => {
         paymentPlanService
@@ -87,12 +91,17 @@ const PaymentPlanPanel = ({ isAdmin }) => {
     // Distinct dropdown options from the loaded (scoped) dataset.
     const options = useMemo(() => {
         const uniq = (vals) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        // Consultant options are scoped to the selected team, so picking a team
+        // narrows the consultant list to that team's consultants.
+        const teamScoped = filters.team
+            ? plans.filter((p) => (p.teamName || '') === filters.team)
+            : plans;
         return {
             teams: uniq(plans.map((p) => p.teamName)),
-            consultants: uniq(plans.map((p) => p.consultantName)),
+            consultants: uniq(teamScoped.map((p) => p.consultantName)),
             months: MONTHS.filter((m) => plans.some((p) => p.month === m)), // calendar order
         };
-    }, [plans]);
+    }, [plans, filters.team]);
 
     // Apply the active filters + free-text search (client-side).
     const filtered = useMemo(() => {
@@ -113,11 +122,24 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         });
     }, [plans, filters]);
 
+    // Reset to the first page when filters change; clamp if a data refresh
+    // shrinks the result set below the current page.
+    useEffect(() => { setPage(0); }, [filters]);
+    useEffect(() => {
+        const lastPage = Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1);
+        setPage((p) => (p > lastPage ? lastPage : p));
+    }, [filtered.length]);
+
+    const pageRows = useMemo(
+        () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+        [filtered, page]
+    );
+
     // Admin view groups rows by team; team lead sees a single flat list.
     const groups = useMemo(() => {
-        if (!isAdmin) return [{ team: null, rows: filtered }];
+        if (!isAdmin) return [{ team: null, rows: pageRows }];
         const byTeam = new Map();
-        for (const p of filtered) {
+        for (const p of pageRows) {
             const key = p.teamName || p.teamLeadName || 'Unassigned';
             if (!byTeam.has(key)) byTeam.set(key, []);
             byTeam.get(key).push(p);
@@ -125,7 +147,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         return [...byTeam.entries()]
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([team, rows]) => ({ team, rows }));
-    }, [filtered, isAdmin]);
+    }, [pageRows, isAdmin]);
 
     const openCreate = () => { setEditing(null); setDialogOpen(true); };
     const openEdit = (plan) => { setEditing(plan); setDialogOpen(true); };
@@ -191,7 +213,7 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         </Box>
     );
 
-    let rowNumber = 0;
+    let rowNumber = page * PAGE_SIZE;
     const renderRow = (p) => {
         rowNumber += 1;
         return (
@@ -236,8 +258,6 @@ const PaymentPlanPanel = ({ isAdmin }) => {
                         setFilters={setFilters}
                         options={options}
                         isAdmin={isAdmin}
-                        resultCount={filtered.length}
-                        totalCount={plans.length}
                     />
                     {filtered.length === 0 ? (
                         <Box sx={{ textAlign: 'center', py: 5, color: 'var(--d-text-muted, #8A887E)' }}>
@@ -272,6 +292,18 @@ const PaymentPlanPanel = ({ isAdmin }) => {
                                 </TableBody>
                             </Table>
                         </TableContainer>
+                    )}
+                    {filtered.length > 0 && (
+                        <TablePagination
+                            component="div"
+                            count={filtered.length}
+                            page={page}
+                            onPageChange={(e, p) => setPage(p)}
+                            rowsPerPage={PAGE_SIZE}
+                            rowsPerPageOptions={[PAGE_SIZE]}
+                            labelDisplayedRows={({ from, to, count }) => `Showing ${from}–${to} of ${count}`}
+                            sx={{ borderTop: '1px solid var(--d-border-soft, #ECE9E2)' }}
+                        />
                     )}
                 </>
             )}
