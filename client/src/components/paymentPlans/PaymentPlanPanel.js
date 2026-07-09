@@ -135,6 +135,9 @@ const PaymentPlanPanel = ({ isAdmin }) => {
         [filtered, page]
     );
 
+    const showingFrom = filtered.length ? page * PAGE_SIZE + 1 : 0;
+    const showingTo = Math.min((page + 1) * PAGE_SIZE, filtered.length);
+
     // Admin view groups rows by team; team lead sees a single flat list.
     const groups = useMemo(() => {
         if (!isAdmin) return [{ team: null, rows: pageRows }];
@@ -259,6 +262,11 @@ const PaymentPlanPanel = ({ isAdmin }) => {
                         options={options}
                         isAdmin={isAdmin}
                     />
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: 'var(--d-text-3, #57564E)', mb: 1.5 }}>
+                        {filtered.length
+                            ? `Showing ${showingFrom}–${showingTo} of ${filtered.length}`
+                            : 'No matching records'}
+                    </Typography>
                     {filtered.length === 0 ? (
                         <Box sx={{ textAlign: 'center', py: 5, color: 'var(--d-text-muted, #8A887E)' }}>
                             <Typography sx={{ mb: 0.5 }}>No payment plans match your filters.</Typography>
