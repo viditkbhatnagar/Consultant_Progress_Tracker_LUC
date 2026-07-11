@@ -118,16 +118,16 @@ const AttendanceTab = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
             ) : (
                 <Paper variant="outlined" sx={{ borderRadius: '12px', p: 1.5 }}>
-                    <Typography sx={{ fontSize: 12.5, color: '#57564E', mb: 1 }}>
+                    <Typography sx={{ fontSize: 12.5, color: 'var(--d-text-3, #57564E)', mb: 1 }}>
                         {gradeOrYear}{subject ? ` · ${subject}` : ''} · {date} — {markedCount}/{rows.length} marked
                     </Typography>
                     <Divider sx={{ mb: 1 }} />
                     {rows.length === 0 ? (
-                        <Typography sx={{ color: '#8A887E', py: 2 }}>No students yet — add one below.</Typography>
+                        <Typography sx={{ color: 'var(--d-text-muted, #8A887E)', py: 2 }}>No students yet — add one below.</Typography>
                     ) : rows.map((r, idx) => (
-                        <Box key={r.studentName} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderBottom: '1px solid #f1efea' }}>
+                        <Box key={r.studentName} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, borderBottom: '1px solid var(--d-border-soft, #f1efea)' }}>
                             <Typography sx={{ flex: 1, fontWeight: 600, fontSize: 14 }}>
-                                {r.studentName}{!r.student && <Typography component="span" sx={{ fontSize: 10, color: '#a3a3a3', ml: 1 }}>(unlinked)</Typography>}
+                                {r.studentName}{!r.student && <Typography component="span" sx={{ fontSize: 10, color: 'var(--d-text-muted, #a3a3a3)', ml: 1 }}>(unlinked)</Typography>}
                             </Typography>
                             <ToggleButtonGroup exclusive size="small" value={r.status} onChange={(e, v) => setStatus(idx, v || '')}>
                                 <ToggleButton value="Present" sx={{ px: 1.5, '&.Mui-selected': { bgcolor: 'rgba(31,122,53,0.15)', color: '#1F7A35' } }}>Present</ToggleButton>

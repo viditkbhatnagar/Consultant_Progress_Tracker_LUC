@@ -68,7 +68,7 @@ const EntryDialog = ({ open, entry, teachers, onClose, onSaved }) => {
 };
 
 const SessionCard = ({ e, mode, onEdit, onDelete }) => (
-    <Box sx={{ p: 1, mb: 1, borderRadius: '8px', bgcolor: '#fff', border: '1px solid #e5e7eb', borderLeft: '3px solid #2383E2' }}>
+    <Box sx={{ p: 1, mb: 1, borderRadius: '8px', bgcolor: 'var(--d-surface, #fff)', border: '1px solid var(--d-border, #e5e7eb)', borderLeft: '3px solid var(--d-accent, #2383E2)' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
             <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{e.time}</Typography>
             <Box sx={{ whiteSpace: 'nowrap' }}>
@@ -77,7 +77,7 @@ const SessionCard = ({ e, mode, onEdit, onDelete }) => (
             </Box>
         </Box>
         <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{e.studentLabel || e.gradeOrYear}</Typography>
-        <Typography sx={{ fontSize: 11, color: '#57564E' }}>
+        <Typography sx={{ fontSize: 11, color: 'var(--d-text-3, #57564E)' }}>
             {[mode === 'grade' ? e.teacherName : e.subject, e.curriculum].filter(Boolean).join(' · ')}
         </Typography>
     </Box>
@@ -153,10 +153,10 @@ const TimetableTab = () => {
                 <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${DAYS.length}, minmax(150px, 1fr))`, gap: 1 }}>
                     {DAYS.map((d) => (
                         <Box key={d}>
-                            <Typography sx={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#57564E', mb: 1, textAlign: 'center' }}>{d.slice(0, 3)}</Typography>
+                            <Typography sx={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--d-text-3, #57564E)', mb: 1, textAlign: 'center' }}>{d.slice(0, 3)}</Typography>
                             {byDay[d].length ? byDay[d].map((e) => (
                                 <SessionCard key={e._id} e={e} mode={mode} onEdit={(x) => { setEditing(x); setDialogOpen(true); }} onDelete={del} />
-                            )) : <Typography sx={{ fontSize: 11, color: '#a3a3a3', textAlign: 'center', mt: 1 }}>—</Typography>}
+                            )) : <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #a3a3a3)', textAlign: 'center', mt: 1 }}>—</Typography>}
                         </Box>
                     ))}
                 </Box>

@@ -87,7 +87,7 @@ const TeachersTab = () => {
             <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: '12px' }}>
                 <Table size="small">
                     <TableHead>
-                        <TableRow sx={{ bgcolor: '#f1efea' }}>
+                        <TableRow sx={{ bgcolor: 'var(--d-surface-muted, #f1efea)' }}>
                             <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
                             <TableCell sx={{ fontWeight: 700 }}>Subjects</TableCell>
                             <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
