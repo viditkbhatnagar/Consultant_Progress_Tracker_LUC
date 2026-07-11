@@ -20,6 +20,7 @@ import ConsultantPerformancePage from './pages/ConsultantPerformancePage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import TierPage from './pages/TierPage';
 import PaymentPlanTrackerPage from './pages/PaymentPlanTrackerPage';
+import InstitutePage from './pages/InstitutePage';
 import MonthlyTargetsPage from './pages/MonthlyTargetsPage';
 import FloatingChatLauncher from './components/chat/FloatingChatLauncher';
 import AnnouncementBanner from './components/AnnouncementBanner';
@@ -233,6 +234,17 @@ function App() {
               element={
                 <PrivateRoute allowedRoles={['admin', 'team_lead']}>
                   <PaymentPlanTrackerPage />
+                </PrivateRoute>
+              }
+            />
+
+            {/* Skillhub Institute — teachers, timetable, attendance. Admin +
+                the Institute branch login; backend scopes to skillhub_institute. */}
+            <Route
+              path="/institute"
+              element={
+                <PrivateRoute allowedRoles={['admin', 'skillhub']}>
+                  <InstitutePage />
                 </PrivateRoute>
               }
             />

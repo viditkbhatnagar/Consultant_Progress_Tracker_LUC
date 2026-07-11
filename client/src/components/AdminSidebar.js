@@ -20,6 +20,7 @@ import {
     AutoAwesome as AutoAwesomeIcon,
     AttachMoney as MoneyIcon,
     Payments as PaymentPlanIcon,
+    CalendarMonth as InstituteIcon,
     AccessTime as AccessTimeIcon,
     VideoCall as VideoCallIcon,
     FactCheck as CommitmentsIcon,
@@ -359,6 +360,13 @@ const AdminSidebar = ({ onLogout, onAIAnalysis, onDashboard, aiAnalysisActive, o
                     <ListItemButton onClick={onAIAnalysis} selected={aiAnalysisActive} sx={navItemSx}>
                         <ListItemIcon><AutoAwesomeIcon /></ListItemIcon>
                         <ListItemText primary="AI Analysis" />
+                    </ListItemButton>
+                </ListItem>
+
+                <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton onClick={() => navigate('/institute')} selected={location.pathname === '/institute'} sx={navItemSx}>
+                        <ListItemIcon><InstituteIcon /></ListItemIcon>
+                        <ListItemText primary="Institute" />
                     </ListItemButton>
                 </ListItem>
 
