@@ -50,6 +50,7 @@ app.use('/api/team-entries', require('./routes/teamEntries'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/tiers', require('./routes/tiers'));
 app.use('/api/payment-plans', require('./routes/paymentPlans'));
+app.use('/api/institute', require('./routes/institute'));
 
 // Auth-gated static PDFs (spec §7). Must sit before the SPA catch-all so
 // that /program-docs/* never falls through to index.html. JWT + LUC-only.
