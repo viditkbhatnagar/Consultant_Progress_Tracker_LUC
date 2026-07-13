@@ -23,6 +23,8 @@ const instituteService = {
         (await axios.get(`${URL}/attendance/roster`, { params: { gradeOrYear } })).data,
     getAttendance: async (params) => (await axios.get(`${URL}/attendance`, { params })).data,
     markAttendance: async (body) => (await axios.post(`${URL}/attendance`, body)).data,
+    deleteAttendanceStudent: async (gradeOrYear, studentName) =>
+        (await axios.delete(`${URL}/attendance/student`, { data: { gradeOrYear, studentName } })).data,
 };
 
 export default instituteService;

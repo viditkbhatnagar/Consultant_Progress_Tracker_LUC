@@ -18,9 +18,10 @@ router.route('/teachers/:id').put(c.updateTeacher).delete(c.deleteTeacher);
 router.route('/timetable').get(c.getTimetable).post(c.createTimetableEntry);
 router.route('/timetable/:id').put(c.updateTimetableEntry).delete(c.deleteTimetableEntry);
 
-// Attendance (specific reads before the generic list)
+// Attendance (specific routes before the generic list)
 router.get('/attendance/meta', c.getAttendanceMeta);
 router.get('/attendance/roster', c.getRoster);
+router.delete('/attendance/student', c.deleteAttendanceStudent);
 router.route('/attendance').get(c.getAttendance).post(c.markAttendance);
 
 module.exports = router;

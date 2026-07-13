@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box, Button, Paper, FormControl, InputLabel, Select, MenuItem, TextField, ToggleButtonGroup,
-    ToggleButton, CircularProgress, Alert, Typography, Snackbar, Divider,
+    ToggleButton, CircularProgress, Alert, Typography, Snackbar, Divider, IconButton, Tooltip,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import instituteService from '../../services/instituteService';
 
 const todayIso = () => {
@@ -59,6 +60,16 @@ const AttendanceTab = () => {
     useEffect(() => { loadRoster(); }, [loadRoster]);
 
     const setStatus = (idx, status) => setRows((p) => p.map((r, i) => (i === idx ? { ...r, status } : r)));
+    const removeStudent = async (studentName) => {
+        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear}? This deletes all their attendance in this grade/year.`)) return;
+        try {
+            await instituteService.deleteAttendanceStudent(gradeOrYear, studentName);
+            setRows((p) => p.filter((r) => r.studentName !== studentName));
+            setToast({ severity: 'success', message: `Removed ${studentName}` });
+        } catch (e) {
+            setToast({ severity: 'error', message: e.response?.data?.message || e.message });
+        }
+    };
     const addStudent = () => {
         const nm = newName.trim();
         if (!nm) return;
@@ -133,6 +144,9 @@ const AttendanceTab = () => {
                                 <ToggleButton value="Present" sx={{ px: 1.5, '&.Mui-selected': { bgcolor: 'rgba(31,122,53,0.15)', color: '#1F7A35' } }}>Present</ToggleButton>
                                 <ToggleButton value="Absent" sx={{ px: 1.5, '&.Mui-selected': { bgcolor: 'rgba(220,38,38,0.15)', color: '#DC2626' } }}>Absent</ToggleButton>
                             </ToggleButtonGroup>
+                            <Tooltip title="Remove from this grade / year">
+                                <IconButton size="small" onClick={() => removeStudent(r.studentName)}><DeleteIcon fontSize="small" /></IconButton>
+                            </Tooltip>
                         </Box>
                     ))}
                     <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>

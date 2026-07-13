@@ -308,3 +308,21 @@ exports.markAttendance = async (req, res, next) => {
         next(error);
     }
 };
+
+// Remove a student from a grade/year's attendance entirely (wrong-grade or
+// discontinued students). Deletes all their attendance rows for that grade so
+// they drop out of the roster.
+exports.deleteAttendanceStudent = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const { gradeOrYear, studentName } = req.body;
+        if (!gradeOrYear || !studentName) {
+            return res.status(400).json({ success: false, message: 'gradeOrYear and studentName are required' });
+        }
+        const result = await Attendance.deleteMany({ organization: INSTITUTE, gradeOrYear, studentName });
+        emit('institute:attendance', { gradeOrYear, studentName, removed: result.deletedCount });
+        res.status(200).json({ success: true, data: { removed: result.deletedCount } });
+    } catch (error) {
+        next(error);
+    }
+};
