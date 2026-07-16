@@ -291,32 +291,28 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             </Select>
                         </FormControl>
                     </Grid>
-                    {/* Commitment Date — Skillhub branch logins are the
-                        admin of their branch, so they can backdate freely
-                        (e.g. to fill in pre-rollout April entries).
-                        Capped only at "today" so future-dating isn't
-                        allowed. weekStartDate/weekEndDate/weekNumber are
-                        re-derived from whatever date is picked. */}
+                    {/* Commitment Date — Skillhub branch logins are the admin
+                        of their branch, so they can pick any date, past OR
+                        future (e.g. a follow-up scheduled next week).
+                        weekStartDate/weekEndDate/weekNumber are re-derived from
+                        whatever date is picked. */}
                     <Grid size={{ xs: 12, sm: 4 }}>
                         <TextField
                             fullWidth type="date" label="Commitment Date"
                             InputLabelProps={{ shrink: true }}
-                            inputProps={{ max: format(new Date(), 'yyyy-MM-dd') }}
                             value={formData.selectedDate}
                             onChange={(e) => {
                                 const v = e.target.value;
                                 if (!v) return;
-                                const todayStr = format(new Date(), 'yyyy-MM-dd');
-                                const clamped = v > todayStr ? todayStr : v;
-                                const dt = new Date(clamped + 'T00:00:00');
+                                const dt = new Date(v + 'T00:00:00');
                                 setFormData((f) => ({
                                     ...f,
-                                    selectedDate: clamped,
+                                    selectedDate: v,
                                     dayOfWeek: format(dt, 'EEEE'),
                                     weekNumber: getWeek(dt, { weekStartsOn: 1 }),
                                 }));
                             }}
-                            helperText="Optional — defaults to today. Pick any past date; the week / month roll-up is computed automatically."
+                            helperText="Optional — defaults to today. Pick any date (past or future); the week / month roll-up is computed automatically."
                         />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 4 }}>
