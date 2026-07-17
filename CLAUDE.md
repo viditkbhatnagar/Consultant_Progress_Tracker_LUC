@@ -52,7 +52,9 @@ cd server && node scripts/backfillCommitmentDate.js
 cd client && npm test
 ```
 
-**No backend tests exist** — `npm test` in `server/` is a no-op.
+**Backend tests** — `npm test` in `server/` runs `tests/exports/**` + `tests/meetings/**`
+(Jest + supertest + mongodb-memory-server). Coverage is partial: the rest of the
+server is untested, so a green run does not mean the whole API is verified.
 
 Legacy seed scripts exist in `server/utils/` (`seedUsers.js`, `seed2025.js`, `seedTeamBased2025.js`) but are not used by `npm run seed`. Other one-off scripts live in `server/scripts/`: `createManager.js` (adds a manager user), `seedSkillhub.js` (non-destructive Skillhub-only seed — safe to run in production; does not touch LUC data), `importStudents.js` / `clearAndImportStudents.js` (Excel imports), `fixAdmissionClosedStatus.js`, `analyzeExcel.js`, `analyzeExcelData.js`.
 
@@ -97,6 +99,13 @@ Legacy seed scripts exist in `server/utils/` (`seedUsers.js`, `seed2025.js`, `se
 ### Hourly Tracker Feature
 - `/api/hourly/*` routes cover slot upserts, day/month reads, leaderboard, and an AI analysis endpoint (`GET /api/hourly/ai-analysis`). All require auth but no role gate — scoping is done inline in `hourlyController.js`.
 - Frontend page: `client/src/pages/HourlyTrackerPage.js`, route `/hourly-tracker`.
+
+### Meeting Tracker (`/meetings`)
+- Roles: `admin`, `team_lead`, `skillhub`. Delete and `GET /api/meetings/ai-analysis` stay admin / LUC-shaped — don't widen the AI route until a Skillhub UI actually calls it (it's OpenAI-billed).
+- `client/src/pages/MeetingTrackerPage.js` is a **dispatcher** (same shape as `HourlyTrackerPage`): it resolves the caller's org via `resolveViewOrg(user, adminOrgScope)` and renders `SkillhubMeetingTrackerPage` for Skillhub, or the original `LucMeetingTrackerPage` (in the same file) for LUC. Add org-specific behavior by branching here, not by adding org checks inside the LUC page.
+- Skillhub view (`client/src/pages/SkillhubMeetingTrackerPage.js` + `components/skillhub/SkillhubMeetingDialog.js`) is Institute-shaped: no LUC Program field, plus **Demo done by** — a `Meeting.demoDoneBy` name string sourced from `instituteService.getTeachers()`. That dropdown and its filter render only when `viewOrg === 'skillhub_institute'`; the teachers endpoint 403s for a Training login.
+- **`program` is `required: [lucOnly, ...]`, and that rule cannot fire on update.** Mongoose runs `findByIdAndUpdate` validators with *query* context, so `this.organization` is always `undefined` and the requirement silently passes. `updateMeeting` therefore re-checks it in JS against the stored doc's org. Same trap applies to every `required: lucOnly` / `required: skillhubOnly` field in `Student.js`. Specs: `server/tests/meetings/meetings.test.js`.
+- Admin has no branch token, so admin-created Skillhub meetings derive `teamLead` from the picked counselor's populated `teamLead._id`; `team_lead` / `skillhub` callers always get org + ownership from their own token server-side.
 
 ### AI Analysis Feature
 - `POST /api/ai/analysis` — generates dashboard analysis via OpenAI. Available to both admins and team leads (role-scoped data aggregation).

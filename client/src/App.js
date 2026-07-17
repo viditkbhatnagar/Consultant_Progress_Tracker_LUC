@@ -104,11 +104,14 @@ function App() {
               }
             />
 
-            {/* Meeting Tracker - LUC admin + team_lead */}
+            {/* Meeting Tracker - admin, team_lead, and skillhub. The page
+                dispatches on the caller's org (user.organization or admin's
+                current adminOrgScope): LUC gets the original tracker,
+                Skillhub gets the Institute-shaped page. */}
             <Route
               path="/meetings"
               element={
-                <PrivateRoute allowedRoles={['admin', 'team_lead']}>
+                <PrivateRoute allowedRoles={['admin', 'team_lead', 'skillhub']}>
                   <MeetingTrackerPage />
                 </PrivateRoute>
               }

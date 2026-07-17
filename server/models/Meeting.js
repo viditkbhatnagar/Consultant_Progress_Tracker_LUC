@@ -1,8 +1,12 @@
 const mongoose = require('mongoose');
-const { ORGANIZATIONS, ORG_LUC } = require('../config/organizations');
+const { ORGANIZATIONS, ORG_LUC, isLuc } = require('../config/organizations');
 const { LEAD_STAGES } = require('./Commitment');
 
 const MEETING_MODES = ['Zoom', 'Out Meeting', 'Office Meeting', 'Student Meeting'];
+
+const lucOnly = function () {
+    return isLuc(this.organization);
+};
 
 const MeetingSchema = new mongoose.Schema(
     {
@@ -27,9 +31,11 @@ const MeetingSchema = new mongoose.Schema(
             required: [true, 'Student name is required'],
             trim: true,
         },
+        // LUC-only: Skillhub meetings are demo sessions against a curriculum,
+        // not a LUC program.
         program: {
             type: String,
-            required: [true, 'Program is required'],
+            required: [lucOnly, 'Program is required'],
             trim: true,
         },
         mode: {
@@ -100,6 +106,16 @@ const MeetingSchema = new mongoose.Schema(
         meetingTakenBy: {
             type: [String],
             default: [],
+        },
+
+        // Skillhub Institute: which teacher actually delivered the demo
+        // class. Denormalized name string (teachers live in the Teacher
+        // collection, not User) so a renamed/removed teacher doesn't
+        // rewrite history. Unused by LUC.
+        demoDoneBy: {
+            type: String,
+            default: '',
+            trim: true,
         },
 
         createdBy: {

@@ -27,6 +27,9 @@ import MeetingsCardsView from '../components/meetings/MeetingsCardsView';
 import MeetingDetailDrawer from '../components/meetings/MeetingDetailDrawer';
 import MeetingsAIAnalysisDialog from '../components/meetings/MeetingsAIAnalysisDialog';
 import { TrackerThemeProvider, useThemeState } from '../utils/trackerTheme';
+import SkillhubMeetingTrackerPage from './SkillhubMeetingTrackerPage';
+import { useAdminOrgScope } from '../utils/adminOrgScope';
+import { resolveViewOrg, isSkillhubOrg } from '../utils/hourlyConfig';
 
 // Default = show everything. User can type a number into the Rows/page
 // input to switch to paginated mode. SHOW_ALL_LIMIT is a hard cap the
@@ -51,7 +54,7 @@ const savePrefs = (prefs) => {
     }
 };
 
-const MeetingTrackerPage = () => {
+const LucMeetingTrackerPage = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const isAdmin = user?.role === 'admin';
@@ -538,6 +541,20 @@ const MeetingTrackerPage = () => {
         </TrackerThemeProvider>
         </LocalizationProvider>
     );
+};
+
+// ─── DISPATCHER ──────────────────────────────────────────────
+// Thin wrapper so hooks order is constant inside each real component.
+// Skillhub view rendered by SkillhubMeetingTrackerPage (Institute-shaped:
+// no Program, plus "Demo done by"); LUC view by LucMeetingTrackerPage above.
+const MeetingTrackerPage = () => {
+    const { user } = useAuth();
+    const [adminOrgScope] = useAdminOrgScope();
+    const viewOrg = resolveViewOrg(user, adminOrgScope);
+    if (isSkillhubOrg(viewOrg)) {
+        return <SkillhubMeetingTrackerPage />;
+    }
+    return <LucMeetingTrackerPage />;
 };
 
 export default MeetingTrackerPage;

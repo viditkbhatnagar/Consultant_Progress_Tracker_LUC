@@ -94,7 +94,10 @@ exports.getMeetings = async (req, res, next) => {
         if (status) filter.status = status;
         if (mode) filter.mode = mode;
         if (search) {
-            filter.studentName = { $regex: search, $options: 'i' };
+            // Escape regex metacharacters — a raw "(" from the search box
+            // would otherwise throw. Mirrors studentController.getStudents.
+            const safe = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (safe) filter.studentName = { $regex: safe, $options: 'i' };
         }
 
         const [total, data] = await Promise.all([
@@ -198,7 +201,9 @@ exports.getMeeting = async (req, res, next) => {
 // @access  Private (admin, team_lead)
 exports.createMeeting = async (req, res, next) => {
     try {
-        if (req.user.role === 'team_lead') {
+        // Team leads (LUC) and Skillhub branch logins always own what they
+        // create — ownership and org come from the token, never the body.
+        if (req.user.role === 'team_lead' || req.user.role === 'skillhub') {
             req.body.teamLead = req.user.id;
             req.body.organization = req.user.organization;
         } else if (req.user.role === 'admin') {
@@ -288,6 +293,24 @@ exports.updateMeeting = async (req, res, next) => {
         if (req.user.role !== 'admin') {
             delete req.body.teamLead;
             delete req.body.organization;
+        }
+
+        // The schema's `required: lucOnly` on `program` cannot run here:
+        // findByIdAndUpdate validators execute with query context, so
+        // `this.organization` is undefined and the rule silently passes.
+        // Enforce it against the stored doc's org so LUC keeps the
+        // requirement it had when `program` was statically required.
+        const effectiveOrg =
+            (req.user.role === 'admin' && req.body.organization) || meeting.organization;
+        if (
+            'program' in req.body &&
+            isLuc(effectiveOrg) &&
+            !String(req.body.program || '').trim()
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'Program is required',
+            });
         }
 
         req.body.lastUpdatedBy = req.user.id;

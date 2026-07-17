@@ -23,6 +23,7 @@ import {
     ChatBubbleOutline as AskMeIcon,
     SaveAlt as ExportCenterIcon,
     CalendarMonth as InstituteIcon,
+    Groups as MeetingsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { ORGANIZATION_LABELS } from '../../utils/constants';
@@ -223,8 +224,12 @@ const SkillhubSidebar = ({ activeView, onNavigate, onNewAdmission, onLogout }) =
                 {navItem('new-admission', 'New Admission', PersonAddIcon, onNewAdmission)}
                 {navItem('hourly', 'Hourly Tracker', AccessTimeIcon, () => navigate('/hourly-tracker'))}
                 {navItem('exports', 'Export Center', ExportCenterIcon, () => navigate('/exports'))}
-                {user?.organization === 'skillhub_institute' &&
-                    navItem('institute', 'Institute', InstituteIcon, () => navigate('/institute'))}
+                {user?.organization === 'skillhub_institute' && (
+                    <>
+                        {navItem('meetings', 'Meeting Tracker', MeetingsIcon, () => navigate('/meetings'))}
+                        {navItem('institute', 'Institute', InstituteIcon, () => navigate('/institute'))}
+                    </>
+                )}
             </List>
 
             <Box sx={{ p: 2, borderTop: '1px solid var(--d-border-soft, #ECE9E2)' }}>
