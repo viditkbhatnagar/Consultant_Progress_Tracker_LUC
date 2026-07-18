@@ -33,6 +33,10 @@ const DemoSlotSchema = new mongoose.Schema(
         done: { type: Boolean, default: false },
         doneAt: { type: Date, default: null },
         notes: { type: String, default: '', trim: true },
+        // Skillhub Institute: which teacher delivered this demo. Denormalized
+        // name string (teachers live in the Teacher collection, not User) so a
+        // renamed/removed teacher doesn't rewrite history. Unused by Training.
+        demoDoneBy: { type: String, default: '', trim: true },
     },
     { _id: false }
 );

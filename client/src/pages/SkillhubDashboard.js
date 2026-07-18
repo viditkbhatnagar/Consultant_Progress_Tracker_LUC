@@ -800,6 +800,7 @@ const SkillhubDashboard = () => {
                 commitment={editingCommitment}
                 teamConsultants={counselors}
                 user={user}
+                viewOrg={user?.organization}
             />
         </DashboardShell>
     );

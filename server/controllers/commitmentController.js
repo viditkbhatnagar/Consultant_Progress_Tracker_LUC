@@ -60,12 +60,15 @@ function normalizeDemos(input, existing = []) {
             done,
             doneAt,
             notes: (raw.notes || '').toString().trim(),
+            demoDoneBy: (raw.demoDoneBy || '').toString().trim(),
         });
     }
     // Stable sort by slot number so the stored order matches the UI
     cleaned.sort((a, b) => a.slot.localeCompare(b.slot));
     return { ok: true, demos: cleaned };
 }
+// Exported for unit tests (demo-slot normalization is pure + worth locking).
+exports.normalizeDemos = normalizeDemos;
 
 // @desc    Get commitments
 // @route   GET /api/commitments

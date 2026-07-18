@@ -22,6 +22,7 @@ import {
 } from '@mui/material';
 import { LEAD_STAGES_LIST } from '../../utils/constants';
 import { getWeekInfo } from '../../utils/weekUtils';
+import instituteService from '../../services/instituteService';
 import { format, startOfWeek, endOfWeek, getWeek } from 'date-fns';
 
 const DEMO_SLOTS = ['Demo 1', 'Demo 2', 'Demo 3', 'Demo 4'];
@@ -33,6 +34,7 @@ const blankDemos = () =>
         done: false,
         doneAt: null,
         notes: '',
+        demoDoneBy: '',
     }));
 
 const toInputDatetime = (v) => {
@@ -43,8 +45,15 @@ const toInputDatetime = (v) => {
     return format(d, "yyyy-MM-dd'T'HH:mm");
 };
 
-const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsultants = [], user }) => {
+const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsultants = [], user, viewOrg }) => {
     const currentWeek = getWeekInfo();
+
+    // "Demo done by" is an Institute-only teacher dropdown (teachers exist only
+    // for the Institute branch). Admins carry org 'luc', so trust viewOrg when
+    // provided and fall back to the caller's own org.
+    const effectiveOrg = viewOrg || user?.organization;
+    const isInstitute = effectiveOrg === 'skillhub_institute';
+    const [teachers, setTeachers] = useState([]);
 
     const [formData, setFormData] = useState({
         consultantName: '',
@@ -91,8 +100,9 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                           done: !!d.done,
                           doneAt: d.doneAt || null,
                           notes: d.notes || '',
+                          demoDoneBy: d.demoDoneBy || '',
                       }
-                    : { slot, scheduledAt: '', done: false, doneAt: null, notes: '' };
+                    : { slot, scheduledAt: '', done: false, doneAt: null, notes: '', demoDoneBy: '' };
             });
 
             setFormData((f) => ({
@@ -141,6 +151,18 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         setError('');
     }, [commitment, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Load Institute teachers for the "Demo done by" dropdown. The endpoint is
+    // Institute-scoped (403s for a Training login), so only call it when we
+    // know we're in the Institute branch.
+    useEffect(() => {
+        if (!open || !isInstitute) { setTeachers([]); return; }
+        let cancelled = false;
+        instituteService.getTeachers()
+            .then((r) => { if (!cancelled) setTeachers((r.data || []).filter((t) => t.isActive !== false)); })
+            .catch(() => { if (!cancelled) setTeachers([]); });
+        return () => { cancelled = true; };
+    }, [open, isInstitute]);
+
     const set = (field, value) => setFormData((f) => ({ ...f, [field]: value }));
     const updateDemo = (idx, field, value) =>
         setFormData((f) => ({
@@ -176,12 +198,13 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             // Build a clean payload. Trim empty demos to avoid sending rows with
             // nothing to save — server is forgiving but cleaner payload is nicer.
             const cleanDemos = formData.demos
-                .filter((d) => d.scheduledAt || d.done || d.notes)
+                .filter((d) => d.scheduledAt || d.done || d.notes || d.demoDoneBy)
                 .map((d) => ({
                     slot: d.slot,
                     scheduledAt: d.scheduledAt ? new Date(d.scheduledAt).toISOString() : null,
                     done: d.done,
                     notes: d.notes,
+                    demoDoneBy: d.demoDoneBy || '',
                 }));
 
             // Derive week bounds from the picked commitment date so week &
@@ -370,7 +393,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                         </Typography>
                                     )}
                                 </Grid>
-                                <Grid size={{ xs: 12, sm: 4 }}>
+                                <Grid size={{ xs: 12, sm: isInstitute ? 3 : 4 }}>
                                     <TextField
                                         fullWidth size="small" type="datetime-local"
                                         label="Scheduled"
@@ -379,7 +402,28 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                         onChange={(e) => updateDemo(idx, 'scheduledAt', e.target.value)}
                                     />
                                 </Grid>
-                                <Grid size={{ xs: 12, sm: 4 }}>
+                                {isInstitute && (
+                                    <Grid size={{ xs: 12, sm: 3 }}>
+                                        <FormControl fullWidth size="small">
+                                            <InputLabel>Demo done by</InputLabel>
+                                            <Select
+                                                label="Demo done by"
+                                                value={d.demoDoneBy || ''}
+                                                onChange={(e) => updateDemo(idx, 'demoDoneBy', e.target.value)}
+                                            >
+                                                <MenuItem value=""><em>—</em></MenuItem>
+                                                {teachers.map((t) => (
+                                                    <MenuItem key={t._id} value={t.name}>{t.name}</MenuItem>
+                                                ))}
+                                                {/* Keep a saved teacher selectable even if since deactivated. */}
+                                                {d.demoDoneBy && !teachers.some((t) => t.name === d.demoDoneBy) && (
+                                                    <MenuItem value={d.demoDoneBy}>{d.demoDoneBy}</MenuItem>
+                                                )}
+                                            </Select>
+                                        </FormControl>
+                                    </Grid>
+                                )}
+                                <Grid size={{ xs: 12, sm: isInstitute ? 2 : 4 }}>
                                     <TextField
                                         fullWidth size="small"
                                         label="Notes"

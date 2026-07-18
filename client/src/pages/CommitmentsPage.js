@@ -470,6 +470,7 @@ const CommitmentsPage = () => {
                         commitment={editing}
                         teamConsultants={consultants}
                         user={user}
+                        viewOrg={viewOrg}
                     />
                 ) : (
                     <CommitmentFormDialog
