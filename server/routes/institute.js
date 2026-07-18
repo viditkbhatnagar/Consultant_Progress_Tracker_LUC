@@ -24,4 +24,9 @@ router.get('/attendance/roster', c.getRoster);
 router.delete('/attendance/student', c.deleteAttendanceStudent);
 router.route('/attendance').get(c.getAttendance).post(c.markAttendance);
 
+// Tests (specific /tests/meta before the generic /tests/:id)
+router.get('/tests/meta', c.getTestMeta);
+router.route('/tests').get(c.getTests).post(c.createTests);
+router.route('/tests/:id').put(c.updateTest).delete(c.deleteTest);
+
 module.exports = router;

@@ -25,6 +25,13 @@ const instituteService = {
     markAttendance: async (body) => (await axios.post(`${URL}/attendance`, body)).data,
     deleteAttendanceStudent: async (gradeOrYear, studentName) =>
         (await axios.delete(`${URL}/attendance/student`, { data: { gradeOrYear, studentName } })).data,
+
+    // Tests
+    getTestMeta: async () => (await axios.get(`${URL}/tests/meta`)).data,
+    getTests: async (params = {}) => (await axios.get(`${URL}/tests`, { params })).data,
+    saveTests: async (body) => (await axios.post(`${URL}/tests`, body)).data,
+    updateTest: async (id, body) => (await axios.put(`${URL}/tests/${id}`, body)).data,
+    deleteTest: async (id) => (await axios.delete(`${URL}/tests/${id}`)).data,
 };
 
 export default instituteService;

@@ -6,6 +6,7 @@
 const Teacher = require('../models/Teacher');
 const TimetableEntry = require('../models/TimetableEntry');
 const Attendance = require('../models/Attendance');
+const TestRecord = require('../models/TestRecord');
 const { ORG_SKILLHUB_INSTITUTE } = require('../config/organizations');
 const { emitToOrg } = require('../services/realtime');
 
@@ -213,18 +214,29 @@ exports.getAttendanceMeta = async (req, res, next) => {
 };
 
 // Roster for a grade/year: distinct students that have appeared in its
-// attendance history (name + optional Student ref).
+// attendance OR test history (name + optional Student ref). Unioned so a grade
+// that has only sat a test still has a roster for the next test/attendance.
 exports.getRoster = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
         const { gradeOrYear } = req.query;
         if (!gradeOrYear) return res.status(400).json({ success: false, message: 'gradeOrYear is required' });
-        const rows = await Attendance.aggregate([
+        const groupStage = [
             { $match: { organization: INSTITUTE, gradeOrYear } },
             { $group: { _id: '$studentName', student: { $first: '$student' } } },
-            { $sort: { _id: 1 } },
+        ];
+        const [attRows, testRows] = await Promise.all([
+            Attendance.aggregate(groupStage),
+            TestRecord.aggregate(groupStage),
         ]);
-        const roster = rows.map((r) => ({ studentName: r._id, student: r.student || null }));
+        const byName = new Map();
+        for (const r of [...attRows, ...testRows]) {
+            if (!r._id) continue;
+            const existing = byName.get(r._id);
+            // Prefer a linked Student ref if either source has one.
+            byName.set(r._id, { studentName: r._id, student: existing?.student || r.student || null });
+        }
+        const roster = [...byName.values()].sort((a, b) => a.studentName.localeCompare(b.studentName));
         res.status(200).json({ success: true, data: roster });
     } catch (error) {
         next(error);
@@ -322,6 +334,218 @@ exports.deleteAttendanceStudent = async (req, res, next) => {
         const result = await Attendance.deleteMany({ organization: INSTITUTE, gradeOrYear, studentName });
         emit('institute:attendance', { gradeOrYear, studentName, removed: result.deletedCount });
         res.status(200).json({ success: true, data: { removed: result.deletedCount } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// ── Tests ────────────────────────────────────────────────────────────────
+// Coerce a marks value to a non-negative number, or null when blank/invalid.
+// Handles whitespace ('  ' → null, not 0) and negatives (min:0 semantics),
+// matching what row.save() would enforce — bulkWrite upserts skip validators.
+function toNonNegativeNumber(v) {
+    if (v === '' || v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (s === '') return null;
+    const n = Number(s);
+    return Number.isNaN(n) || n < 0 ? null : n;
+}
+
+// A bulkWrite that only tripped the unique index (duplicate concurrent save)
+// is benign — the row already exists. Distinguish it from real failures.
+function isAllDuplicateKeyError(err) {
+    if (!err) return false;
+    if (err.code === 11000) return true;
+    const writeErrors = err.writeErrors || (err.result && err.result.writeErrors) || [];
+    return writeErrors.length > 0 && writeErrors.every((w) => (w.code || (w.err && w.err.code)) === 11000);
+}
+
+// Weekly test tracker: marks per grade/subject with test topic + teacher.
+// Distinct grade/year + subject values for the filter/entry dropdowns,
+// unioned from test history and the timetable so brand-new grades appear.
+exports.getTestMeta = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const [tGrades, tSubjects, ttGrades, ttSubjects] = await Promise.all([
+            TestRecord.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
+            TestRecord.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
+            TimetableEntry.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
+            TimetableEntry.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
+        ]);
+        const uniq = (a) => [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y));
+        res.status(200).json({
+            success: true,
+            data: { gradesOrYears: uniq([...tGrades, ...ttGrades]), subjects: uniq([...tSubjects, ...ttSubjects]) },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Filtered test list — by grade/year, subject, teacherName, studentName, and a
+// single date or a date range. Mirrors getAttendance's filter handling.
+exports.getTests = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const { gradeOrYear, subject, teacherName, studentName, date, startDate, endDate } = req.query;
+        const filter = { organization: INSTITUTE };
+        if (gradeOrYear) filter.gradeOrYear = gradeOrYear;
+        if (subject) filter.subject = subject;
+        if (teacherName) filter.teacherName = teacherName;
+        if (studentName) filter.studentName = studentName;
+        // Guard against unparseable date params — an Invalid Date would cast-
+        // error and get mislabeled as a 404. Reject malformed input as 400.
+        const parseDate = (v) => {
+            const d = new Date(v);
+            return Number.isNaN(d.getTime()) ? null : d;
+        };
+        if (date) {
+            const d = parseDate(date);
+            if (!d) return res.status(400).json({ success: false, message: 'Invalid date' });
+            const nextDay = new Date(d);
+            nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+            filter.date = { $gte: d, $lt: nextDay };
+        } else if (startDate || endDate) {
+            filter.date = {};
+            if (startDate) {
+                const s = parseDate(startDate);
+                if (!s) return res.status(400).json({ success: false, message: 'Invalid startDate' });
+                filter.date.$gte = s;
+            }
+            if (endDate) {
+                const e = parseDate(endDate);
+                if (!e) return res.status(400).json({ success: false, message: 'Invalid endDate' });
+                e.setUTCHours(23, 59, 59, 999);
+                filter.date.$lte = e;
+            }
+        }
+        const rows = await TestRecord.find(filter).sort({ date: -1, studentName: 1 }).lean();
+        res.status(200).json({ success: true, count: rows.length, data: rows });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Bulk save one test session: upsert one row per student keyed on
+// (date, grade/year, subject, testTopic, studentName). Upsert-per-student —
+// NOT delete-then-insert — so re-recording a session only touches the
+// students in the payload and never wipes marks the caller didn't resubmit.
+// Remove a stray result with the per-row DELETE instead. Different topics on
+// the same day are separate keys and coexist.
+exports.createTests = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const {
+            date, gradeOrYear, curriculum, subject, testTopic,
+            maxMarks, teacher, teacherName, entries,
+        } = req.body;
+        if (!date || !gradeOrYear || !Array.isArray(entries)) {
+            return res.status(400).json({ success: false, message: 'date, gradeOrYear and entries[] are required' });
+        }
+        const day = new Date(date);
+        if (Number.isNaN(day.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid date' });
+        }
+        // Always store the day at UTC midnight so the exact-match upsert filter
+        // is stable and single-day reads bucket correctly.
+        const dayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+        // Optional denominator: '', null, NaN, or negative all mean "unset".
+        const cappedMax = toNonNegativeNumber(maxMarks);
+        const subj = subject || '';
+        const topic = testTopic || '';
+
+        // Only students with a real, non-negative numeric mark are recorded
+        // (blank/whitespace/negative = skipped). bulkWrite upserts do NOT run
+        // Mongoose validators, so this JS guard is what enforces the schema's
+        // `min: 0` on the primary insert path — keep it in step with save().
+        const ops = entries
+            .map((e) => (e ? { e, mark: toNonNegativeNumber(e.marksObtained) } : null))
+            .filter((x) => x && x.e.studentName && x.mark != null)
+            .map(({ e, mark }) => {
+                const studentName = String(e.studentName).trim();
+                return {
+                    updateOne: {
+                        filter: { organization: INSTITUTE, date: dayStart, gradeOrYear, subject: subj, testTopic: topic, studentName },
+                        update: {
+                            $set: {
+                                organization: INSTITUTE,
+                                date: dayStart,
+                                student: e.student || null,
+                                studentName,
+                                gradeOrYear,
+                                curriculum: curriculum || '',
+                                subject: subj,
+                                testTopic: topic,
+                                marksObtained: mark,
+                                maxMarks: cappedMax,
+                                teacher: teacher || null,
+                                teacherName: teacherName || '',
+                                markedBy: req.user._id,
+                            },
+                        },
+                        upsert: true,
+                    },
+                };
+            });
+        if (ops.length) {
+            try {
+                // ordered:false so one racing duplicate doesn't abort the rest.
+                await TestRecord.bulkWrite(ops, { ordered: false });
+            } catch (e) {
+                // A concurrent save for the same key trips the unique index
+                // (E11000). The row already exists with the same payload, so
+                // treat an all-duplicate-key failure as success; re-throw
+                // anything else.
+                if (!isAllDuplicateKeyError(e)) throw e;
+            }
+        }
+        emit('institute:test', { gradeOrYear, subject: subj, date: dayStart });
+        res.status(200).json({ success: true, count: ops.length });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Edit a single test row (correct a mark, topic, subject, teacher, etc.).
+exports.updateTest = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const row = await TestRecord.findOne({ _id: req.params.id, organization: INSTITUTE });
+        if (!row) return res.status(404).json({ success: false, message: 'Test record not found' });
+        const b = req.body;
+        ['studentName', 'gradeOrYear', 'curriculum', 'subject', 'testTopic', 'teacherName'].forEach((f) => {
+            if (b[f] !== undefined) row[f] = b[f];
+        });
+        if (b.marksObtained !== undefined) {
+            const mark = toNonNegativeNumber(b.marksObtained);
+            if (mark == null) return res.status(400).json({ success: false, message: 'Marks obtained must be a non-negative number' });
+            row.marksObtained = mark;
+        }
+        if (b.maxMarks !== undefined) row.maxMarks = toNonNegativeNumber(b.maxMarks);
+        if (b.teacher !== undefined) row.teacher = b.teacher || null;
+        if (b.date !== undefined) {
+            const d = new Date(b.date);
+            if (!Number.isNaN(d.getTime())) {
+                // Normalize to UTC midnight so an edited row stays in step with
+                // the createTests upsert key (which stores dayStart).
+                row.date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            }
+        }
+        await row.save();
+        emit('institute:test', { id: String(row._id) });
+        res.status(200).json({ success: true, data: row });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.deleteTest = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const row = await TestRecord.findOneAndDelete({ _id: req.params.id, organization: INSTITUTE });
+        if (!row) return res.status(404).json({ success: false, message: 'Test record not found' });
+        emit('institute:test', { id: String(row._id) });
+        res.status(200).json({ success: true, data: { id: String(row._id) } });
     } catch (error) {
         next(error);
     }

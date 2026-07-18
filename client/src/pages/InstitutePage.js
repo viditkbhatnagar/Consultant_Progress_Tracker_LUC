@@ -11,6 +11,7 @@ import TeachersTab from '../components/institute/TeachersTab';
 import TimetableTab from '../components/institute/TimetableTab';
 import AttendanceTab from '../components/institute/AttendanceTab';
 import AttendanceReportTab from '../components/institute/AttendanceReportTab';
+import TestsTab from '../components/institute/TestsTab';
 
 // Skillhub Institute — Teachers, Timetable, Attendance. Rendered inside the
 // standard dashboard shell (persistent sidebar + light/dark tokens + hero),
@@ -46,14 +47,16 @@ const InstitutePage = () => {
             >
                 <Tab label="Timetable" />
                 <Tab label="Attendance" />
+                <Tab label="Tests" />
                 <Tab label="Report" />
                 <Tab label="Teachers" />
             </Tabs>
 
             {tab === 0 && <TimetableTab />}
             {tab === 1 && <AttendanceTab />}
-            {tab === 2 && <AttendanceReportTab />}
-            {tab === 3 && <TeachersTab />}
+            {tab === 2 && <TestsTab />}
+            {tab === 3 && <AttendanceReportTab />}
+            {tab === 4 && <TeachersTab />}
         </DashboardShell>
     );
 };
