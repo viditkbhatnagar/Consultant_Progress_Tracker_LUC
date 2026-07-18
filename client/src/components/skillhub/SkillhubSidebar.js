@@ -212,7 +212,7 @@ const SkillhubSidebar = ({ activeView, onNavigate, onNewAdmission, onLogout }) =
             <List sx={{ flex: 1, px: 1.25, py: 1.5 }}>
                 {navItem('dashboard', 'Dashboard', DashboardIcon, () => onNavigate('dashboard'))}
                 {navItem('students', 'Student Database', SchoolIcon, () => onNavigate('students'))}
-                {navItem('commitments', 'Commitments', AssignmentIcon, () => onNavigate('commitments'))}
+                {navItem('commitments', user?.organization === 'skillhub_institute' ? 'Demo Tracker' : 'Commitments', AssignmentIcon, () => onNavigate('commitments'))}
                 {navItem('analytics', 'Analytics', AnalyticsIcon, () => onNavigate('analytics'))}
                 {navItem('ai', 'AI Analysis', AutoAwesomeIcon, () => onNavigate('ai'))}
                 {/* Ask me — Skillhub gets the same chat drawer as LUC, but

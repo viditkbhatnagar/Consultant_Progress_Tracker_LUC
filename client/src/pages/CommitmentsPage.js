@@ -61,6 +61,10 @@ const CommitmentsPage = () => {
         ? adminOrg || 'luc'
         : user?.organization || 'luc';
     const isSkillhub = isSkillhubOrg(viewOrg);
+    // Skillhub Institute calls this tracker the "Demo Tracker" (their weekly
+    // student demos live here); Training + LUC keep "Commitment Tracker".
+    const isInstitute = viewOrg === 'skillhub_institute';
+    const trackerLabel = isInstitute ? 'Demo Tracker' : 'Commitment Tracker';
     const orgLabel = ORGANIZATION_LABELS[viewOrg] || (isSkillhub ? 'Skillhub' : 'LUC');
 
     const prefs = useMemo(() => loadPrefs(), []);
@@ -257,7 +261,7 @@ const CommitmentsPage = () => {
     };
 
     const handleDelete = async (row) => {
-        if (!window.confirm(`Delete commitment for ${row.studentName || 'this row'}?`)) return;
+        if (!window.confirm(`Delete ${isInstitute ? 'demo' : 'commitment'} for ${row.studentName || 'this row'}?`)) return;
         try {
             await commitmentService.deleteCommitment(row._id);
             setSnack({ open: true, message: 'Commitment deleted', severity: 'success' });
@@ -352,7 +356,7 @@ const CommitmentsPage = () => {
                         </IconButton>
                         <Box>
                             <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                Commitment Tracker
+                                {trackerLabel}
                             </Typography>
                             <Typography
                                 sx={{

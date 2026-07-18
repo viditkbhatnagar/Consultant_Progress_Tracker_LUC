@@ -49,6 +49,8 @@ import { riseVariants, useReducedMotionVariants } from '../utils/dashboardMotion
 
 const SkillhubDashboard = () => {
     const { user, logout } = useAuth();
+    // Institute renames the commitment feature to "Demo Tracker".
+    const isInstitute = user?.organization === 'skillhub_institute';
     const navigate = useNavigate();
     const weekInfo = getWeekInfo();
     const branchLabel = ORGANIZATION_LABELS[user?.organization] || 'Skillhub';
@@ -377,7 +379,7 @@ const SkillhubDashboard = () => {
                 </SectionCard>
 
                 <SectionCard
-                    title="Recent Commitments"
+                    title={isInstitute ? 'Recent Demos' : 'Recent Commitments'}
                     eyebrow="Last 5"
                     right={
                         <Button
@@ -517,7 +519,7 @@ const SkillhubDashboard = () => {
 
     const renderCommitmentsTable = () => (
         <SectionCard
-            title="Commitments"
+            title={isInstitute ? 'Demo Tracker' : 'Commitments'}
             right={
                 <Button
                     variant="contained"

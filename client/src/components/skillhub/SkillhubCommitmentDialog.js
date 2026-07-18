@@ -252,7 +252,9 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle>
-                {commitment ? 'Edit Commitment' : 'New Commitment'}
+                {commitment
+                    ? (isInstitute ? 'Edit Demo' : 'Edit Commitment')
+                    : (isInstitute ? 'New Demo' : 'New Commitment')}
                 <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
                     Week {formData.weekNumber} / {formData.year}
                 </Typography>
@@ -502,7 +504,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             <DialogActions>
                 <Button onClick={onClose}>Cancel</Button>
                 <Button variant="contained" onClick={handleSave} disabled={saving}>
-                    {saving ? 'Saving…' : commitment ? 'Save Changes' : 'Create Commitment'}
+                    {saving ? 'Saving…' : commitment ? 'Save Changes' : (isInstitute ? 'Create Demo' : 'Create Commitment')}
                 </Button>
             </DialogActions>
         </Dialog>
