@@ -25,12 +25,39 @@ import {
     displayDate,
 } from '../../utils/commitmentDesign';
 
-const StatusChip = ({ status }) => {
-    if (!status) return <span style={{ color: 'var(--t-text-faint)' }}>—</span>;
+// Clickable when `onClick` is supplied — the table wires it to an inline
+// status-change popover, mirroring how the Lead Stage pill already works.
+const StatusChip = ({ status, onClick, expanded }) => {
+    const interactive = Boolean(onClick);
+    if (!status) {
+        return interactive ? (
+            <Box
+                component="button"
+                type="button"
+                onClick={onClick}
+                aria-haspopup="menu"
+                aria-expanded={expanded ? 'true' : 'false'}
+                aria-label="Set status"
+                sx={{
+                    background: 'transparent', border: 0, padding: 0, cursor: 'pointer',
+                    color: 'var(--t-text-faint)', font: 'inherit',
+                }}
+            >
+                —
+            </Box>
+        ) : (
+            <span style={{ color: 'var(--t-text-faint)' }}>—</span>
+        );
+    }
     const meta = STATUS_META[status] || { label: status, color: 'var(--t-text-faint)' };
     return (
         <Box
-            component="span"
+            component={interactive ? 'button' : 'span'}
+            type={interactive ? 'button' : undefined}
+            onClick={onClick}
+            aria-haspopup={interactive ? 'menu' : undefined}
+            aria-expanded={interactive ? (expanded ? 'true' : 'false') : undefined}
+            aria-label={interactive ? `Status: ${meta.label}. Change status` : undefined}
             sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -40,10 +67,20 @@ const StatusChip = ({ status }) => {
                 borderRadius: 999,
                 fontSize: 11,
                 fontWeight: 600,
+                fontFamily: 'inherit',
                 color: meta.color,
                 border: `1px solid ${meta.color}`,
                 backgroundColor: 'transparent',
                 lineHeight: 1.3,
+                cursor: interactive ? 'pointer' : 'default',
+                // Tint with the status colour rather than the row-hover token,
+                // which is identical to the row background on hover and so
+                // gives the chip no visible affordance.
+                ...(interactive && {
+                    transition: 'background-color 120ms ease',
+                    '&:hover': { backgroundColor: `${meta.color}22` },
+                    '&:focus-visible': { outline: `2px solid ${meta.color}`, outlineOffset: 1 },
+                }),
             }}
         >
             <Box
@@ -54,6 +91,11 @@ const StatusChip = ({ status }) => {
         </Box>
     );
 };
+
+// Unique teacher names across a commitment's demo slots (Skillhub Institute).
+const demoTeachers = (row) => [
+    ...new Set((row.demos || []).map((d) => (d.demoDoneBy || '').trim()).filter(Boolean)),
+];
 
 const CommitmentsTableView = ({
     rows,
@@ -68,12 +110,20 @@ const CommitmentsTableView = ({
     onEdit,
     onDelete,
     onStageChange,
+    onStatusChange,
+    isInstitute,
 }) => {
     const rowPad = density === 'compact' ? '8px 14px' : '12px 14px';
     const [stageAnchor, setStageAnchor] = useState(null);
     const [stageRow, setStageRow] = useState(null);
+    const [statusAnchor, setStatusAnchor] = useState(null);
+    const [statusRow, setStatusRow] = useState(null);
     const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
     const [rowMenuRow, setRowMenuRow] = useState(null);
+    // Week, Date, Student, Consultant, Commitment, Lead Stage, Prob, Ach,
+    // Meet, Follow-up, Status, Actions (+ Team Lead for admin, + Teacher for
+    // Institute) — keep the empty/loading colSpan in step with the header.
+    const columnCount = 12 + (isAdmin ? 1 : 0) + (isInstitute ? 1 : 0);
 
     const openStageMenu = (e, row) => {
         e.stopPropagation();
@@ -83,6 +133,15 @@ const CommitmentsTableView = ({
     const closeStageMenu = () => {
         setStageAnchor(null);
         setStageRow(null);
+    };
+    const openStatusMenu = (e, row) => {
+        e.stopPropagation();
+        setStatusRow(row);
+        setStatusAnchor(e.currentTarget);
+    };
+    const closeStatusMenu = () => {
+        setStatusAnchor(null);
+        setStatusRow(null);
     };
     const openRowMenu = (e, row) => {
         e.stopPropagation();
@@ -141,6 +200,7 @@ const CommitmentsTableView = ({
                             <th>Consultant</th>
                             {isAdmin && <th>Team Lead</th>}
                             <th>Commitment</th>
+                            {isInstitute && <th>Teacher</th>}
                             <th>Lead Stage</th>
                             <th style={{ textAlign: 'center' }}>Prob.</th>
                             <th style={{ textAlign: 'center' }}>Ach.</th>
@@ -153,14 +213,14 @@ const CommitmentsTableView = ({
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={isAdmin ? 13 : 12} style={{ textAlign: 'center', padding: '48px 0' }}>
+                                <td colSpan={columnCount} style={{ textAlign: 'center', padding: '48px 0' }}>
                                     <CircularProgress size={22} />
                                 </td>
                             </tr>
                         ) : rows.length === 0 ? (
                             <tr>
                                 <td
-                                    colSpan={isAdmin ? 13 : 12}
+                                    colSpan={columnCount}
                                     style={{ textAlign: 'center', padding: '40px 0', color: 'var(--t-text-muted)' }}
                                 >
                                     No commitments match your filters.
@@ -260,6 +320,34 @@ const CommitmentsTableView = ({
                                                 </span>
                                             </Tooltip>
                                         </td>
+                                        {isInstitute && (() => {
+                                            const names = demoTeachers(r);
+                                            return (
+                                                <td
+                                                    style={{
+                                                        maxWidth: 160,
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        color: 'var(--t-text-3)',
+                                                    }}
+                                                >
+                                                    {names.length ? (
+                                                        <Tooltip title={names.join(', ')} arrow placement="top">
+                                                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                                                                <MeetingAvatar name={names[0]} size={20} />
+                                                                <span>
+                                                                    {names[0]}
+                                                                    {names.length > 1 && ` +${names.length - 1}`}
+                                                                </span>
+                                                            </Box>
+                                                        </Tooltip>
+                                                    ) : (
+                                                        <span style={{ color: 'var(--t-text-faint)' }}>—</span>
+                                                    )}
+                                                </td>
+                                            );
+                                        })()}
                                         <td>
                                             <StatusPill
                                                 status={r.leadStage}
@@ -301,7 +389,20 @@ const CommitmentsTableView = ({
                                             )}
                                         </td>
                                         <td>
-                                            <StatusChip status={r.status} />
+                                            {/* A closed admission is locked at
+                                                'achieved', so don't offer a menu
+                                                whose every option is a dead click. */}
+                                            {r.admissionClosed ? (
+                                                <Tooltip title="Admission closed — status is locked" arrow placement="top">
+                                                    <span><StatusChip status={r.status} /></span>
+                                                </Tooltip>
+                                            ) : (
+                                                <StatusChip
+                                                    status={r.status}
+                                                    expanded={Boolean(statusAnchor) && statusRow?._id === r._id}
+                                                    onClick={onStatusChange ? (e) => openStatusMenu(e, r) : undefined}
+                                                />
+                                            )}
                                         </td>
                                         <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                                             <Tooltip title="Edit" placement="top" arrow>
@@ -391,6 +492,46 @@ const CommitmentsTableView = ({
                         sx={{ py: 0.75 }}
                     >
                         <StatusPill status={s} size="sm" />
+                    </MenuItem>
+                ))}
+            </Menu>
+
+            <Menu
+                anchorEl={statusAnchor}
+                open={Boolean(statusAnchor)}
+                onClose={closeStatusMenu}
+                PaperProps={{
+                    sx: {
+                        minWidth: 200,
+                        borderRadius: '10px',
+                        boxShadow: '0 10px 30px rgba(15,23,42,0.12)',
+                    },
+                }}
+            >
+                <Box
+                    sx={{
+                        px: 1.5,
+                        pt: 1,
+                        pb: 0.5,
+                        fontSize: 10.5,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: 'var(--t-text-muted)',
+                        fontWeight: 600,
+                    }}
+                >
+                    Change status
+                </Box>
+                {Object.keys(STATUS_META).map((s) => (
+                    <MenuItem
+                        key={s}
+                        onClick={() => {
+                            if (statusRow && s !== statusRow.status) onStatusChange?.(statusRow, s);
+                            closeStatusMenu();
+                        }}
+                        sx={{ py: 0.75 }}
+                    >
+                        <StatusChip status={s} />
                     </MenuItem>
                 ))}
             </Menu>

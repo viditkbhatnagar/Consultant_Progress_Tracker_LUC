@@ -301,6 +301,22 @@ exports.updateCommitment = async (req, res, next) => {
             });
         }
 
+        // A closed admission stays 'achieved'. Without this, any route that
+        // PUTs a status (inline popover, detail drawer, edit dialog, or a raw
+        // API call) could leave admissionClosed=true next to status='missed' —
+        // a self-contradicting row that every "achieved || admissionClosed"
+        // aggregate then counts inconsistently.
+        if (
+            commitment.admissionClosed === true &&
+            req.body.status !== undefined &&
+            req.body.status !== 'achieved'
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: 'This admission is closed - its status stays Achieved',
+            });
+        }
+
         // Update last modified info
         req.body.lastUpdatedBy = req.user.id;
 

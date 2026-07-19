@@ -28,6 +28,7 @@ import { TrackerThemeProvider, useThemeState } from '../utils/trackerTheme';
 import { useAdminOrgScope } from '../utils/adminOrgScope';
 import { isSkillhubOrg } from '../utils/hourlyConfig';
 import { ORGANIZATION_LABELS } from '../utils/constants';
+import { STATUS_META } from '../utils/commitmentDesign';
 
 const PAGE_SIZE = 20;
 const STORAGE_KEY = 'commitments-ui-prefs';
@@ -157,7 +158,10 @@ const CommitmentsPage = () => {
         [filters]
     );
 
-    const loadCommitments = useCallback(async () => {
+    // `keepPage` is used by the inline popovers — refetching after a one-click
+    // edit shouldn't yank the user back to page 1, away from the row they
+    // just changed. Filter/org changes still reset to the first page.
+    const loadCommitments = useCallback(async ({ keepPage = false } = {}) => {
         setLoading(true);
         setFetchError('');
         try {
@@ -174,7 +178,7 @@ const CommitmentsPage = () => {
                   )
                 : await commitmentService.getCommitments({ organization: viewOrg });
             setAllRows(res.data || []);
-            setPage(0);
+            if (!keepPage) setPage(0);
         } catch (err) {
             setFetchError(err?.response?.data?.message || err?.message || 'Failed to load commitments');
             setAllRows([]);
@@ -241,11 +245,26 @@ const CommitmentsPage = () => {
         loadCommitments();
     };
 
+    // The server auto-closes an admission (irreversibly) as soon as a row is
+    // BOTH leadStage='Admission' and status='achieved' — it merges the patch
+    // over the stored doc, so either edit order trips it. Both inline popovers
+    // funnel through here so neither can close a record without asking.
+    const confirmIrreversibleClose = (row, { nextStage, nextStatus }) => {
+        const stage = nextStage !== undefined ? nextStage : row.leadStage;
+        const status = nextStatus !== undefined ? nextStatus : row.status;
+        if (stage !== 'Admission' || status !== 'achieved' || row.admissionClosed) return true;
+        return window.confirm(
+            `This will CLOSE the admission for "${row.studentName || 'this row'}".\n\n` +
+            'Closing an admission is irreversible. Continue?'
+        );
+    };
+
     const handleStageChange = async (row, nextStage) => {
+        if (!confirmIrreversibleClose(row, { nextStage })) return;
         try {
             await commitmentService.updateCommitment(row._id, { leadStage: nextStage });
             setSnack({ open: true, message: `Lead stage → ${nextStage}`, severity: 'success' });
-            loadCommitments();
+            loadCommitments({ keepPage: true });
         } catch (err) {
             setSnack({
                 open: true,
@@ -271,6 +290,40 @@ const CommitmentsPage = () => {
             setSnack({
                 open: true,
                 message: err?.response?.data?.message || 'Delete failed',
+                severity: 'error',
+            });
+        }
+    };
+
+    // Inline status change from the table, mirroring the lead-stage popover.
+    // A closed admission is locked at 'achieved' (the server enforces this too,
+    // so every other edit route is covered); otherwise confirm before an edit
+    // that would irreversibly close the admission.
+    const handleStatusChange = async (row, nextStatus) => {
+        if (row.admissionClosed && nextStatus !== 'achieved') {
+            setSnack({
+                open: true,
+                message: 'This admission is closed — its status stays Achieved.',
+                severity: 'warning',
+            });
+            return;
+        }
+        const willCloseAdmission =
+            row.leadStage === 'Admission' && nextStatus === 'achieved' && !row.admissionClosed;
+        if (!confirmIrreversibleClose(row, { nextStatus })) return;
+        try {
+            await commitmentService.updateCommitment(row._id, { status: nextStatus });
+            const label = STATUS_META[nextStatus]?.label || nextStatus;
+            setSnack({
+                open: true,
+                message: willCloseAdmission ? `Status → ${label} · admission closed` : `Status → ${label}`,
+                severity: 'success',
+            });
+            loadCommitments({ keepPage: true });
+        } catch (err) {
+            setSnack({
+                open: true,
+                message: err?.response?.data?.message || 'Failed to update status',
                 severity: 'error',
             });
         }
@@ -443,6 +496,8 @@ const CommitmentsPage = () => {
                             onEdit={openEdit}
                             onDelete={handleDelete}
                             onStageChange={handleStageChange}
+                            onStatusChange={handleStatusChange}
+                            isInstitute={isInstitute}
                         />
                     )}
 
