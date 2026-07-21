@@ -94,14 +94,24 @@ const AttendanceTab = () => {
         }
     };
 
-    // Removes the student from THIS subject only (class list + their marks for
-    // it). Other subjects are untouched — removal is per subject now, the same
-    // way adding is.
+    // With a subject selected this removes the student from that subject only.
+    // With no subject it removes them from the whole grade/year — which is what
+    // "get this student out of Grade 10" has to mean. Either way it clears
+    // attendance AND test results in scope, because the roster is built from
+    // both and leaving one behind puts the student straight back on the list.
     const removeStudent = async (studentName) => {
-        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear} · ${subject || '(no subject)'}?\n\nThis takes them off this subject's list and deletes their attendance for THIS subject. Their other subjects are not affected.\n\nTo undo just one wrong date, use "Cancel this date's mark" instead.`)) return;
+        const scopeLabel = subject ? `${gradeOrYear} · ${subject}` : `${gradeOrYear} (ALL subjects)`;
+        const detail = subject
+            ? `Their attendance and test results for ${subject} in ${gradeOrYear} will be deleted. Other subjects are not affected.`
+            : `Their attendance and test results for EVERY subject in ${gradeOrYear} will be deleted. Other grades/years are not affected.`;
+        if (!window.confirm(`Remove "${studentName}" from ${scopeLabel}?\n\n${detail}\n\nTo undo just one wrong date instead, use "Cancel this date's mark".`)) return;
         try {
-            await instituteService.removeRosterStudent({ gradeOrYear, subject, studentName });
-            setToast({ severity: 'success', message: `Removed ${studentName} from ${subject || gradeOrYear}` });
+            const res = await instituteService.removeRosterStudent({ gradeOrYear, subject, studentName });
+            const { marksRemoved = 0, testsRemoved = 0 } = res.data || {};
+            setToast({
+                severity: 'success',
+                message: `Removed ${studentName} from ${subject || gradeOrYear} — ${marksRemoved} attendance, ${testsRemoved} test record(s) deleted`,
+            });
             loadRoster();
         } catch (e) {
             setToast({ severity: 'error', message: e.response?.data?.message || e.message });

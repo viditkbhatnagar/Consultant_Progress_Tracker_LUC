@@ -202,6 +202,14 @@ const SkillhubStudentDatabasePage = () => {
             .some((f) => String(f).toLowerCase().includes(q));
     });
 
+    // Only show the loading skeleton when there is nothing on screen yet.
+    // The table/cards views swap their rows for a skeleton whenever `loading`
+    // is true, so every post-action refresh (edit, delete, move to
+    // active/inactive) collapsed the scroll container's height and the browser
+    // clamped it back to the top. Keeping the current rows mounted during a
+    // background refresh holds the scroll position where the user left it.
+    const showSkeleton = loading && displayed.length === 0;
+
     // ── KPI ──
     // Stats-driven so the strip shows true totals. Curriculum + statusTab are
     // the base scope (always applied). Additional filters (date, consultant)
@@ -687,7 +695,7 @@ const SkillhubStudentDatabasePage = () => {
                             {view === 'table' ? (
                                 <SkillhubStudentsTableView
                                     students={displayed}
-                                    loading={loading}
+                                    loading={showSkeleton}
                                     page={page}
                                     limit={PAGE_SIZE}
                                     total={total}
@@ -703,7 +711,7 @@ const SkillhubStudentDatabasePage = () => {
                             ) : (
                                 <SkillhubStudentsCardsView
                                     students={displayed}
-                                    loading={loading}
+                                    loading={showSkeleton}
                                     onRowClick={(s) => {
                                         setDrawerStudent(s);
                                         setDrawerOpen(true);

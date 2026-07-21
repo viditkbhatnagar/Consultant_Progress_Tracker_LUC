@@ -196,6 +196,37 @@ describe('Attendance — adding a student sticks without marking them', () => {
         expect(roster.body.data.map((r) => r.studentName)).toContain('Zoya');
     });
 
+    // A student can land on a grade's roster via a stray TEST record, not just
+    // attendance. Removal has to clear that too or they can never be deleted —
+    // which is exactly what the branch hit with a Grade 8 student stuck in
+    // Grade 10 by one mis-entered test result.
+    test('removing with NO subject clears the whole grade, including test records', async () => {
+        const TestRecord = require('mongoose').model('TestRecord');
+        await TestRecord.create({
+            organization: 'skillhub_institute', date: new Date('2026-07-21'),
+            studentName: 'Faizan', gradeOrYear: 'Grade 10', subject: 'biology', marksObtained: 5,
+        });
+        // Sourced purely from the test record — no attendance at all.
+        let roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 10');
+        expect(roster.body.data.map((r) => r.studentName)).toContain('Faizan');
+
+        const res = await request(app).delete('/attendance/roster')
+            .send({ gradeOrYear: 'Grade 10', studentName: 'Faizan' });
+        expect(res.status).toBe(200);
+        expect(res.body.data.testsRemoved).toBe(1);
+
+        roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 10');
+        expect(roster.body.data.map((r) => r.studentName)).not.toContain('Faizan');
+    });
+
+    test('removing with no subject does not touch the student in OTHER grades', async () => {
+        await request(app).post('/attendance/roster').send(add({ gradeOrYear: 'Grade 8', subject: 'Biology', studentName: 'Faizan' }));
+        await request(app).post('/attendance/roster').send(add({ gradeOrYear: 'Grade 10', subject: 'Biology', studentName: 'Faizan' }));
+        await request(app).delete('/attendance/roster').send({ gradeOrYear: 'Grade 10', studentName: 'Faizan' });
+        const g8 = await request(app).get('/attendance/roster?gradeOrYear=Grade 8&subject=Biology');
+        expect(g8.body.data.map((r) => r.studentName)).toEqual(['Faizan']);
+    });
+
     test('removing from a subject clears the list entry and that subject only', async () => {
         await request(app).post('/attendance/roster').send(add());
         await request(app).post('/attendance/roster').send(add({ subject: 'Economics' }));

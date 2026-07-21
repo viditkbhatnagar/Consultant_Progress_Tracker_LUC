@@ -307,10 +307,17 @@ exports.addRosterStudent = async (req, res, next) => {
     }
 };
 
-// Take a student off ONE subject's class list. Their marks for that subject go
-// with it — the roster unions history, so leaving the marks behind would put
-// the student straight back on the list. Other subjects are untouched; use
-// deleteAttendanceStudent to purge the whole grade.
+// Take a student off a class list.
+//
+// With `subject`: just that subject. WITHOUT `subject`: the whole grade/year —
+// "remove this student from Grade 10" has to mean every subject, otherwise the
+// call would only match rows whose subject is literally blank and appear to do
+// nothing at all.
+//
+// It clears enrollments, attendance AND test records for that scope. The roster
+// is the union of all three, so leaving any one behind puts the student
+// straight back on the list — which is exactly why a student who landed in the
+// wrong grade via a stray test result could never be deleted.
 exports.removeRosterStudent = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
@@ -318,15 +325,21 @@ exports.removeRosterStudent = async (req, res, next) => {
         if (!gradeOrYear || !studentName) {
             return res.status(400).json({ success: false, message: 'gradeOrYear and studentName are required' });
         }
-        const subjectCond = subject ? subjectMatchCondition(subject) : '';
-        const [enrollRes, attRes] = await Promise.all([
-            InstituteEnrollment.deleteMany({ organization: INSTITUTE, gradeOrYear, subject: subjectCond, studentName }),
-            Attendance.deleteMany({ organization: INSTITUTE, gradeOrYear, subject: subjectCond, studentName }),
+        const scope = { organization: INSTITUTE, gradeOrYear, studentName };
+        if (subject) scope.subject = subjectMatchCondition(subject);
+        const [enrollRes, attRes, testRes] = await Promise.all([
+            InstituteEnrollment.deleteMany(scope),
+            Attendance.deleteMany(scope),
+            TestRecord.deleteMany(scope),
         ]);
         emit('institute:attendance', { gradeOrYear, subject: subject || '', studentName });
         res.status(200).json({
             success: true,
-            data: { removed: enrollRes.deletedCount, marksRemoved: attRes.deletedCount },
+            data: {
+                removed: enrollRes.deletedCount,
+                marksRemoved: attRes.deletedCount,
+                testsRemoved: testRes.deletedCount,
+            },
         });
     } catch (error) {
         next(error);
