@@ -16,6 +16,7 @@ import commitmentService from '../services/commitmentService';
 import userService from '../services/userService';
 import consultantService from '../services/consultantService';
 import instituteService from '../services/instituteService';
+import { exportRawSheet } from '../services/xlsxBuilder';
 import CommitmentsKPIStrip from '../components/commitments/CommitmentsKPIStrip';
 import CommitmentsToolbar from '../components/commitments/CommitmentsToolbar';
 import CommitmentsTableView from '../components/commitments/CommitmentsTableView';
@@ -233,6 +234,51 @@ const CommitmentsPage = () => {
         }
         return list;
     }, [allRows, filters]);
+
+    // Export exactly what's on screen (all active filters applied), so
+    // filtering by a teacher and downloading gives that teacher's demos. The
+    // "Demo done by" column is what makes a per-teacher count possible in Excel.
+    const handleExport = (kind) => {
+        const rows = filteredRows.map((r) => ({
+            date: r.commitmentDate || r.weekStartDate || r.createdAt,
+            studentName: r.studentName || '',
+            consultantName: r.consultantName || '',
+            demoDoneBy: [
+                ...new Set((r.demos || []).map((d) => (d.demoDoneBy || '').trim()).filter(Boolean)),
+            ].join(', '),
+            commitmentMade: r.commitmentMade || '',
+            leadStage: r.leadStage || '',
+            status: r.admissionClosed ? 'Admitted & Closed' : (r.status || ''),
+            conversionProbability: r.conversionProbability ?? 0,
+            meetingsDone: r.meetingsDone ?? 0,
+            followUpDate: r.followUpDate || '',
+            admissionClosedDate: r.admissionClosedDate || '',
+            teamName: r.teamName || '',
+            correctiveActionByTL: r.correctiveActionByTL || '',
+            adminComment: r.adminComment || '',
+        }));
+        const cols = [
+            { key: 'date', lbl: 'Date', date: true },
+            { key: 'studentName', lbl: 'Student' },
+            { key: 'consultantName', lbl: 'Consultant' },
+            ...(isInstitute ? [{ key: 'demoDoneBy', lbl: 'Demo done by' }] : []),
+            { key: 'commitmentMade', lbl: isInstitute ? 'Demo' : 'Commitment' },
+            { key: 'leadStage', lbl: 'Lead stage' },
+            { key: 'status', lbl: 'Status' },
+            { key: 'conversionProbability', lbl: 'Probability %' },
+            { key: 'meetingsDone', lbl: 'Meetings' },
+            { key: 'followUpDate', lbl: 'Follow-up date', date: true },
+            { key: 'admissionClosedDate', lbl: 'Closed date', date: true },
+            ...(isAdmin ? [{ key: 'teamName', lbl: 'Team' }] : []),
+            { key: 'correctiveActionByTL', lbl: 'TL comment' },
+            { key: 'adminComment', lbl: 'Admin comment' },
+        ];
+        const base = isInstitute ? 'demo-tracker' : 'commitment-tracker';
+        const suffix = filters.demoDoneBy ? `-${filters.demoDoneBy.replace(/[^\w-]+/g, '_')}` : '';
+        exportRawSheet(rows, cols, `${base}${suffix}`, kind, {
+            sheetName: isInstitute ? 'Demos' : 'Commitments',
+        });
+    };
 
     const handleFilterChange = (field, value) => {
         setPage(0);
@@ -505,6 +551,8 @@ const CommitmentsPage = () => {
                         teachers={teachers}
                         isInstitute={isInstitute}
                         isAdmin={isAdmin}
+                        onExport={handleExport}
+                        exportDisabled={!filteredRows.length}
                         onAdd={openCreate}
                         onAIAnalysis={openAI}
                         mode={mode}

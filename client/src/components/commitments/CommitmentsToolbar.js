@@ -19,6 +19,7 @@ import {
     AutoAwesome as SparkleIcon,
     LightMode as LightModeIcon,
     DarkMode as DarkModeIcon,
+    FileDownloadOutlined as FileDownloadIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { ALL_LEAD_STAGES, STATUS_META } from '../../utils/commitmentDesign';
@@ -131,9 +132,13 @@ const CommitmentsToolbar = ({
     isAdmin,
     onAdd,
     onAIAnalysis,
+    onExport,
+    exportDisabled = false,
     mode = 'light',
     onToggleMode,
 }) => {
+    const [exportAnchor, setExportAnchor] = useState(null);
+
     const hasFilters = Boolean(
         filters.leadStage ||
             filters.status ||
@@ -256,6 +261,39 @@ const CommitmentsToolbar = ({
                     >
                         {mode === 'dark' ? 'Light' : 'Dark'}
                     </Button>
+                )}
+
+                {onExport && (
+                    <>
+                        <Button
+                            size="small"
+                            variant="text"
+                            disabled={exportDisabled}
+                            onClick={(e) => setExportAnchor(e.currentTarget)}
+                            startIcon={<FileDownloadIcon sx={{ fontSize: 14 }} />}
+                            sx={{
+                                color: 'var(--t-accent-text)',
+                                textTransform: 'none',
+                                fontSize: 12,
+                                fontWeight: 550,
+                                px: 1.25,
+                            }}
+                        >
+                            Export
+                        </Button>
+                        <Menu
+                            anchorEl={exportAnchor}
+                            open={!!exportAnchor}
+                            onClose={() => setExportAnchor(null)}
+                        >
+                            <MenuItem onClick={() => { setExportAnchor(null); onExport('xlsx'); }}>
+                                Excel (.xlsx)
+                            </MenuItem>
+                            <MenuItem onClick={() => { setExportAnchor(null); onExport('csv'); }}>
+                                CSV (.csv)
+                            </MenuItem>
+                        </Menu>
+                    </>
                 )}
 
                 {onAIAnalysis && (
