@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box, Button, Paper, FormControl, InputLabel, Select, MenuItem, TextField, ToggleButtonGroup,
     ToggleButton, CircularProgress, Alert, Typography, Snackbar, Divider, IconButton, Tooltip, Menu,
+    Autocomplete,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import BackspaceIcon from '@mui/icons-material/BackspaceOutlined';
@@ -30,10 +31,17 @@ const AttendanceTab = () => {
     const [toast, setToast] = useState(null);
     const [downloadAnchor, setDownloadAnchor] = useState(null);
 
+    const [studentOptions, setStudentOptions] = useState([]);
+
     useEffect(() => {
         instituteService.getAttendanceMeta()
             .then((res) => setMeta(res.data || { gradesOrYears: [], subjects: [] }))
             .catch(() => {});
+        // Real admission records, so an added student can be linked rather than
+        // stored as a loose name.
+        instituteService.getInstituteStudents()
+            .then((res) => setStudentOptions(res.data || []))
+            .catch(() => setStudentOptions([]));
     }, []);
 
     // Load roster + existing marks whenever grade/subject/date change. The
@@ -86,24 +94,39 @@ const AttendanceTab = () => {
         }
     };
 
+    // Removes the student from THIS subject only (class list + their marks for
+    // it). Other subjects are untouched — removal is per subject now, the same
+    // way adding is.
     const removeStudent = async (studentName) => {
-        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear} entirely?\n\nThis deletes ALL their attendance in this grade/year. To undo a single wrong mark, use "Cancel this date's mark" instead.`)) return;
+        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear} · ${subject || '(no subject)'}?\n\nThis takes them off this subject's list and deletes their attendance for THIS subject. Their other subjects are not affected.\n\nTo undo just one wrong date, use "Cancel this date's mark" instead.`)) return;
         try {
-            await instituteService.deleteAttendanceStudent(gradeOrYear, studentName);
-            setRows((p) => p.filter((r) => r.studentName !== studentName));
-            setToast({ severity: 'success', message: `Removed ${studentName}` });
+            await instituteService.removeRosterStudent({ gradeOrYear, subject, studentName });
+            setToast({ severity: 'success', message: `Removed ${studentName} from ${subject || gradeOrYear}` });
+            loadRoster();
         } catch (e) {
             setToast({ severity: 'error', message: e.response?.data?.message || e.message });
         }
     };
 
-    const addStudent = () => {
-        const nm = newName.trim();
+    // Adding is persisted immediately. It used to only touch local state, so a
+    // student added but not ticked Present/Absent was never saved and vanished
+    // on reload. `picked` carries the Student ref when chosen from the list,
+    // which is what stops the row rendering as "(unlinked)".
+    const addStudent = async (picked) => {
+        const nm = (picked?.studentName || newName).trim();
         if (!nm) return;
-        if (!rows.find((r) => r.studentName.toLowerCase() === nm.toLowerCase())) {
-            setRows((p) => [...p, { studentName: nm, student: null, status: '' }].sort((a, b) => a.studentName.localeCompare(b.studentName)));
+        if (!subject) return setError('Pick a subject first — a student is added to one subject at a time.');
+        if (rows.find((r) => r.studentName.toLowerCase() === nm.toLowerCase())) { setNewName(''); return; }
+        try {
+            await instituteService.addRosterStudent({
+                gradeOrYear, subject, studentName: nm, student: picked?._id || null,
+            });
+            setNewName('');
+            setToast({ severity: 'success', message: `${nm} added to ${gradeOrYear} · ${subject}` });
+            loadRoster();
+        } catch (e) {
+            setToast({ severity: 'error', message: e.response?.data?.message || e.message });
         }
-        setNewName('');
     };
 
     const markedCount = useMemo(() => rows.filter((r) => r.status).length, [rows]);
@@ -221,10 +244,40 @@ const AttendanceTab = () => {
                             </Tooltip>
                         </Box>
                     ))}
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
-                        <TextField size="small" placeholder="Add student name…" value={newName} onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') addStudent(); }} sx={{ minWidth: 220 }} />
-                        <Button size="small" onClick={addStudent}>Add</Button>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5, alignItems: 'center' }}>
+                        <Autocomplete
+                            freeSolo
+                            size="small"
+                            sx={{ minWidth: 320 }}
+                            options={studentOptions}
+                            getOptionLabel={(o) => (typeof o === 'string' ? o : o.studentName || '')}
+                            filterOptions={(opts, state) => {
+                                const q = state.inputValue.trim().toLowerCase();
+                                if (!q) return opts.slice(0, 50);
+                                return opts.filter((o) => (o.studentName || '').toLowerCase().includes(q)).slice(0, 50);
+                            }}
+                            renderOption={(props, o) => (
+                                <li {...props} key={o._id}>
+                                    <Box>
+                                        <Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>{o.studentName}</Typography>
+                                        <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)' }}>
+                                            {[o.yearOrGrade, (o.subjects || []).join(', ')].filter(Boolean).join(' · ')}
+                                        </Typography>
+                                    </Box>
+                                </li>
+                            )}
+                            inputValue={newName}
+                            onInputChange={(e, v) => setNewName(v)}
+                            onChange={(e, v) => { if (v && typeof v !== 'string') addStudent(v); }}
+                            renderInput={(params) => (
+                                <TextField {...params} placeholder="Add student — pick from the list to link them…"
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && newName.trim()) { e.preventDefault(); addStudent(null); } }} />
+                            )}
+                        />
+                        <Button size="small" onClick={() => addStudent(null)} disabled={!newName.trim()}>Add</Button>
+                        <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)' }}>
+                            Picking from the list links the student to their admission record.
+                        </Typography>
                     </Box>
                 </Paper>
             )}

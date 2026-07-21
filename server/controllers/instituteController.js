@@ -7,6 +7,8 @@ const Teacher = require('../models/Teacher');
 const TimetableEntry = require('../models/TimetableEntry');
 const Attendance = require('../models/Attendance');
 const TestRecord = require('../models/TestRecord');
+const InstituteEnrollment = require('../models/InstituteEnrollment');
+const Student = require('../models/Student');
 const { ORG_SKILLHUB_INSTITUTE } = require('../config/organizations');
 const { subjectOptions, subjectMatchCondition } = require('../config/instituteSubjects');
 const { emitToOrg } = require('../services/realtime');
@@ -232,9 +234,12 @@ exports.getRoster = async (req, res, next) => {
             { $match: match },
             { $group: { _id: '$studentName', student: { $first: '$student' } } },
         ];
-        const [attRows, testRows] = await Promise.all([
+        // Enrollments are the durable class list; attendance/test history is
+        // unioned in so classes that predate enrollments still have a roster.
+        const [attRows, testRows, enrolled] = await Promise.all([
             Attendance.aggregate(groupStage),
             TestRecord.aggregate(groupStage),
+            InstituteEnrollment.find(match).select('studentName student').lean(),
         ]);
         const byName = new Map();
         for (const r of [...attRows, ...testRows]) {
@@ -243,8 +248,86 @@ exports.getRoster = async (req, res, next) => {
             // Prefer a linked Student ref if either source has one.
             byName.set(r._id, { studentName: r._id, student: existing?.student || r.student || null });
         }
+        for (const e of enrolled) {
+            if (!e.studentName) continue;
+            const existing = byName.get(e.studentName);
+            byName.set(e.studentName, {
+                studentName: e.studentName,
+                student: existing?.student || e.student || null,
+            });
+        }
         const roster = [...byName.values()].sort((a, b) => a.studentName.localeCompare(b.studentName));
         res.status(200).json({ success: true, data: roster });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Institute students, for the "add to class" picker. Returned so the caller
+// can attach a real Student ref instead of a free-typed name (which is what
+// makes rows show as "(unlinked)"). Grade labels are inconsistent in the
+// admissions data ("g11", "grade 11", "G11") so they're returned verbatim for
+// display and the user chooses — we never auto-match on them.
+exports.getInstituteStudents = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const students = await Student.find({ organization: INSTITUTE })
+            .select('studentName yearOrGrade subjects curriculum')
+            .sort({ studentName: 1 })
+            .lean();
+        res.status(200).json({ success: true, count: students.length, data: students });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Add a student to a class list. Idempotent — re-adding the same student is a
+// no-op rather than a duplicate row. This is what makes "Add" stick even
+// before the student has ever been marked.
+exports.addRosterStudent = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const { gradeOrYear, subject, studentName, student } = req.body;
+        if (!gradeOrYear || !studentName || !String(studentName).trim()) {
+            return res.status(400).json({ success: false, message: 'gradeOrYear and studentName are required' });
+        }
+        if (!subject) {
+            return res.status(400).json({ success: false, message: 'subject is required — a student belongs to one subject at a time' });
+        }
+        const name = String(studentName).trim();
+        const doc = await InstituteEnrollment.findOneAndUpdate(
+            { organization: INSTITUTE, gradeOrYear, subject, studentName: name },
+            { $setOnInsert: { organization: INSTITUTE, gradeOrYear, subject, studentName: name, student: student || null, addedBy: req.user._id } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+        emit('institute:attendance', { gradeOrYear, subject, studentName: name });
+        res.status(201).json({ success: true, data: doc });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Take a student off ONE subject's class list. Their marks for that subject go
+// with it — the roster unions history, so leaving the marks behind would put
+// the student straight back on the list. Other subjects are untouched; use
+// deleteAttendanceStudent to purge the whole grade.
+exports.removeRosterStudent = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const { gradeOrYear, subject, studentName } = req.body;
+        if (!gradeOrYear || !studentName) {
+            return res.status(400).json({ success: false, message: 'gradeOrYear and studentName are required' });
+        }
+        const subjectCond = subject ? subjectMatchCondition(subject) : '';
+        const [enrollRes, attRes] = await Promise.all([
+            InstituteEnrollment.deleteMany({ organization: INSTITUTE, gradeOrYear, subject: subjectCond, studentName }),
+            Attendance.deleteMany({ organization: INSTITUTE, gradeOrYear, subject: subjectCond, studentName }),
+        ]);
+        emit('institute:attendance', { gradeOrYear, subject: subject || '', studentName });
+        res.status(200).json({
+            success: true,
+            data: { removed: enrollRes.deletedCount, marksRemoved: attRes.deletedCount },
+        });
     } catch (error) {
         next(error);
     }
@@ -324,6 +407,27 @@ exports.markAttendance = async (req, res, next) => {
                 markedBy: req.user._id,
             }));
         const inserted = docs.length ? await Attendance.insertMany(docs) : [];
+
+        // Marking a student also puts them on the class list, so a roster built
+        // purely by marking (the old behaviour) stays intact and self-heals.
+        if (docs.length && subject) {
+            await InstituteEnrollment.bulkWrite(
+                docs.map((d) => ({
+                    updateOne: {
+                        filter: { organization: INSTITUTE, gradeOrYear, subject, studentName: d.studentName },
+                        update: {
+                            $setOnInsert: {
+                                organization: INSTITUTE, gradeOrYear, subject,
+                                studentName: d.studentName, student: d.student || null, addedBy: req.user._id,
+                            },
+                        },
+                        upsert: true,
+                    },
+                })),
+                { ordered: false }
+            ).catch(() => { /* enrollment is best-effort; the marks are already saved */ });
+        }
+
         emit('institute:attendance', { gradeOrYear, subject: subject || '', date: dayStart });
         res.status(200).json({ success: true, count: inserted.length, data: inserted });
     } catch (error) {
@@ -379,6 +483,9 @@ exports.deleteAttendanceStudent = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'gradeOrYear and studentName are required' });
         }
         const result = await Attendance.deleteMany({ organization: INSTITUTE, gradeOrYear, studentName });
+        // Drop their class-list membership too, otherwise they'd reappear on
+        // the roster with no history behind them.
+        await InstituteEnrollment.deleteMany({ organization: INSTITUTE, gradeOrYear, studentName });
         emit('institute:attendance', { gradeOrYear, studentName, removed: result.deletedCount });
         res.status(200).json({ success: true, data: { removed: result.deletedCount } });
     } catch (error) {

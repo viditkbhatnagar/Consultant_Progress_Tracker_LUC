@@ -18,6 +18,8 @@ const {
 require('../../models/Attendance');
 require('../../models/TestRecord');
 require('../../models/TimetableEntry');
+require('../../models/InstituteEnrollment');
+require('../../models/Student');
 const c = require('../../controllers/instituteController');
 
 const INSTITUTE_USER = makeSkillhub({ organization: 'skillhub_institute' });
@@ -29,6 +31,8 @@ function makeApp(user) {
     app.use((req, _res, next) => { req.user = user; next(); });
     app.get('/attendance/meta', c.getAttendanceMeta);
     app.get('/attendance/roster', c.getRoster);
+    app.post('/attendance/roster', c.addRosterStudent);
+    app.delete('/attendance/roster', c.removeRosterStudent);
     app.get('/attendance', c.getAttendance);
     app.post('/attendance', c.markAttendance);
     app.delete('/attendance/entry', c.deleteAttendanceEntry);
@@ -129,6 +133,78 @@ describe('Attendance — cancel one entry (bug 2)', () => {
             .send({ gradeOrYear: 'Year 13', studentName: 'Mahi' });
         const left = await request(app).get('/attendance?gradeOrYear=Year 13&studentName=Mahi');
         expect(left.body.data).toHaveLength(0);
+    });
+});
+
+// The branch reported: "she's adding Aishwarya in Grade 11 Accountancy, saving
+// it, but she cannot see it." Adding used to be local-only, and the roster was
+// derived from marks, so an unmarked student was never persisted.
+describe('Attendance — adding a student sticks without marking them', () => {
+    const add = (over = {}) => ({
+        gradeOrYear: 'Grade 11', subject: 'Accountancy', studentName: 'Aishwarya Aswani Kumar', ...over,
+    });
+
+    test('an added student appears on the roster before any mark exists', async () => {
+        const res = await request(app).post('/attendance/roster').send(add());
+        expect(res.status).toBe(201);
+        const roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(roster.body.data.map((r) => r.studentName)).toEqual(['Aishwarya Aswani Kumar']);
+    });
+
+    test('they survive a reload with no attendance rows written', async () => {
+        await request(app).post('/attendance/roster').send(add());
+        const marks = await request(app).get('/attendance?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(marks.body.data).toHaveLength(0); // nothing marked yet…
+        const roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(roster.body.data).toHaveLength(1); // …but still on the list
+    });
+
+    test('adding is per subject — they do not leak into another subject', async () => {
+        await request(app).post('/attendance/roster').send(add());
+        const other = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Economics');
+        expect(other.body.data).toHaveLength(0);
+    });
+
+    test('re-adding the same student is idempotent', async () => {
+        await request(app).post('/attendance/roster').send(add());
+        await request(app).post('/attendance/roster').send(add());
+        const roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(roster.body.data).toHaveLength(1);
+    });
+
+    test('a linked student keeps its Student ref (so it is not "unlinked")', async () => {
+        const studentId = new (require('mongoose').Types.ObjectId)();
+        await request(app).post('/attendance/roster').send(add({ student: String(studentId) }));
+        const roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(String(roster.body.data[0].student)).toBe(String(studentId));
+    });
+
+    test('adding without a subject is rejected', async () => {
+        const res = await request(app).post('/attendance/roster').send(add({ subject: '' }));
+        expect(res.status).toBe(400);
+    });
+
+    test('marking a student also enrolls them, so the old flow self-heals', async () => {
+        await request(app).post('/attendance').send(mark({
+            gradeOrYear: 'Grade 11', subject: 'Accountancy',
+            entries: [{ studentName: 'Zoya', status: 'Present' }],
+        }));
+        // Cancel the only mark — enrollment keeps her on the list.
+        await request(app).delete('/attendance/entry')
+            .send({ gradeOrYear: 'Grade 11', subject: 'Accountancy', date: '2026-07-07', studentName: 'Zoya' });
+        const roster = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(roster.body.data.map((r) => r.studentName)).toContain('Zoya');
+    });
+
+    test('removing from a subject clears the list entry and that subject only', async () => {
+        await request(app).post('/attendance/roster').send(add());
+        await request(app).post('/attendance/roster').send(add({ subject: 'Economics' }));
+        await request(app).delete('/attendance/roster')
+            .send({ gradeOrYear: 'Grade 11', subject: 'Accountancy', studentName: 'Aishwarya Aswani Kumar' });
+        const gone = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Accountancy');
+        expect(gone.body.data).toHaveLength(0);
+        const kept = await request(app).get('/attendance/roster?gradeOrYear=Grade 11&subject=Economics');
+        expect(kept.body.data).toHaveLength(1);
     });
 });
 

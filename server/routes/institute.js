@@ -19,8 +19,15 @@ router.route('/timetable').get(c.getTimetable).post(c.createTimetableEntry);
 router.route('/timetable/:id').put(c.updateTimetableEntry).delete(c.deleteTimetableEntry);
 
 // Attendance (specific routes before the generic list)
+// Institute students — source for the "add to class" picker, so added rows can
+// carry a real Student ref instead of an unlinked free-typed name.
+router.get('/students', c.getInstituteStudents);
+
 router.get('/attendance/meta', c.getAttendanceMeta);
-router.get('/attendance/roster', c.getRoster);
+router.route('/attendance/roster')
+    .get(c.getRoster)
+    .post(c.addRosterStudent)
+    .delete(c.removeRosterStudent);
 // /attendance/entry cancels one mark; /attendance/student removes the student
 // from the whole grade/year. Both must precede the generic /attendance route.
 router.delete('/attendance/entry', c.deleteAttendanceEntry);

@@ -23,6 +23,13 @@ const instituteService = {
     // grade-wide and a student shows up under every subject of that grade.
     getRoster: async (gradeOrYear, subject) =>
         (await axios.get(`${URL}/attendance/roster`, { params: { gradeOrYear, subject: subject || undefined } })).data,
+    // Class-list membership, independent of whether the student has been marked.
+    addRosterStudent: async ({ gradeOrYear, subject, studentName, student }) =>
+        (await axios.post(`${URL}/attendance/roster`, { gradeOrYear, subject, studentName, student })).data,
+    removeRosterStudent: async ({ gradeOrYear, subject, studentName }) =>
+        (await axios.delete(`${URL}/attendance/roster`, { data: { gradeOrYear, subject, studentName } })).data,
+    // Institute students, for linking added names to real admission records.
+    getInstituteStudents: async () => (await axios.get(`${URL}/students`)).data,
     getAttendance: async (params) => (await axios.get(`${URL}/attendance`, { params })).data,
     markAttendance: async (body) => (await axios.post(`${URL}/attendance`, body)).data,
     // Cancel one wrong mark — the student keeps every other record.
