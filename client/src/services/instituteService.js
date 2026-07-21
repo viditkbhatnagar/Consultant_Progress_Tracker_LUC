@@ -19,10 +19,18 @@ const instituteService = {
 
     // Attendance
     getAttendanceMeta: async () => (await axios.get(`${URL}/attendance/meta`)).data,
-    getRoster: async (gradeOrYear) =>
-        (await axios.get(`${URL}/attendance/roster`, { params: { gradeOrYear } })).data,
+    // `subject` scopes the roster to that subject — without it the roster is
+    // grade-wide and a student shows up under every subject of that grade.
+    getRoster: async (gradeOrYear, subject) =>
+        (await axios.get(`${URL}/attendance/roster`, { params: { gradeOrYear, subject: subject || undefined } })).data,
     getAttendance: async (params) => (await axios.get(`${URL}/attendance`, { params })).data,
     markAttendance: async (body) => (await axios.post(`${URL}/attendance`, body)).data,
+    // Cancel one wrong mark — the student keeps every other record.
+    deleteAttendanceEntry: async ({ gradeOrYear, subject, date, studentName }) =>
+        (await axios.delete(`${URL}/attendance/entry`, {
+            data: { gradeOrYear, subject: subject || '', date, studentName },
+        })).data,
+    // Remove the student from the whole grade/year (all their rows).
     deleteAttendanceStudent: async (gradeOrYear, studentName) =>
         (await axios.delete(`${URL}/attendance/student`, { data: { gradeOrYear, studentName } })).data,
 

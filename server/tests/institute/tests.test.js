@@ -18,6 +18,7 @@ const {
 require('../../models/TestRecord');
 require('../../models/Attendance');
 require('../../models/TimetableEntry');
+const { subjectOptions } = require('../../config/instituteSubjects');
 const c = require('../../controllers/instituteController');
 
 const INSTITUTE_USER = makeSkillhub({ organization: 'skillhub_institute' });
@@ -166,10 +167,25 @@ describe('Test Tracker — filters', () => {
         expect(outOfRange.body.data.length).toBe(0);
     });
 
-    test('meta surfaces distinct grades and subjects', async () => {
+    test('meta surfaces distinct grades from the data', async () => {
         const res = await request(app).get('/tests/meta');
         expect(res.body.data.gradesOrYears).toContain('Grade 9');
-        expect(res.body.data.subjects.sort()).toEqual(['Maths', 'Science']);
+    });
+
+    // Subjects are NO LONGER derived from the rows. Deriving them is what let
+    // duplicate spellings ("Maths" vs "Math") and the retired CHRM into the
+    // picker, so meta now serves the canonical list from config regardless of
+    // what the stored rows happen to say.
+    test('meta serves the canonical subject list, not distinct row values', async () => {
+        const res = await request(app).get('/tests/meta');
+        const { subjects } = res.body.data;
+        expect(subjects).toEqual(subjectOptions());
+        // The seeded rows use "Maths"; the picker must offer canonical "Math".
+        expect(subjects).toContain('Math');
+        expect(subjects).not.toContain('Maths');
+        expect(subjects).not.toContain('CHRM');
+        // The four the branch asked for are all present.
+        ['Physics', 'Biology', 'Science', 'Math'].forEach((s) => expect(subjects).toContain(s));
     });
 
     test('an unparseable date param is a 400, not a 404', async () => {

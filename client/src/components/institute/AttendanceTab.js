@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box, Button, Paper, FormControl, InputLabel, Select, MenuItem, TextField, ToggleButtonGroup,
-    ToggleButton, CircularProgress, Alert, Typography, Snackbar, Divider, IconButton, Tooltip,
+    ToggleButton, CircularProgress, Alert, Typography, Snackbar, Divider, IconButton, Tooltip, Menu,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import BackspaceIcon from '@mui/icons-material/BackspaceOutlined';
+import FileDownloadIcon from '@mui/icons-material/FileDownloadOutlined';
 import instituteService from '../../services/instituteService';
+import { exportRawSheet } from '../../services/xlsxBuilder';
 
 const todayIso = () => {
     const d = new Date();
@@ -17,11 +20,15 @@ const AttendanceTab = () => {
     const [subject, setSubject] = useState('');
     const [date, setDate] = useState(todayIso());
     const [rows, setRows] = useState([]); // { studentName, student, status }
+    // Names that already have a SAVED mark for this (grade, subject, date) —
+    // only those can have that single day's entry cancelled.
+    const [savedNames, setSavedNames] = useState(new Set());
     const [newName, setNewName] = useState('');
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [toast, setToast] = useState(null);
+    const [downloadAnchor, setDownloadAnchor] = useState(null);
 
     useEffect(() => {
         instituteService.getAttendanceMeta()
@@ -29,22 +36,26 @@ const AttendanceTab = () => {
             .catch(() => {});
     }, []);
 
-    // Load roster + existing marks whenever grade/subject/date change.
+    // Load roster + existing marks whenever grade/subject/date change. The
+    // roster is scoped to the chosen subject, so a student only appears in the
+    // subjects they actually attend.
     const loadRoster = useCallback(async () => {
-        if (!gradeOrYear) { setRows([]); return; }
+        if (!gradeOrYear) { setRows([]); setSavedNames(new Set()); return; }
         setLoading(true);
         setError('');
         try {
             const [rosterRes, attRes] = await Promise.all([
-                instituteService.getRoster(gradeOrYear),
+                instituteService.getRoster(gradeOrYear, subject || undefined),
                 instituteService.getAttendance({ gradeOrYear, subject: subject || undefined, date }),
             ]);
-            const existing = new Map((attRes.data || []).map((a) => [a.studentName, a.status]));
+            const marks = attRes.data || [];
+            const existing = new Map(marks.map((a) => [a.studentName, a.status]));
+            setSavedNames(new Set(marks.map((a) => a.studentName)));
             const merged = (rosterRes.data || []).map((r) => ({
                 studentName: r.studentName, student: r.student || null, status: existing.get(r.studentName) || '',
             }));
             // Include any marked names not in the roster.
-            for (const a of attRes.data || []) {
+            for (const a of marks) {
                 if (!merged.find((m) => m.studentName === a.studentName)) {
                     merged.push({ studentName: a.studentName, student: a.student || null, status: a.status });
                 }
@@ -60,8 +71,23 @@ const AttendanceTab = () => {
     useEffect(() => { loadRoster(); }, [loadRoster]);
 
     const setStatus = (idx, status) => setRows((p) => p.map((r, i) => (i === idx ? { ...r, status } : r)));
+
+    // Cancel just this student's mark for this date — e.g. marked present on a
+    // day the class never ran. Every other date they've been marked survives,
+    // so they stay on the roster.
+    const cancelEntry = async (studentName) => {
+        if (!window.confirm(`Cancel ${studentName}'s attendance for ${date}${subject ? ` (${subject})` : ''}?\n\nOnly this one entry is removed — their other dates are kept.`)) return;
+        try {
+            await instituteService.deleteAttendanceEntry({ gradeOrYear, subject, date, studentName });
+            setToast({ severity: 'success', message: `Cancelled ${studentName}'s mark for ${date}` });
+            loadRoster();
+        } catch (e) {
+            setToast({ severity: 'error', message: e.response?.data?.message || e.message });
+        }
+    };
+
     const removeStudent = async (studentName) => {
-        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear}? This deletes all their attendance in this grade/year.`)) return;
+        if (!window.confirm(`Remove "${studentName}" from ${gradeOrYear} entirely?\n\nThis deletes ALL their attendance in this grade/year. To undo a single wrong mark, use "Cancel this date's mark" instead.`)) return;
         try {
             await instituteService.deleteAttendanceStudent(gradeOrYear, studentName);
             setRows((p) => p.filter((r) => r.studentName !== studentName));
@@ -70,6 +96,7 @@ const AttendanceTab = () => {
             setToast({ severity: 'error', message: e.response?.data?.message || e.message });
         }
     };
+
     const addStudent = () => {
         const nm = newName.trim();
         if (!nm) return;
@@ -83,12 +110,25 @@ const AttendanceTab = () => {
 
     const save = async () => {
         if (!gradeOrYear) return setError('Pick a grade / year');
+        // Attendance is per subject. Saving without one would write rows into a
+        // blank-subject bucket that then shows up under every subject again —
+        // the exact leak we're fixing. (Legacy blank-subject rows can still be
+        // viewed under "Any / none" and cancelled row-by-row.)
+        if (!subject) return setError('Pick a subject — attendance is marked per subject.');
         const entries = rows.filter((r) => r.status).map((r) => ({ studentName: r.studentName, student: r.student, status: r.status }));
-        if (!entries.length) return setError('Mark at least one student');
+        // Saving with nothing marked is how you clear a whole day that was
+        // logged by mistake — allowed, but confirmed since it wipes the sitting.
+        if (!entries.length) {
+            if (!savedNames.size) return setError('Mark at least one student');
+            if (!window.confirm(`Clear ALL attendance for ${gradeOrYear}${subject ? ` · ${subject}` : ''} on ${date}?`)) return;
+        }
         setSaving(true); setError('');
         try {
             await instituteService.markAttendance({ date, gradeOrYear, subject, entries });
-            setToast({ severity: 'success', message: `Saved attendance for ${entries.length} student(s)` });
+            setToast({
+                severity: 'success',
+                message: entries.length ? `Saved attendance for ${entries.length} student(s)` : 'Cleared attendance for this date',
+            });
             loadRoster();
         } catch (e) {
             setToast({ severity: 'error', message: e.response?.data?.message || e.message });
@@ -98,6 +138,21 @@ const AttendanceTab = () => {
     };
 
     const allPresent = () => setRows((p) => p.map((r) => ({ ...r, status: 'Present' })));
+
+    const download = (kind) => {
+        setDownloadAnchor(null);
+        const exportRows = rows.map((r) => ({
+            date, gradeOrYear, subject: subject || '', studentName: r.studentName, status: r.status || 'Not marked',
+        }));
+        const cols = [
+            { key: 'date', lbl: 'Date' },
+            { key: 'gradeOrYear', lbl: 'Grade / Year' },
+            { key: 'subject', lbl: 'Subject' },
+            { key: 'studentName', lbl: 'Student' },
+            { key: 'status', lbl: 'Status' },
+        ];
+        exportRawSheet(exportRows, cols, 'institute-attendance', kind, { sheetName: 'Attendance' });
+    };
 
     return (
         <Box>
@@ -117,6 +172,11 @@ const AttendanceTab = () => {
                 </FormControl>
                 <TextField size="small" type="date" label="Date" InputLabelProps={{ shrink: true }} value={date} onChange={(e) => setDate(e.target.value)} />
                 <Box sx={{ flex: 1 }} />
+                <Button size="small" variant="outlined" startIcon={<FileDownloadIcon />} disabled={!rows.length} onClick={(e) => setDownloadAnchor(e.currentTarget)}>Export</Button>
+                <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
+                    <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
+                    <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                </Menu>
                 <Button size="small" onClick={allPresent} disabled={!rows.length}>All Present</Button>
                 <Button variant="contained" size="small" onClick={save} disabled={saving || !gradeOrYear}>{saving ? 'Saving…' : 'Save Attendance'}</Button>
             </Box>
@@ -132,6 +192,11 @@ const AttendanceTab = () => {
                     <Typography sx={{ fontSize: 12.5, color: 'var(--d-text-3, #57564E)', mb: 1 }}>
                         {gradeOrYear}{subject ? ` · ${subject}` : ''} · {date} — {markedCount}/{rows.length} marked
                     </Typography>
+                    {!subject && (
+                        <Alert severity="info" sx={{ mb: 1, py: 0 }}>
+                            Pick a subject to see only the students who take it. Students added here belong to the selected subject only.
+                        </Alert>
+                    )}
                     <Divider sx={{ mb: 1 }} />
                     {rows.length === 0 ? (
                         <Typography sx={{ color: 'var(--d-text-muted, #8A887E)', py: 2 }}>No students yet — add one below.</Typography>
@@ -144,7 +209,14 @@ const AttendanceTab = () => {
                                 <ToggleButton value="Present" sx={{ px: 1.5, '&.Mui-selected': { bgcolor: 'rgba(31,122,53,0.15)', color: '#1F7A35' } }}>Present</ToggleButton>
                                 <ToggleButton value="Absent" sx={{ px: 1.5, '&.Mui-selected': { bgcolor: 'rgba(220,38,38,0.15)', color: '#DC2626' } }}>Absent</ToggleButton>
                             </ToggleButtonGroup>
-                            <Tooltip title="Remove from this grade / year">
+                            <Tooltip title={savedNames.has(r.studentName) ? "Cancel this date's mark (keeps the student)" : 'Nothing saved for this date'}>
+                                <span>
+                                    <IconButton size="small" disabled={!savedNames.has(r.studentName)} onClick={() => cancelEntry(r.studentName)}>
+                                        <BackspaceIcon fontSize="small" />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                            <Tooltip title="Remove student from this grade / year (all dates)">
                                 <IconButton size="small" onClick={() => removeStudent(r.studentName)}><DeleteIcon fontSize="small" /></IconButton>
                             </Tooltip>
                         </Box>

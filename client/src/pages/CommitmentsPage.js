@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import commitmentService from '../services/commitmentService';
 import userService from '../services/userService';
 import consultantService from '../services/consultantService';
+import instituteService from '../services/instituteService';
 import CommitmentsKPIStrip from '../components/commitments/CommitmentsKPIStrip';
 import CommitmentsToolbar from '../components/commitments/CommitmentsToolbar';
 import CommitmentsTableView from '../components/commitments/CommitmentsTableView';
@@ -92,6 +93,8 @@ const CommitmentsPage = () => {
         status: '',
         teamLead: '',
         consultantName: '',
+        // Institute only — the teacher who took the demo (Commitment.demos[].demoDoneBy).
+        demoDoneBy: '',
         // No default date window — show everything until the user picks one.
         startDate: null,
         endDate: null,
@@ -99,6 +102,7 @@ const CommitmentsPage = () => {
 
     const [teamLeads, setTeamLeads] = useState([]);
     const [consultants, setConsultants] = useState([]);
+    const [teachers, setTeachers] = useState([]);
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -145,6 +149,21 @@ const CommitmentsPage = () => {
             .catch(() => { if (!cancelled) setConsultants([]); });
         return () => { cancelled = true; };
     }, [isAdmin, viewOrg]);
+
+    // Institute demos record which teacher took them, so the tracker gets a
+    // "Demo done by" filter alongside Consultant. Only the Institute has faculty.
+    useEffect(() => {
+        if (!isInstitute) { setTeachers([]); return undefined; }
+        let cancelled = false;
+        instituteService
+            .getTeachers()
+            .then((res) => {
+                const list = res.data || [];
+                if (!cancelled) setTeachers(list.filter((t) => t.isActive !== false));
+            })
+            .catch(() => { if (!cancelled) setTeachers([]); });
+        return () => { cancelled = true; };
+    }, [isInstitute]);
 
     const fetchParams = useMemo(
         () => ({
@@ -205,6 +224,13 @@ const CommitmentsPage = () => {
         if (filters.consultantName) {
             list = list.filter((r) => r.consultantName === filters.consultantName);
         }
+        // A row matches if ANY of its demos was done by the chosen teacher —
+        // one commitment can carry several demos.
+        if (filters.demoDoneBy) {
+            list = list.filter((r) =>
+                (r.demos || []).some((d) => (d.demoDoneBy || '').trim() === filters.demoDoneBy)
+            );
+        }
         return list;
     }, [allRows, filters]);
 
@@ -219,6 +245,7 @@ const CommitmentsPage = () => {
             status: '',
             teamLead: '',
             consultantName: '',
+            demoDoneBy: '',
             startDate: null,
             endDate: null,
         });
@@ -475,6 +502,8 @@ const CommitmentsPage = () => {
                         onClearFilters={clearFilters}
                         teamLeads={teamLeads}
                         consultants={consultants}
+                        teachers={teachers}
+                        isInstitute={isInstitute}
                         isAdmin={isAdmin}
                         onAdd={openCreate}
                         onAIAnalysis={openAI}

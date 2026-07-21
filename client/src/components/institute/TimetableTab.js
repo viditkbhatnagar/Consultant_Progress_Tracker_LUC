@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box, Button, Paper, ToggleButtonGroup, ToggleButton, FormControl, InputLabel, Select, MenuItem,
-    IconButton, Tooltip, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Typography, Snackbar,
+    IconButton, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
+    TextField, Typography, Snackbar, Menu,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
+import FileDownloadIcon from '@mui/icons-material/FileDownloadOutlined';
 import instituteService from '../../services/instituteService';
+import { exportRawSheet } from '../../services/xlsxBuilder';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const EntryDialog = ({ open, entry, teachers, onClose, onSaved }) => {
+const EntryDialog = ({ open, entry, teachers, subjects = [], onClose, onSaved }) => {
     const [f, setF] = useState({});
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -54,7 +56,18 @@ const EntryDialog = ({ open, entry, teachers, onClose, onSaved }) => {
                     </FormControl>
                     <TextField size="small" label="Time" value={f.time} onChange={set('time')} placeholder="12.30 pm - 1.30 pm" />
                     <TextField size="small" label="Grade / Year" value={f.gradeOrYear} onChange={set('gradeOrYear')} placeholder="Grade 9 / Year 10" />
-                    <TextField size="small" label="Subject" value={f.subject} onChange={set('subject')} />
+                    <FormControl fullWidth size="small">
+                        <InputLabel>Subject</InputLabel>
+                        <Select label="Subject" value={f.subject || ''} onChange={set('subject')}>
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {subjects.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                            {/* Keep a retired/legacy value (e.g. CHRM) selectable on an
+                                existing row so editing it doesn't silently blank it. */}
+                            {f.subject && !subjects.includes(f.subject) && (
+                                <MenuItem value={f.subject}>{f.subject} (legacy)</MenuItem>
+                            )}
+                        </Select>
+                    </FormControl>
                     <TextField size="small" label="Curriculum" value={f.curriculum} onChange={set('curriculum')} placeholder="CBSE / IGCSE Edexcel" />
                     <TextField size="small" label="Grade / Student label" value={f.studentLabel} onChange={set('studentLabel')} sx={{ gridColumn: '1 / -1' }} placeholder="e.g. Mitali  /  Grade 9" />
                 </Box>
@@ -93,6 +106,8 @@ const TimetableTab = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [toast, setToast] = useState(null);
+    const [downloadAnchor, setDownloadAnchor] = useState(null);
+    const [subjects, setSubjects] = useState([]);
 
     const load = useCallback(() => {
         Promise.all([instituteService.getTeachers(), instituteService.getTimetable()])
@@ -100,6 +115,14 @@ const TimetableTab = () => {
             .catch((err) => { setError(err.response?.data?.message || err.message); setLoading(false); });
     }, []);
     useEffect(() => { setLoading(true); load(); }, [load]);
+
+    // Canonical subject list for the session dialog — typing subjects freehand
+    // is what produced the duplicate spellings in the first place.
+    useEffect(() => {
+        instituteService.getAttendanceMeta()
+            .then((r) => setSubjects(r.data?.subjects || []))
+            .catch(() => {});
+    }, []);
 
     const grades = useMemo(() => [...new Set(entries.map((e) => e.gradeOrYear).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [entries]);
 
@@ -127,6 +150,28 @@ const TimetableTab = () => {
         catch (err) { setToast({ severity: 'error', message: err.response?.data?.message || err.message }); }
     };
 
+    // Exports the schedule currently on screen (the selected teacher / grade),
+    // ordered the way the grid reads: day, then start time.
+    const download = (kind) => {
+        setDownloadAnchor(null);
+        const ordered = DAYS.flatMap((d) => byDay[d]);
+        const exportRows = ordered.map((e) => ({
+            dayOfWeek: e.dayOfWeek, time: e.time, gradeOrYear: e.gradeOrYear,
+            subject: e.subject, curriculum: e.curriculum, teacherName: e.teacherName,
+            studentLabel: e.studentLabel,
+        }));
+        const cols = [
+            { key: 'dayOfWeek', lbl: 'Day' },
+            { key: 'time', lbl: 'Time' },
+            { key: 'gradeOrYear', lbl: 'Grade / Year' },
+            { key: 'subject', lbl: 'Subject' },
+            { key: 'curriculum', lbl: 'Curriculum' },
+            { key: 'teacherName', lbl: 'Teacher' },
+            { key: 'studentLabel', lbl: 'Grade / Student' },
+        ];
+        exportRawSheet(exportRows, cols, 'institute-timetable', kind, { sheetName: 'Timetable' });
+    };
+
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>;
     if (error) return <Alert severity="error">{error}</Alert>;
 
@@ -146,6 +191,11 @@ const TimetableTab = () => {
                     </Select>
                 </FormControl>
                 <Box sx={{ flex: 1 }} />
+                <Button size="small" variant="outlined" startIcon={<FileDownloadIcon />} disabled={!filtered.length} onClick={(e) => setDownloadAnchor(e.currentTarget)}>Export</Button>
+                <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
+                    <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
+                    <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                </Menu>
                 <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => { setEditing(null); setDialogOpen(true); }}>New Session</Button>
             </Box>
 
@@ -162,7 +212,7 @@ const TimetableTab = () => {
                 </Box>
             </Paper>
 
-            <EntryDialog open={dialogOpen} entry={editing} teachers={teachers} onClose={() => setDialogOpen(false)}
+            <EntryDialog open={dialogOpen} entry={editing} teachers={teachers} subjects={subjects} onClose={() => setDialogOpen(false)}
                 onSaved={() => { setToast({ severity: 'success', message: editing ? 'Session updated' : 'Session created' }); load(); }} />
             <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
                 <Alert severity={toast?.severity || 'info'} onClose={() => setToast(null)}>{toast?.message}</Alert>

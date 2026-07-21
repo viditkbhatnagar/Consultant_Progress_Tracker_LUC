@@ -8,6 +8,7 @@ const TimetableEntry = require('../models/TimetableEntry');
 const Attendance = require('../models/Attendance');
 const TestRecord = require('../models/TestRecord');
 const { ORG_SKILLHUB_INSTITUTE } = require('../config/organizations');
+const { subjectOptions, subjectMatchCondition } = require('../config/instituteSubjects');
 const { emitToOrg } = require('../services/realtime');
 
 const INSTITUTE = ORG_SKILLHUB_INSTITUTE;
@@ -195,18 +196,17 @@ exports.deleteTimetableEntry = async (req, res, next) => {
 exports.getAttendanceMeta = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
-        const [grades, subjects] = await Promise.all([
+        // Grades stay data-derived (they grow organically), but subjects come
+        // from the canonical list — deriving them from `distinct('subject')`
+        // is what let duplicates and the retired CHRM into the picker.
+        const [grades, tGrades] = await Promise.all([
             Attendance.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
-            Attendance.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
-        ]);
-        const [tGrades, tSubjects] = await Promise.all([
             TimetableEntry.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
-            TimetableEntry.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
         ]);
         const uniq = (a) => [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y));
         res.status(200).json({
             success: true,
-            data: { gradesOrYears: uniq([...grades, ...tGrades]), subjects: uniq([...subjects, ...tSubjects]) },
+            data: { gradesOrYears: uniq([...grades, ...tGrades]), subjects: subjectOptions() },
         });
     } catch (error) {
         next(error);
@@ -216,13 +216,20 @@ exports.getAttendanceMeta = async (req, res, next) => {
 // Roster for a grade/year: distinct students that have appeared in its
 // attendance OR test history (name + optional Student ref). Unioned so a grade
 // that has only sat a test still has a roster for the next test/attendance.
+//
+// When `subject` is supplied the roster is scoped to that subject. Without it
+// the roster was grade-wide, so a student added under (Year 13, Biology) then
+// showed up under every other Year 13 subject — a student must only appear in
+// the subjects they actually attend; adding them elsewhere is a manual action.
 exports.getRoster = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
-        const { gradeOrYear } = req.query;
+        const { gradeOrYear, subject } = req.query;
         if (!gradeOrYear) return res.status(400).json({ success: false, message: 'gradeOrYear is required' });
+        const match = { organization: INSTITUTE, gradeOrYear };
+        if (subject) match.subject = subjectMatchCondition(subject);
         const groupStage = [
-            { $match: { organization: INSTITUTE, gradeOrYear } },
+            { $match: match },
             { $group: { _id: '$studentName', student: { $first: '$student' } } },
         ];
         const [attRows, testRows] = await Promise.all([
@@ -250,7 +257,7 @@ exports.getAttendance = async (req, res, next) => {
         const { gradeOrYear, subject, date, startDate, endDate, studentName } = req.query;
         const filter = { organization: INSTITUTE };
         if (gradeOrYear) filter.gradeOrYear = gradeOrYear;
-        if (subject) filter.subject = subject;
+        if (subject) filter.subject = subjectMatchCondition(subject);
         if (studentName) filter.studentName = studentName;
         if (date) {
             const d = new Date(date);
@@ -291,10 +298,13 @@ exports.markAttendance = async (req, res, next) => {
         dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
         // Clear this exact key, then insert fresh — keeps re-marking clean.
+        // The clear matches legacy spellings too (a day stored as "Maths" is
+        // replaced when re-marked as "Math") so re-marking can't leave a
+        // duplicate row behind; the insert below always writes the canonical.
         await Attendance.deleteMany({
             organization: INSTITUTE,
             gradeOrYear,
-            subject: subject || '',
+            subject: subject ? subjectMatchCondition(subject) : '',
             date: { $gte: dayStart, $lt: dayEnd },
         });
 
@@ -321,9 +331,46 @@ exports.markAttendance = async (req, res, next) => {
     }
 };
 
+// Cancel ONE mark: the (grade/year, subject, date, student) row only.
+// Used when a teacher marked a student on a day the class never ran. The
+// student keeps every other record — and so stays on the roster — which is the
+// difference from deleteAttendanceStudent below (that one wipes the lot).
+exports.deleteAttendanceEntry = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const { gradeOrYear, subject, date, studentName } = req.body;
+        if (!gradeOrYear || !studentName || !date) {
+            return res.status(400).json({
+                success: false,
+                message: 'gradeOrYear, studentName and date are required',
+            });
+        }
+        const day = new Date(date);
+        if (Number.isNaN(day.getTime())) {
+            return res.status(400).json({ success: false, message: 'Invalid date' });
+        }
+        const dayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+        const dayEnd = new Date(dayStart);
+        dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+        const result = await Attendance.deleteMany({
+            organization: INSTITUTE,
+            gradeOrYear,
+            subject: subject ? subjectMatchCondition(subject) : '',
+            studentName,
+            date: { $gte: dayStart, $lt: dayEnd },
+        });
+        emit('institute:attendance', { gradeOrYear, subject: subject || '', date: dayStart });
+        res.status(200).json({ success: true, data: { removed: result.deletedCount } });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Remove a student from a grade/year's attendance entirely (wrong-grade or
 // discontinued students). Deletes all their attendance rows for that grade so
-// they drop out of the roster.
+// they drop out of the roster. To cancel a single wrong mark use
+// deleteAttendanceEntry instead.
 exports.deleteAttendanceStudent = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
@@ -366,16 +413,14 @@ function isAllDuplicateKeyError(err) {
 exports.getTestMeta = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
-        const [tGrades, tSubjects, ttGrades, ttSubjects] = await Promise.all([
+        const [tGrades, ttGrades] = await Promise.all([
             TestRecord.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
-            TestRecord.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
             TimetableEntry.distinct('gradeOrYear', { organization: INSTITUTE, gradeOrYear: { $nin: [null, ''] } }),
-            TimetableEntry.distinct('subject', { organization: INSTITUTE, subject: { $nin: [null, ''] } }),
         ]);
         const uniq = (a) => [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y));
         res.status(200).json({
             success: true,
-            data: { gradesOrYears: uniq([...tGrades, ...ttGrades]), subjects: uniq([...tSubjects, ...ttSubjects]) },
+            data: { gradesOrYears: uniq([...tGrades, ...ttGrades]), subjects: subjectOptions() },
         });
     } catch (error) {
         next(error);
@@ -390,7 +435,7 @@ exports.getTests = async (req, res, next) => {
         const { gradeOrYear, subject, teacherName, studentName, date, startDate, endDate } = req.query;
         const filter = { organization: INSTITUTE };
         if (gradeOrYear) filter.gradeOrYear = gradeOrYear;
-        if (subject) filter.subject = subject;
+        if (subject) filter.subject = subjectMatchCondition(subject);
         if (teacherName) filter.teacherName = teacherName;
         if (studentName) filter.studentName = studentName;
         // Guard against unparseable date params — an Invalid Date would cast-

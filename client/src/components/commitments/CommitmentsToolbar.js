@@ -126,6 +126,8 @@ const CommitmentsToolbar = ({
     onClearFilters,
     teamLeads = [],
     consultants = [],
+    teachers = [],
+    isInstitute = false,
     isAdmin,
     onAdd,
     onAIAnalysis,
@@ -137,6 +139,7 @@ const CommitmentsToolbar = ({
             filters.status ||
             filters.teamLead ||
             filters.consultantName ||
+            filters.demoDoneBy ||
             filters.startDate ||
             filters.endDate
     );
@@ -150,6 +153,7 @@ const CommitmentsToolbar = ({
         value: c.name,
         label: c.name,
     }));
+    const teacherOptions = teachers.map((t) => ({ value: t.name, label: t.name }));
     const tlOptions = teamLeads.map((u) => ({ value: u._id, label: u.name }));
 
     const selectedTlLabel =
@@ -320,6 +324,15 @@ const CommitmentsToolbar = ({
                     onChange={(v) => onFilterChange('consultantName', v)}
                     width={220}
                 />
+                {isInstitute && (
+                    <FilterChip
+                        label="Demo done by"
+                        value={filters.demoDoneBy || ''}
+                        options={teacherOptions}
+                        onChange={(v) => onFilterChange('demoDoneBy', v)}
+                        width={220}
+                    />
+                )}
                 <DatePicker
                     label="From"
                     value={filters.startDate}

@@ -27,7 +27,9 @@ const marksLabel = (r) => {
     return `${r.marksObtained}`;
 };
 
-const EMPTY_FILTERS = { search: '', gradeOrYear: '', subject: '', teacherName: '', startDate: '', endDate: '' };
+// Tests are a single weekly sitting, so one date is enough — a From/To range
+// only ever added two clicks for the same answer.
+const EMPTY_FILTERS = { search: '', gradeOrYear: '', subject: '', teacherName: '', date: '' };
 
 // ── Bulk entry: record one test for a whole grade at once ──────────────────
 const RecordTestDialog = ({ open, meta, teachers, onClose, onSaved }) => {
@@ -333,8 +335,7 @@ const TestsTab = () => {
                 gradeOrYear: filters.gradeOrYear || undefined,
                 subject: filters.subject || undefined,
                 teacherName: filters.teacherName || undefined,
-                startDate: filters.startDate || undefined,
-                endDate: filters.endDate || undefined,
+                date: filters.date || undefined,
             });
             setRows(res.data || []);
         } catch (e) {
@@ -342,7 +343,7 @@ const TestsTab = () => {
         } finally {
             setLoading(false);
         }
-    }, [filters.gradeOrYear, filters.subject, filters.teacherName, filters.startDate, filters.endDate]);
+    }, [filters.gradeOrYear, filters.subject, filters.teacherName, filters.date]);
     useEffect(() => { load(); }, [load]);
 
     // Student search is client-side (substring, case-insensitive).
@@ -417,8 +418,7 @@ const TestsTab = () => {
                         {teachers.map((t) => <MenuItem key={t._id} value={t.name}>{t.name}</MenuItem>)}
                     </Select>
                 </FormControl>
-                <TextField size="small" type="date" label="From" InputLabelProps={{ shrink: true }} value={filters.startDate} onChange={(e) => setFilter('startDate', e.target.value)} />
-                <TextField size="small" type="date" label="To" InputLabelProps={{ shrink: true }} value={filters.endDate} onChange={(e) => setFilter('endDate', e.target.value)} />
+                <TextField size="small" type="date" label="Date" InputLabelProps={{ shrink: true }} value={filters.date} onChange={(e) => setFilter('date', e.target.value)} />
                 <Button size="small" onClick={() => setFilters(EMPTY_FILTERS)}>Clear</Button>
                 <Box sx={{ flex: 1 }} />
                 <Button size="small" variant="outlined" startIcon={<FileDownloadIcon />} disabled={!visible.length} onClick={(e) => setDownloadAnchor(e.currentTarget)}>Export</Button>

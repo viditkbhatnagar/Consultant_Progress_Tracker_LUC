@@ -21,6 +21,9 @@ router.route('/timetable/:id').put(c.updateTimetableEntry).delete(c.deleteTimeta
 // Attendance (specific routes before the generic list)
 router.get('/attendance/meta', c.getAttendanceMeta);
 router.get('/attendance/roster', c.getRoster);
+// /attendance/entry cancels one mark; /attendance/student removes the student
+// from the whole grade/year. Both must precede the generic /attendance route.
+router.delete('/attendance/entry', c.deleteAttendanceEntry);
 router.delete('/attendance/student', c.deleteAttendanceStudent);
 router.route('/attendance').get(c.getAttendance).post(c.markAttendance);
 

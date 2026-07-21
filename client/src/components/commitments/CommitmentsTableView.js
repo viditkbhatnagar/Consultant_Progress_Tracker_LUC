@@ -200,7 +200,7 @@ const CommitmentsTableView = ({
                             <th>Consultant</th>
                             {isAdmin && <th>Team Lead</th>}
                             <th>Commitment</th>
-                            {isInstitute && <th>Teacher</th>}
+                            {isInstitute && <th>Demo done by</th>}
                             <th>Lead Stage</th>
                             <th style={{ textAlign: 'center' }}>Prob.</th>
                             <th style={{ textAlign: 'center' }}>Ach.</th>
