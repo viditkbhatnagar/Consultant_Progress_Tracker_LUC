@@ -37,6 +37,9 @@ import { getConsultantPerformance } from '../services/execOverviewService';
 
 const fmtCurrency = (n) => `AED ${Number(n || 0).toLocaleString('en-US')}`;
 const fmtPct = (n) => (n == null || Number.isNaN(n) ? '0.0%' : `${(n * 100).toFixed(1)}%`);
+// Top-5 cards only. The table's YTD % / MTD % columns are deliberately left in
+// the default text colour: traffic-lighting every percentage competed with the
+// gold million marker and made the table noisy. Don't re-apply it there.
 const pctColor = (n) => (n >= 1 ? '#1F7A35' : n >= 0.8 ? '#2383E2' : '#A35A06');
 
 // "Million club" — consultants whose YTD revenue has crossed AED 1,000,000.
@@ -145,9 +148,9 @@ const CategoryTable = ({ title, accent, rows, subtitle }) => (
                                 <TableCell align="right" sx={isMillionClub(r) ? { fontWeight: 800, color: GOLD } : null}>
                                     {fmtCurrency(r.ytdAchieved)}
                                 </TableCell>
-                                <TableCell align="right" sx={{ fontWeight: 700, color: pctColor(r.ytdPercent) }}>{fmtPct(r.ytdPercent)}</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 700 }}>{fmtPct(r.ytdPercent)}</TableCell>
                                 <TableCell align="right">{fmtCurrency(r.mtdAchieved)}</TableCell>
-                                <TableCell align="right" sx={{ color: pctColor(r.mtdPercent) }}>{fmtPct(r.mtdPercent)}</TableCell>
+                                <TableCell align="right">{fmtPct(r.mtdPercent)}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
