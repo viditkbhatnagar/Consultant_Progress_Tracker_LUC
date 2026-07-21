@@ -39,10 +39,11 @@ const fmtCurrency = (n) => `AED ${Number(n || 0).toLocaleString('en-US')}`;
 const fmtPct = (n) => (n == null || Number.isNaN(n) ? '0.0%' : `${(n * 100).toFixed(1)}%`);
 const pctColor = (n) => (n >= 1 ? '#1F7A35' : n >= 0.8 ? '#2383E2' : '#A35A06');
 
-// "Million club" — consultants whose YTD revenue has crossed AED 1,000,000 are
-// highlighted in gold automatically, no manual flagging. It's deliberately a
-// highlight on the existing name/amount rather than a new column: the table is
-// already nine columns wide with no room to spare.
+// "Million club" — consultants whose YTD revenue has crossed AED 1,000,000.
+// Gold is applied to exactly two things: the consultant's name and their YTD
+// Achieved figure. Everything else on the row stays black — the whole point is
+// that the million reads instantly, and washing the row or adding badges
+// dilutes it.
 const MILLION_CLUB_THRESHOLD = 1000000;
 const GOLD = '#C99700';
 const isMillionClub = (r) => Number(r?.ytdAchieved || 0) >= MILLION_CLUB_THRESHOLD;
@@ -75,19 +76,15 @@ const LeaderboardCard = ({ title, rows, metric, accent, quoteIndex }) => (
                         <Typography sx={{ fontSize: 15, fontWeight: 800, lineHeight: 1.1, color: pctColor(metric === 'mtd' ? r.mtdPercent : r.ytdPercent) }}>
                             {fmtPct(metric === 'mtd' ? r.mtdPercent : r.ytdPercent)}
                         </Typography>
+                        {/* Gold only on the YTD card — the MTD figure isn't the
+                            number that crossed a million, so colouring it would
+                            point at the wrong thing. */}
                         <Typography sx={{
                             fontSize: 12,
                             fontWeight: 800,
-                            color: isMillionClub(r) ? GOLD : 'var(--d-text-2, #2A2927)',
+                            color: metric !== 'mtd' && isMillionClub(r) ? GOLD : 'var(--d-text-2, #2A2927)',
                             fontVariantNumeric: 'tabular-nums',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.4,
-                            justifyContent: 'flex-end',
                         }}>
-                            {isMillionClub(r) && (
-                                <EmojiEventsIcon titleAccess="Crossed AED 1M YTD" sx={{ fontSize: 13, color: GOLD }} />
-                            )}
                             {fmtCurrency(metric === 'mtd' ? r.mtdAchieved : r.ytdAchieved)}
                         </Typography>
                     </Box>
@@ -130,25 +127,9 @@ const CategoryTable = ({ title, accent, rows, subtitle }) => (
                         {rows.length === 0 ? (
                             <TableRow><TableCell colSpan={9} sx={{ textAlign: 'center', py: 3, color: 'var(--d-text-muted)' }}>No consultants in this category.</TableCell></TableRow>
                         ) : rows.map((r) => (
-                            <TableRow
-                                key={r.consultantId || r.name}
-                                hover
-                                sx={{
-                                    ...(r.isActive === false ? { opacity: 0.55 } : null),
-                                    // Gold wash + rule for anyone past AED 1M YTD.
-                                    ...(isMillionClub(r)
-                                        ? { bgcolor: `${GOLD}14`, boxShadow: `inset 3px 0 0 ${GOLD}` }
-                                        : null),
-                                }}
-                            >
+                            <TableRow key={r.consultantId || r.name} hover sx={r.isActive === false ? { opacity: 0.55 } : null}>
                                 <TableCell>{r.rank}</TableCell>
                                 <TableCell sx={{ fontWeight: isMillionClub(r) ? 800 : 600, color: isMillionClub(r) ? GOLD : 'inherit' }}>
-                                    {isMillionClub(r) && (
-                                        <EmojiEventsIcon
-                                            titleAccess="Crossed AED 1M YTD"
-                                            sx={{ fontSize: 15, color: GOLD, mr: 0.5, verticalAlign: 'text-bottom' }}
-                                        />
-                                    )}
                                     {r.name}
                                     {r.isActive === false && (
                                         <Chip
