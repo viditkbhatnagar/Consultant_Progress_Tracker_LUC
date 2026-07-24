@@ -122,6 +122,57 @@ export function downloadBlob(blob, filename) {
     saveAs(blob, filename);
 }
 
+// PDF is lazy-loaded — jsPDF + autotable are ~150KB and only needed when the
+// user actually picks "PDF", so they stay out of the main bundle (see the web
+// performance rule: dynamically import heavy libraries).
+async function exportPdfSheet(rows, columns, fullName, sheetName, disclaimerRows) {
+    const [{ jsPDF }, autoTableMod] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+    ]);
+    const autoTable = autoTableMod.default || autoTableMod;
+
+    // Wide tables (the Demo Tracker has a dozen columns) read better landscape.
+    const landscape = columns.length > 6;
+    const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' });
+    const marginX = 32;
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text(sheetName || 'Export', marginX, 38);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(`Generated ${fmtDate(new Date(), 'dd MMM yyyy')} · ${rows.length} row${rows.length === 1 ? '' : 's'}`, marginX, 52);
+
+    let startY = 66;
+    for (const text of disclaimerRows) {
+        const lines = doc.splitTextToSize(String(text), pageWidth - marginX * 2);
+        doc.text(lines, marginX, startY);
+        startY += lines.length * 11 + 4;
+    }
+    doc.setTextColor(0);
+
+    const head = [columns.map(columnHeader)];
+    const body = rows.map((row, i) => columns.map((col) => {
+        const v = getCellValue(row, col, i, { asString: true });
+        return v == null ? '' : String(v);
+    }));
+
+    autoTable(doc, {
+        head,
+        body,
+        startY,
+        margin: { left: marginX, right: marginX },
+        styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
+        headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [246, 245, 242] },
+    });
+
+    doc.save(fullName);
+}
+
 export function exportRawSheet(
     rows,
     columns,
@@ -133,9 +184,17 @@ export function exportRawSheet(
     const fullName = `${filename}_${stamp}.${kind}`;
     if (kind === 'csv') {
         downloadBlob(buildCsvBlob(rows, columns), fullName);
+    } else if (kind === 'pdf') {
+        // Async because of the lazy import; callers fire-and-forget.
+        return exportPdfSheet(rows, columns, fullName, sheetName, disclaimerRows).catch((err) => {
+            console.error('PDF export failed', err);
+            // eslint-disable-next-line no-alert
+            window.alert('Sorry — the PDF could not be generated. Please try Excel or CSV.');
+        });
     } else {
         downloadBlob(buildRawWorkbook(rows, columns, sheetName, disclaimerRows), fullName);
     }
+    return undefined;
 }
 
 // Convert a pivot result envelope (server's /api/exports/pivot response shape)

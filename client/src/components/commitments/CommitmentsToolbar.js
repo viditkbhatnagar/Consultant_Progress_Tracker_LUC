@@ -292,6 +292,9 @@ const CommitmentsToolbar = ({
                             <MenuItem onClick={() => { setExportAnchor(null); onExport('csv'); }}>
                                 CSV (.csv)
                             </MenuItem>
+                            <MenuItem onClick={() => { setExportAnchor(null); onExport('pdf'); }}>
+                                PDF (.pdf)
+                            </MenuItem>
                         </Menu>
                     </>
                 )}

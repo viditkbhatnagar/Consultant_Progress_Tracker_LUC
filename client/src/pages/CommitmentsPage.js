@@ -232,7 +232,11 @@ const CommitmentsPage = () => {
                 (r.demos || []).some((d) => (d.demoDoneBy || '').trim() === filters.demoDoneBy)
             );
         }
-        return list;
+        // Newest first by the DATE shown in the table. The server sorts by
+        // createdAt, but the table's Date column is commitmentDate, so the
+        // dates looked out of order. Sort on the same value the column renders.
+        const rowDate = (r) => new Date(r.commitmentDate || r.weekStartDate || r.createdAt || 0).getTime();
+        return [...list].sort((a, b) => rowDate(b) - rowDate(a));
     }, [allRows, filters]);
 
     // Export exactly what's on screen (all active filters applied), so

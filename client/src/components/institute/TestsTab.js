@@ -425,6 +425,7 @@ const TestsTab = () => {
                 <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
                     <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
                     <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                    <MenuItem onClick={() => download('pdf')}>PDF (.pdf)</MenuItem>
                 </Menu>
                 <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setRecordOpen(true)}>Record Test</Button>
             </Box>

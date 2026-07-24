@@ -209,6 +209,7 @@ const AttendanceTab = () => {
                 <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
                     <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
                     <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                    <MenuItem onClick={() => download('pdf')}>PDF (.pdf)</MenuItem>
                 </Menu>
                 <Button size="small" onClick={allPresent} disabled={!rows.length}>All Present</Button>
                 <Button variant="contained" size="small" onClick={save} disabled={saving || !gradeOrYear}>{saving ? 'Saving…' : 'Save Attendance'}</Button>

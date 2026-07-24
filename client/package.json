@@ -19,6 +19,8 @@
     "fastest-levenshtein": "^1.0.16",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.38.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "react": "^19.2.0",
     "react-calendar-heatmap": "^1.10.0",
     "react-data-grid": "7.0.0-beta.59",

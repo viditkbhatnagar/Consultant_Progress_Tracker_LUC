@@ -195,6 +195,7 @@ const TimetableTab = () => {
                 <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
                     <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
                     <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                    <MenuItem onClick={() => download('pdf')}>PDF (.pdf)</MenuItem>
                 </Menu>
                 <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => { setEditing(null); setDialogOpen(true); }}>New Session</Button>
             </Box>

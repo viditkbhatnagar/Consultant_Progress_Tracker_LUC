@@ -21,6 +21,7 @@ const StatusChip = ({ status }) => (
 const AttendanceReportTab = () => {
     const [meta, setMeta] = useState({ gradesOrYears: [], subjects: [] });
     const [gradeOrYear, setGradeOrYear] = useState('');
+    const [subject, setSubject] = useState('');
     const [roster, setRoster] = useState([]);
     const [studentName, setStudentName] = useState('');
     const [startDate, setStartDate] = useState('');
@@ -47,6 +48,7 @@ const AttendanceReportTab = () => {
         try {
             const res = await instituteService.getAttendance({
                 gradeOrYear,
+                subject: subject || undefined,
                 studentName: studentName || undefined,
                 startDate: startDate || undefined,
                 endDate: endDate || undefined,
@@ -58,7 +60,7 @@ const AttendanceReportTab = () => {
         } finally {
             setLoading(false);
         }
-    }, [gradeOrYear, studentName, startDate, endDate]);
+    }, [gradeOrYear, subject, studentName, startDate, endDate]);
     useEffect(() => { load(); }, [load]);
 
     const summary = useMemo(() => {
@@ -96,6 +98,13 @@ const AttendanceReportTab = () => {
                         {roster.map((r) => <MenuItem key={r.studentName} value={r.studentName}>{r.studentName}</MenuItem>)}
                     </Select>
                 </FormControl>
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel>Subject</InputLabel>
+                    <Select label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)}>
+                        <MenuItem value=""><em>All subjects</em></MenuItem>
+                        {meta.subjects.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+                    </Select>
+                </FormControl>
                 <TextField size="small" type="date" label="From" InputLabelProps={{ shrink: true }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 <TextField size="small" type="date" label="To" InputLabelProps={{ shrink: true }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 <Box sx={{ flex: 1 }} />
@@ -103,6 +112,7 @@ const AttendanceReportTab = () => {
                 <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
                     <MenuItem onClick={() => download('xlsx')}>Excel (.xlsx)</MenuItem>
                     <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
+                    <MenuItem onClick={() => download('pdf')}>PDF (.pdf)</MenuItem>
                 </Menu>
             </Box>
 
