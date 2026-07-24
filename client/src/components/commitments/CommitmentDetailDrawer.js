@@ -17,7 +17,7 @@ import { Close as CloseIcon, Edit as EditIcon } from '@mui/icons-material';
 import MeetingAvatar from '../meetings/MeetingAvatar';
 import StatusPill from '../meetings/StatusPill';
 import {
-    ALL_LEAD_STAGES,
+    leadStagesFor,
     formatDDMMYYYY,
     formatWeekOfMonth,
     STATUS_META,
@@ -73,6 +73,7 @@ const CommitmentDetailDrawer = ({
     onDelete,
     onCloseAdmission,
     isAdmin,
+    isInstitute = false,
 }) => {
     const [leadStage, setLeadStage] = useState('');
     const [status, setStatus] = useState('');
@@ -224,7 +225,7 @@ const CommitmentDetailDrawer = ({
                                 >
                                     Change lead stage
                                 </Box>
-                                {ALL_LEAD_STAGES.map((s) => (
+                                {leadStagesFor(isInstitute, leadStage).map((s) => (
                                     <MenuItem
                                         key={s}
                                         onClick={() => { setLeadStage(s); setStageAnchor(null); }}

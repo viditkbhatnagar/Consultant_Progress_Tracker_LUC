@@ -22,7 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import consultantService from '../../services/consultantService';
 import userService from '../../services/userService';
 import StatusPill from '../meetings/StatusPill';
-import { ALL_LEAD_STAGES, STATUS_META } from '../../utils/commitmentDesign';
+import { leadStagesFor, STATUS_META } from '../../utils/commitmentDesign';
 
 const Label = ({ children }) => (
     <Typography
@@ -61,7 +61,7 @@ const blankForm = () => ({
     adminComment: '',
 });
 
-const CommitmentFormDialog = ({ open, onClose, onSubmit, initialData = null }) => {
+const CommitmentFormDialog = ({ open, onClose, onSubmit, initialData = null, isInstitute = false }) => {
     const { user } = useAuth();
     const isAdmin = user?.role === 'admin';
 
@@ -418,7 +418,7 @@ const CommitmentFormDialog = ({ open, onClose, onSubmit, initialData = null }) =
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
                             <Label>Lead stage</Label>
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                                {ALL_LEAD_STAGES.map((s) => {
+                                {leadStagesFor(isInstitute, form.leadStage).map((s) => {
                                     const selected = form.leadStage === s;
                                     return (
                                         <Box

@@ -618,6 +618,7 @@ const CommitmentsPage = () => {
                         onClose={() => setDialogOpen(false)}
                         onSubmit={handleFormSubmit}
                         initialData={editing}
+                        isInstitute={isInstitute}
                     />
                 )}
 
@@ -630,6 +631,7 @@ const CommitmentsPage = () => {
                     onDelete={handleDelete}
                     onCloseAdmission={handleCloseAdmission}
                     isAdmin={isAdmin}
+                    isInstitute={isInstitute}
                 />
 
                 <CommitmentsAIAnalysisDialog

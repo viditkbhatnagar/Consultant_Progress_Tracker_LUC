@@ -38,7 +38,7 @@ import {
     MeetingsChart,
     ConsultantPerformanceChart,
 } from '../components/Charts';
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 
 import DashboardShell from '../components/dashboard/DashboardShell';
 import DashboardHero from '../components/dashboard/DashboardHero';
@@ -68,10 +68,13 @@ const SkillhubDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Default view period is the current MONTH — the branch asked for a month
+    // window on open rather than a single week. The "This Week" block below is
+    // separate and still always shows the current Mon–Sun.
     const [dateRange, setDateRange] = useState({
-        startDate: format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        endDate: format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-        viewType: 'current-week',
+        startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(new Date()), 'yyyy-MM-dd'),
+        viewType: 'current-month',
     });
 
     const [studentFormOpen, setStudentFormOpen] = useState(false);

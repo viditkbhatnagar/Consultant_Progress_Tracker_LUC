@@ -8,6 +8,29 @@ export const ALL_LEAD_STAGES = LEAD_STAGES
     .map((s) => s.value)
     .filter((v) => v !== 'Meeting Scheduled');
 
+// Skillhub Institute tracks a trimmed funnel — only these six stages. The rest
+// (Cold / Warm / Hot / No Answer / Lost) stay valid in the data model and for
+// LUC; they're simply not offered in the Institute's pickers. A row already
+// sitting on a now-hidden stage keeps rendering — the chip reads the stored
+// value; the picker just won't list it as a choice.
+export const INSTITUTE_LEAD_STAGES = [
+    'Offer Sent',
+    'Awaiting Confirmation',
+    'Admission',
+    'CIF',
+    'Unresponsive',
+    'Dead',
+];
+
+// Stage choices for a context: Institute → trimmed set, everyone else → full.
+// `current` is the row's existing stage — if it's a hidden one, it's kept in
+// the list (marked by the caller) so editing can't silently blank it.
+export const leadStagesFor = (isInstitute, current) => {
+    const base = isInstitute ? INSTITUTE_LEAD_STAGES : ALL_LEAD_STAGES;
+    if (current && !base.includes(current)) return [current, ...base];
+    return base;
+};
+
 // Board-specific ordering: pin Admission and Awaiting Confirmation first
 // (same rule as the Meetings board) then the rest in LEAD_STAGES order.
 const BOARD_LEAD = ['Admission', 'Awaiting Confirmation'];

@@ -18,7 +18,7 @@ import MeetingAvatar from '../meetings/MeetingAvatar';
 import StatusPill from '../meetings/StatusPill';
 import BoardHorizontalScroller from '../shared/BoardHorizontalScroller';
 import {
-    ALL_LEAD_STAGES,
+    leadStagesFor,
     formatDDMMYYYY,
     formatWeekOfMonth,
     STATUS_META,
@@ -482,7 +482,7 @@ const CommitmentsTableView = ({
                 >
                     Change lead stage
                 </Box>
-                {ALL_LEAD_STAGES.map((s) => (
+                {leadStagesFor(isInstitute, stageRow?.leadStage).map((s) => (
                     <MenuItem
                         key={s}
                         onClick={() => {

@@ -22,7 +22,7 @@ import {
     FileDownloadOutlined as FileDownloadIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { ALL_LEAD_STAGES, STATUS_META } from '../../utils/commitmentDesign';
+import { leadStagesFor, STATUS_META } from '../../utils/commitmentDesign';
 
 const FilterChip = ({
     label,
@@ -149,7 +149,7 @@ const CommitmentsToolbar = ({
             filters.endDate
     );
 
-    const stageOptions = ALL_LEAD_STAGES.map((s) => ({ value: s, label: s }));
+    const stageOptions = leadStagesFor(isInstitute).map((s) => ({ value: s, label: s }));
     const statusOptions = Object.entries(STATUS_META).map(([v, m]) => ({
         value: v,
         label: m.label,
