@@ -22,6 +22,8 @@ const {
     getExecutiveOverview,
     getTeamDetail,
     getConsultantPerformance,
+    statusFor,
+    ON_TRACK_THRESHOLD,
 } = require('../../services/execOverview/aggregate');
 
 beforeAll(async () => { await startInMemoryMongo(); });
@@ -194,6 +196,19 @@ describe('getExecutiveOverview', () => {
         const tony = out.teamsMtd.find((t) => String(t.id) === String(tonyId));
         expect(tony).toBeTruthy();
         expect(['On Track', 'Behind']).toContain(tony.status);
+        // Status must agree with the team's own MTD %: at/above the threshold
+        // is "On Track", below is "Behind".
+        const expected = tony.mtdPercent >= ON_TRACK_THRESHOLD ? 'On Track' : 'Behind';
+        expect(tony.status).toBe(expected);
+    });
+
+    test('status flips at 50% MTD, not 80%', () => {
+        expect(ON_TRACK_THRESHOLD).toBe(0.5);
+        expect(statusFor(0.499)).toBe('Behind');
+        expect(statusFor(0.5)).toBe('On Track');   // exactly half → On Track
+        expect(statusFor(0.537)).toBe('On Track');  // Team Shasin 53.6% in the report
+        expect(statusFor(0.457)).toBe('Behind');    // Team Shakil 45.7%
+        expect(statusFor(0.763)).toBe('On Track');  // Team Manoj 76.3%
     });
 });
 

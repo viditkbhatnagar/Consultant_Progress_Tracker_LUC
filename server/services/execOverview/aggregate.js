@@ -28,7 +28,10 @@ const MONTH_NAMES = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const ON_TRACK_THRESHOLD = 0.8;
+// A team is "On Track" once it has achieved at least half of its MTD target.
+// Was 0.8, which left every team from 50–79% stuck on "Behind" — leadership
+// asked for the flip to happen at the halfway mark.
+const ON_TRACK_THRESHOLD = 0.5;
 
 function statusFor(pct) {
     return pct >= ON_TRACK_THRESHOLD ? 'On Track' : 'Behind';
@@ -621,6 +624,7 @@ module.exports = {
     getTeamDetail,
     getExecutiveOverview,
     getConsultantPerformance,
+    statusFor,
     MONTH_NAMES,
     ON_TRACK_THRESHOLD,
     CATEGORY_A_THRESHOLD,
