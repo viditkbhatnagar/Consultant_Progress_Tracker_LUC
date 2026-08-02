@@ -96,6 +96,8 @@ const CommitmentsPage = () => {
         consultantName: '',
         // Institute only — the teacher who took the demo (Commitment.demos[].demoDoneBy).
         demoDoneBy: '',
+        // Institute only — the student's grade/year (Commitment.gradeOrYear).
+        gradeOrYear: '',
         // No default date window — show everything until the user picks one.
         startDate: null,
         endDate: null,
@@ -104,6 +106,7 @@ const CommitmentsPage = () => {
     const [teamLeads, setTeamLeads] = useState([]);
     const [consultants, setConsultants] = useState([]);
     const [teachers, setTeachers] = useState([]);
+    const [grades, setGrades] = useState([]);
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -166,6 +169,18 @@ const CommitmentsPage = () => {
         return () => { cancelled = true; };
     }, [isInstitute]);
 
+    // Institute grade/year options for the Grade filter (same data-derived list
+    // the attendance/tests screens use).
+    useEffect(() => {
+        if (!isInstitute) { setGrades([]); return undefined; }
+        let cancelled = false;
+        instituteService
+            .getAttendanceMeta()
+            .then((res) => { if (!cancelled) setGrades(res.data?.gradesOrYears || []); })
+            .catch(() => { if (!cancelled) setGrades([]); });
+        return () => { cancelled = true; };
+    }, [isInstitute]);
+
     const fetchParams = useMemo(
         () => ({
             startDate: filters.startDate ? filters.startDate.toISOString() : undefined,
@@ -225,6 +240,9 @@ const CommitmentsPage = () => {
         if (filters.consultantName) {
             list = list.filter((r) => r.consultantName === filters.consultantName);
         }
+        if (filters.gradeOrYear) {
+            list = list.filter((r) => (r.gradeOrYear || '') === filters.gradeOrYear);
+        }
         // A row matches if ANY of its demos was done by the chosen teacher —
         // one commitment can carry several demos.
         if (filters.demoDoneBy) {
@@ -239,6 +257,14 @@ const CommitmentsPage = () => {
         return [...list].sort((a, b) => rowDate(b) - rowDate(a));
     }, [allRows, filters]);
 
+    // Grade filter options = the attendance/timetable-derived list PLUS any
+    // grade that only appears on a demo (freeSolo lets a counselor type a brand
+    // new grade), so every grade in the table is actually filterable.
+    const gradeOptions = useMemo(() => {
+        const fromRows = allRows.map((r) => (r.gradeOrYear || '').trim()).filter(Boolean);
+        return [...new Set([...grades, ...fromRows])].sort((a, b) => a.localeCompare(b));
+    }, [grades, allRows]);
+
     // Export exactly what's on screen (all active filters applied), so
     // filtering by a teacher and downloading gives that teacher's demos. The
     // "Demo done by" column is what makes a per-teacher count possible in Excel.
@@ -246,6 +272,7 @@ const CommitmentsPage = () => {
         const rows = filteredRows.map((r) => ({
             date: r.commitmentDate || r.weekStartDate || r.createdAt,
             studentName: r.studentName || '',
+            gradeOrYear: r.gradeOrYear || '',
             consultantName: r.consultantName || '',
             demoDoneBy: [
                 ...new Set((r.demos || []).map((d) => (d.demoDoneBy || '').trim()).filter(Boolean)),
@@ -264,6 +291,7 @@ const CommitmentsPage = () => {
         const cols = [
             { key: 'date', lbl: 'Date', date: true },
             { key: 'studentName', lbl: 'Student' },
+            ...(isInstitute ? [{ key: 'gradeOrYear', lbl: 'Grade' }] : []),
             { key: 'consultantName', lbl: 'Consultant' },
             ...(isInstitute ? [{ key: 'demoDoneBy', lbl: 'Demo done by' }] : []),
             { key: 'commitmentMade', lbl: isInstitute ? 'Demo' : 'Commitment' },
@@ -296,6 +324,7 @@ const CommitmentsPage = () => {
             teamLead: '',
             consultantName: '',
             demoDoneBy: '',
+            gradeOrYear: '',
             startDate: null,
             endDate: null,
         });
@@ -553,6 +582,7 @@ const CommitmentsPage = () => {
                         teamLeads={teamLeads}
                         consultants={consultants}
                         teachers={teachers}
+                        grades={gradeOptions}
                         isInstitute={isInstitute}
                         isAdmin={isAdmin}
                         onExport={handleExport}

@@ -103,6 +103,14 @@ const CommitmentSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        // Skillhub Institute: the student's grade/year for this demo (e.g.
+        // "Grade 9", "Year 10"). Same free-form gradeOrYear the Institute uses
+        // for attendance/tests. Unused by LUC + Training.
+        gradeOrYear: {
+            type: String,
+            trim: true,
+            default: '',
+        },
         studentPhone: {
             type: String,
             trim: true,

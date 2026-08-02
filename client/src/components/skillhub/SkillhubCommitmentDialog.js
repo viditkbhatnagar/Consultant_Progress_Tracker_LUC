@@ -10,6 +10,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    Autocomplete,
     Grid,
     FormControlLabel,
     Checkbox,
@@ -54,10 +55,12 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
     const effectiveOrg = viewOrg || user?.organization;
     const isInstitute = effectiveOrg === 'skillhub_institute';
     const [teachers, setTeachers] = useState([]);
+    const [grades, setGrades] = useState([]);
 
     const [formData, setFormData] = useState({
         consultantName: '',
         studentName: '',
+        gradeOrYear: '',
         studentPhone: '',
         commitmentMade: '',
         leadStage: 'Cold',
@@ -109,6 +112,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 ...f,
                 consultantName: commitment.consultantName || '',
                 studentName: commitment.studentName || '',
+                gradeOrYear: commitment.gradeOrYear || '',
                 studentPhone: commitment.studentPhone || '',
                 commitmentMade: commitment.commitmentMade || '',
                 leadStage: commitment.leadStage || 'Cold',
@@ -135,6 +139,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 ...f,
                 consultantName: '',
                 studentName: '',
+                gradeOrYear: '',
                 studentPhone: '',
                 commitmentMade: '',
                 leadStage: 'Cold',
@@ -160,6 +165,18 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         instituteService.getTeachers()
             .then((r) => { if (!cancelled) setTeachers((r.data || []).filter((t) => t.isActive !== false)); })
             .catch(() => { if (!cancelled) setTeachers([]); });
+        return () => { cancelled = true; };
+    }, [open, isInstitute]);
+
+    // Grade options for the Institute "Grade / Year" picker come from the same
+    // data-derived list the attendance/tests screens use (freeSolo, so a brand
+    // new grade can still be typed).
+    useEffect(() => {
+        if (!open || !isInstitute) { setGrades([]); return; }
+        let cancelled = false;
+        instituteService.getAttendanceMeta()
+            .then((r) => { if (!cancelled) setGrades(r.data?.gradesOrYears || []); })
+            .catch(() => { if (!cancelled) setGrades([]); });
         return () => { cancelled = true; };
     }, [open, isInstitute]);
 
@@ -217,6 +234,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
             const payload = {
                 consultantName: formData.consultantName,
                 studentName: formData.studentName,
+                gradeOrYear: (formData.gradeOrYear || '').trim(),
                 studentPhone: formData.studentPhone,
                 commitmentMade: formData.commitmentMade,
                 leadStage: formData.leadStage,
@@ -294,6 +312,20 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                             onChange={(e) => set('studentPhone', e.target.value)}
                         />
                     </Grid>
+                    {isInstitute && (
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                            <Autocomplete
+                                freeSolo
+                                options={grades}
+                                value={formData.gradeOrYear}
+                                onChange={(e, v) => set('gradeOrYear', v || '')}
+                                onInputChange={(e, v) => set('gradeOrYear', v)}
+                                renderInput={(params) => (
+                                    <TextField {...params} fullWidth label="Grade / Year" placeholder="Grade 9 / Year 10" />
+                                )}
+                            />
+                        </Grid>
+                    )}
                     <Grid size={{ xs: 12 }}>
                         <TextField
                             fullWidth required multiline minRows={2}

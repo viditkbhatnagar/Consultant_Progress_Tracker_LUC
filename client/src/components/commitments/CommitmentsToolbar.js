@@ -128,6 +128,7 @@ const CommitmentsToolbar = ({
     teamLeads = [],
     consultants = [],
     teachers = [],
+    grades = [],
     isInstitute = false,
     isAdmin,
     onAdd,
@@ -145,6 +146,7 @@ const CommitmentsToolbar = ({
             filters.teamLead ||
             filters.consultantName ||
             filters.demoDoneBy ||
+            filters.gradeOrYear ||
             filters.startDate ||
             filters.endDate
     );
@@ -159,6 +161,7 @@ const CommitmentsToolbar = ({
         label: c.name,
     }));
     const teacherOptions = teachers.map((t) => ({ value: t.name, label: t.name }));
+    const gradeOptions = grades.map((g) => ({ value: g, label: g }));
     const tlOptions = teamLeads.map((u) => ({ value: u._id, label: u.name }));
 
     const selectedTlLabel =
@@ -365,6 +368,15 @@ const CommitmentsToolbar = ({
                     onChange={(v) => onFilterChange('consultantName', v)}
                     width={220}
                 />
+                {isInstitute && (
+                    <FilterChip
+                        label="Grade"
+                        value={filters.gradeOrYear || ''}
+                        options={gradeOptions}
+                        onChange={(v) => onFilterChange('gradeOrYear', v)}
+                        width={180}
+                    />
+                )}
                 {isInstitute && (
                     <FilterChip
                         label="Demo done by"

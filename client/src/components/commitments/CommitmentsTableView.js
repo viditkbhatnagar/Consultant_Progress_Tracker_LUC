@@ -121,9 +121,10 @@ const CommitmentsTableView = ({
     const [rowMenuAnchor, setRowMenuAnchor] = useState(null);
     const [rowMenuRow, setRowMenuRow] = useState(null);
     // Week, Date, Student, Consultant, Commitment, Lead Stage, Prob, Ach,
-    // Meet, Follow-up, Status, Actions (+ Team Lead for admin, + Teacher for
-    // Institute) — keep the empty/loading colSpan in step with the header.
-    const columnCount = 12 + (isAdmin ? 1 : 0) + (isInstitute ? 1 : 0);
+    // Meet, Follow-up, Status, Actions (+ Team Lead for admin, + Grade and
+    // Demo done by for Institute) — keep the empty/loading colSpan in step
+    // with the header.
+    const columnCount = 12 + (isAdmin ? 1 : 0) + (isInstitute ? 2 : 0);
 
     const openStageMenu = (e, row) => {
         e.stopPropagation();
@@ -199,6 +200,7 @@ const CommitmentsTableView = ({
                             <th>Student</th>
                             <th>Consultant</th>
                             {isAdmin && <th>Team Lead</th>}
+                            {isInstitute && <th>Grade</th>}
                             <th>Commitment</th>
                             {isInstitute && <th>Demo done by</th>}
                             <th>Lead Stage</th>
@@ -301,6 +303,13 @@ const CommitmentsTableView = ({
                                                     />
                                                     <span>{r.teamLead?.name || r.teamName || '—'}</span>
                                                 </Box>
+                                            </td>
+                                        )}
+                                        {isInstitute && (
+                                            <td style={{ whiteSpace: 'nowrap', color: 'var(--t-text-2)', fontWeight: 600 }}>
+                                                {r.gradeOrYear || (
+                                                    <span style={{ color: 'var(--t-text-faint)' }}>—</span>
+                                                )}
                                             </td>
                                         )}
                                         <td
