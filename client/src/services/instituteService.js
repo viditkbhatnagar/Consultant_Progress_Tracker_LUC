@@ -14,6 +14,14 @@ const instituteService = {
     // Timetable
     getTimetable: async (params = {}) => (await axios.get(`${URL}/timetable`, { params })).data,
     createEntry: async (body) => (await axios.post(`${URL}/timetable`, body)).data,
+    // Bulk schedule upload. dryRun=true returns the preview (nothing written);
+    // dryRun=false applies it, replacing only the teachers in the file.
+    importTimetable: async (file, { dryRun = true } = {}) => {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('dryRun', String(dryRun));
+        return (await axios.post(`${URL}/timetable/import`, form)).data;
+    },
     updateEntry: async (id, body) => (await axios.put(`${URL}/timetable/${id}`, body)).data,
     deleteEntry: async (id) => (await axios.delete(`${URL}/timetable/${id}`)).data,
 

@@ -3,6 +3,7 @@
 // everything) or a `skillhub` branch login whose own organization IS the
 // institute. Training logins and LUC roles are rejected. All queries are
 // pinned to the institute org; creates stamp it.
+const mongoose = require('mongoose');
 const Teacher = require('../models/Teacher');
 const TimetableEntry = require('../models/TimetableEntry');
 const Attendance = require('../models/Attendance');
@@ -11,6 +12,7 @@ const InstituteEnrollment = require('../models/InstituteEnrollment');
 const Student = require('../models/Student');
 const { ORG_SKILLHUB_INSTITUTE } = require('../config/organizations');
 const { subjectOptions, subjectMatchCondition } = require('../config/instituteSubjects');
+const { parseScheduleWorkbook } = require('../services/institute/scheduleParser');
 const { emitToOrg } = require('../services/realtime');
 
 const INSTITUTE = ORG_SKILLHUB_INSTITUTE;
@@ -187,6 +189,222 @@ exports.deleteTimetableEntry = async (req, res, next) => {
         if (!entry) return res.status(404).json({ success: false, message: 'Timetable entry not found' });
         emit('institute:timetable', { id: String(entry._id) });
         res.status(200).json({ success: true, data: { id: String(entry._id) } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Bulk import a schedule workbook (one sheet per teacher). Two modes:
+//   • dryRun=true  → parse + report only, nothing written (the preview step)
+//   • dryRun=false → apply, replacing ONLY the teachers present in the file
+//
+// Per-teacher scoping is what makes this safe to hand to the branch: uploading
+// one teacher's sheet can never wipe another teacher's schedule. Teachers in
+// the file are created if new (and re-activated if previously deactivated).
+exports.importTimetable = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+            return res.status(400).json({ success: false, message: 'Please choose an Excel file to upload.' });
+        }
+        // Multipart fields arrive as strings.
+        const dryRun = String(req.body?.dryRun ?? '') === 'true';
+
+        let parsed;
+        try {
+            parsed = parseScheduleWorkbook(req.file.buffer);
+        } catch (e) {
+            if (e.userFacing) return res.status(400).json({ success: false, message: e.message });
+            throw e;
+        }
+        const { teachers, timetable, warnings } = parsed;
+
+        // Link student names to Student docs: exact normalized name, else a
+        // unique first-name hit. Unmatched names still import as plain text
+        // (studentLabel), they just don't carry a ref — same as the roster.
+        const lcName = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        const studentDocs = await Student.find({ organization: INSTITUTE }).select('studentName').lean();
+        const byFull = new Map();
+        const byFirst = new Map();
+        for (const s of studentDocs) {
+            const full = lcName(s.studentName);
+            if (!full) continue;
+            byFull.set(full, s._id);
+            const first = full.split(' ')[0];
+            if (!byFirst.has(first)) byFirst.set(first, []);
+            byFirst.get(first).push(s._id);
+        }
+        const resolveStudent = (nameStr) => {
+            const key = lcName(nameStr);
+            if (!key) return null;
+            if (byFull.has(key)) return byFull.get(key);
+            const hits = byFirst.get(key.split(' ')[0]);
+            return hits && hits.length === 1 ? hits[0] : null;
+        };
+
+        const unmatched = new Set();
+        for (const row of timetable) {
+            row.students = [];
+            for (const nm of row.studentNames || []) {
+                const id = resolveStudent(nm);
+                if (id) row.students.push(id);
+                else if (nm) unmatched.add(nm);
+            }
+        }
+
+        const uniqSorted = (arr) =>
+            [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+
+        // Existing teacher docs for this org, matched case-insensitively.
+        const existingTeachers = await Teacher.find({ organization: INSTITUTE }).lean();
+        const teacherByName = new Map(existingTeachers.map((t) => [lcName(t.name), t]));
+        const matchedIds = teachers
+            .map((t) => teacherByName.get(lcName(t.name)))
+            .filter(Boolean)
+            .map((t) => t._id);
+        const replacingSessions = matchedIds.length
+            ? await TimetableEntry.countDocuments({ organization: INSTITUTE, teacher: { $in: matchedIds } })
+            : 0;
+
+        const summary = {
+            teachers: teachers.map((t) => ({
+                name: t.name,
+                sessions: t.sessions,
+                subjects: t.subjects,
+                isNew: !teacherByName.has(lcName(t.name)),
+            })),
+            totalSessions: timetable.length,
+            grades: uniqSorted(timetable.map((r) => r.gradeOrYear)),
+            subjects: uniqSorted(timetable.map((r) => r.subject)),
+            unmatchedStudents: [...unmatched].sort((a, b) => a.localeCompare(b)),
+            warnings,
+            replacingSessions,
+        };
+
+        if (dryRun) {
+            return res.status(200).json({ success: true, data: { ...summary, applied: false } });
+        }
+
+        // Rows grouped by teacher. Two sheets whose names normalize to the same
+        // key (e.g. "Fahad" and "fahad ") are ONE teacher — grouping by key and
+        // then iterating the keys means such a teacher is processed exactly
+        // once, instead of the second pass deleting what the first inserted.
+        const bySheet = new Map();
+        for (const row of timetable) {
+            const key = lcName(row.teacherName);
+            if (!bySheet.has(key)) bySheet.set(key, { name: row.teacherName, rows: [], subjects: new Set() });
+            const bucket = bySheet.get(key);
+            bucket.rows.push(row);
+            if (row.subject) bucket.subjects.add(row.subject);
+        }
+
+        // Validate EVERY row before writing anything. Without this a bad row in
+        // the last teacher's sheet would 500 after earlier teachers had already
+        // been replaced — the client would say "Import failed" while part of
+        // the timetable was already overwritten. Fail the whole upload up front.
+        const invalid = [];
+        for (const [, bucket] of bySheet) {
+            for (const r of bucket.rows) {
+                const probe = new TimetableEntry({
+                    organization: INSTITUTE,
+                    teacher: new mongoose.Types.ObjectId(), // real id assigned below
+                    teacherName: bucket.name,
+                    dayOfWeek: r.dayOfWeek,
+                    time: r.time,
+                    startMinutes: r.startMinutes,
+                    gradeOrYear: r.gradeOrYear,
+                    curriculum: r.curriculum,
+                    subject: r.subject,
+                    studentLabel: r.studentLabel,
+                    students: r.students,
+                });
+                const err = probe.validateSync();
+                if (err) {
+                    invalid.push(`${bucket.name} — ${r.dayOfWeek} ${r.time || '(no time)'}: ${Object.values(err.errors || {})[0]?.message || 'invalid row'}`);
+                }
+            }
+        }
+        if (invalid.length) {
+            return res.status(400).json({
+                success: false,
+                message: `Nothing was imported. ${invalid.length} row(s) are incomplete: ${invalid.slice(0, 5).join('; ')}${invalid.length > 5 ? '…' : ''}`,
+            });
+        }
+
+        // Apply, one teacher at a time. Order matters: capture the old rows,
+        // insert the new ones, THEN delete the old. A failure mid-way leaves
+        // duplicates (visible + fixable) rather than deleting a teacher's
+        // schedule with nothing to replace it.
+        const appliedTeachers = [];
+        let inserted = 0;
+        try {
+        for (const [key, bucket] of bySheet) {
+            const t = { name: bucket.name, subjects: [...bucket.subjects] };
+            const rows = bucket.rows;
+            if (!rows.length) continue;
+
+            let teacherDoc = teacherByName.get(key);
+            if (teacherDoc) {
+                // Union subjects so manual additions aren't lost, and revive a
+                // teacher who was deactivated but is clearly teaching again.
+                const merged = uniqSorted([...(teacherDoc.subjects || []), ...t.subjects]);
+                await Teacher.updateOne(
+                    { _id: teacherDoc._id, organization: INSTITUTE },
+                    { $set: { subjects: merged, isActive: true } }
+                );
+            } else {
+                teacherDoc = await Teacher.create({
+                    organization: INSTITUTE,
+                    name: t.name,
+                    subjects: t.subjects,
+                    createdBy: req.user._id,
+                });
+                teacherByName.set(key, teacherDoc);
+            }
+
+            const oldIds = await TimetableEntry.find({
+                organization: INSTITUTE,
+                teacher: teacherDoc._id,
+            }).distinct('_id');
+
+            const docs = rows.map((r) => ({
+                organization: INSTITUTE,
+                teacher: teacherDoc._id,
+                teacherName: teacherDoc.name,
+                dayOfWeek: r.dayOfWeek,
+                time: r.time,
+                startMinutes: r.startMinutes,
+                gradeOrYear: r.gradeOrYear,
+                curriculum: r.curriculum,
+                subject: r.subject,
+                studentLabel: r.studentLabel,
+                students: r.students,
+                createdBy: req.user._id,
+            }));
+            await TimetableEntry.insertMany(docs);
+            inserted += docs.length;
+
+            if (oldIds.length) {
+                await TimetableEntry.deleteMany({ organization: INSTITUTE, _id: { $in: oldIds } });
+            }
+            appliedTeachers.push(teacherDoc.name);
+        }
+        } catch (writeErr) {
+            // Pre-validation makes this unlikely, but if a write still fails
+            // partway, say exactly whose schedule already changed — reporting a
+            // flat "import failed" after a partial replace is how people end up
+            // re-uploading and silently keeping a half-applied timetable.
+            emit('institute:timetable', { imported: inserted, partial: true });
+            return res.status(500).json({
+                success: false,
+                message: appliedTeachers.length
+                    ? `Import stopped partway. Already updated: ${appliedTeachers.join(', ')}. Other teachers are unchanged — re-upload to finish. (${writeErr.message})`
+                    : `Import failed, nothing was changed. (${writeErr.message})`,
+            });
+        }
+
+        emit('institute:timetable', { imported: inserted });
+        res.status(200).json({ success: true, data: { ...summary, applied: true, inserted } });
     } catch (error) {
         next(error);
     }

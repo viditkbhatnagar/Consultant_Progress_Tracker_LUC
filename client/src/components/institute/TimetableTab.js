@@ -8,7 +8,9 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import FileDownloadIcon from '@mui/icons-material/FileDownloadOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFileOutlined';
 import instituteService from '../../services/instituteService';
+import ImportScheduleDialog from './ImportScheduleDialog';
 import { exportRawSheet } from '../../services/xlsxBuilder';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -108,6 +110,7 @@ const TimetableTab = () => {
     const [toast, setToast] = useState(null);
     const [downloadAnchor, setDownloadAnchor] = useState(null);
     const [subjects, setSubjects] = useState([]);
+    const [importOpen, setImportOpen] = useState(false);
 
     const load = useCallback(() => {
         Promise.all([instituteService.getTeachers(), instituteService.getTimetable()])
@@ -126,10 +129,17 @@ const TimetableTab = () => {
 
     const grades = useMemo(() => [...new Set(entries.map((e) => e.gradeOrYear).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [entries]);
 
-    // Default the selector to the first option when data loads.
+    // Default the selector to the first option when data loads — and re-point
+    // it if the current selection no longer exists (e.g. a schedule import
+    // replaced the grades), which would otherwise leave an empty grid.
     useEffect(() => {
-        if (mode === 'teacher' && !sel && teachers.length) setSel(teachers[0]._id);
-        if (mode === 'grade' && !sel && grades.length) setSel(grades[0]);
+        if (mode === 'teacher') {
+            const stillThere = teachers.some((t) => String(t._id) === String(sel));
+            if (!stillThere && teachers.length) setSel(teachers[0]._id);
+        } else {
+            const stillThere = grades.includes(sel);
+            if (!stillThere && grades.length) setSel(grades[0]);
+        }
     }, [mode, sel, teachers, grades]);
 
     const filtered = useMemo(() => {
@@ -197,6 +207,7 @@ const TimetableTab = () => {
                     <MenuItem onClick={() => download('csv')}>CSV (.csv)</MenuItem>
                     <MenuItem onClick={() => download('pdf')}>PDF (.pdf)</MenuItem>
                 </Menu>
+                <Button size="small" variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>Upload Schedule</Button>
                 <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => { setEditing(null); setDialogOpen(true); }}>New Session</Button>
             </Box>
 
@@ -215,6 +226,11 @@ const TimetableTab = () => {
 
             <EntryDialog open={dialogOpen} entry={editing} teachers={teachers} subjects={subjects} onClose={() => setDialogOpen(false)}
                 onSaved={() => { setToast({ severity: 'success', message: editing ? 'Session updated' : 'Session created' }); load(); }} />
+            <ImportScheduleDialog
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                onImported={(message) => { setToast({ severity: 'success', message }); load(); }}
+            />
             <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
                 <Alert severity={toast?.severity || 'info'} onClose={() => setToast(null)}>{toast?.message}</Alert>
             </Snackbar>
