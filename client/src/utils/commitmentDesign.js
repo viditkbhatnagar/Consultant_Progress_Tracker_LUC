@@ -31,6 +31,11 @@ export const leadStagesFor = (isInstitute, current) => {
     return base;
 };
 
+// Starting stage for a brand-new row. 'Cold' isn't offered to the Institute,
+// so defaulting to it there would seed the form with a value its own picker
+// can't show.
+export const defaultLeadStage = (isInstitute) => (isInstitute ? 'Offer Sent' : 'Cold');
+
 // Board-specific ordering: pin Admission and Awaiting Confirmation first
 // (same rule as the Meetings board) then the rest in LEAD_STAGES order.
 const BOARD_LEAD = ['Admission', 'Awaiting Confirmation'];

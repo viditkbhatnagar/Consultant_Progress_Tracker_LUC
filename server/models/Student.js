@@ -19,12 +19,20 @@ const SKILLHUB_SUBJECTS = [
     'JEE',
     'NEET',
 ];
+// IGCSE carries a variant suffix; every other board is stored verbatim.
+// IELTS / GRE / SAT are the test-prep tracks the Institute also runs.
 const SKILLHUB_CURRICULA = [
     'CBSE',
     'IGCSE-Cambridge',
     'IGCSE-Edexcel',
     'IGCSE-AQA',
+    'IELTS',
+    'GRE',
+    'SAT',
 ];
+// Board-level bucket derived from `curriculum` — backs the CBSE / IGCSE / …
+// tabs on the student database.
+const SKILLHUB_CURRICULUM_SLUGS = ['CBSE', 'IGCSE', 'IELTS', 'GRE', 'SAT'];
 const SKILLHUB_MODES = ['Online', 'Offline', 'Hybrid', 'OneToOne'];
 const SKILLHUB_COURSE_DURATIONS = ['Monthly', 'OneYear', 'TwoYears'];
 const SKILLHUB_LEAD_SOURCES = [
@@ -142,7 +150,7 @@ const StudentSchema = new mongoose.Schema(
             enum: SKILLHUB_CURRICULA,
             required: skillhubOnly,
         },
-        curriculumSlug: { type: String, enum: ['IGCSE', 'CBSE'] },
+        curriculumSlug: { type: String, enum: SKILLHUB_CURRICULUM_SLUGS },
         yearOrGrade: { type: String, required: skillhubOnly, trim: true },
         academicYear: {
             type: String,
@@ -312,9 +320,12 @@ StudentSchema.pre('validate', async function () {
     // numbers are now entered manually by the counselor — no auto-generation.
     if (isSkillhub(this.organization)) {
         if (this.curriculum) {
-            this.curriculumSlug = this.curriculum.startsWith('IGCSE')
-                ? 'IGCSE'
-                : 'CBSE';
+            // The slug is the board: "IGCSE-Edexcel" -> "IGCSE", everything
+            // else is stored verbatim (CBSE / IELTS / GRE / SAT). Defaulting
+            // non-IGCSE to CBSE (the old behaviour) would file every test-prep
+            // student under the CBSE tab.
+            const board = String(this.curriculum).split('-')[0];
+            this.curriculumSlug = SKILLHUB_CURRICULUM_SLUGS.includes(board) ? board : 'CBSE';
         }
 
         if (this.enquiryDate && this.closingDate) {

@@ -87,7 +87,9 @@ export const SKILLHUB_LEAD_SOURCES = [
     'Walk-In',
     'Tele-Inquiry',
 ];
-export const SKILLHUB_BOARDS = ['CBSE', 'IGCSE'];
+// IGCSE is the only board with variants; the rest (CBSE plus the test-prep
+// tracks) are stored as the board name alone.
+export const SKILLHUB_BOARDS = ['CBSE', 'IGCSE', 'IELTS', 'GRE', 'SAT'];
 export const SKILLHUB_IGCSE_VARIANTS = ['Cambridge', 'Edexcel', 'AQA'];
 export const SKILLHUB_ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
 
@@ -95,16 +97,17 @@ export const SKILLHUB_ACADEMIC_YEARS = ['2024-25', '2025-26', '2026-27'];
 // into board + IGCSE variant pieces for the cascading UI dropdowns.
 export const splitCurriculum = (curriculum) => {
     if (!curriculum) return { board: '', variant: '' };
-    if (curriculum === 'CBSE') return { board: 'CBSE', variant: '' };
     if (curriculum.startsWith('IGCSE-')) {
         return { board: 'IGCSE', variant: curriculum.slice('IGCSE-'.length) };
     }
+    // Variant-less boards store the board name verbatim (CBSE / IELTS / GRE / SAT).
+    if (SKILLHUB_BOARDS.includes(curriculum)) return { board: curriculum, variant: '' };
     return { board: '', variant: '' };
 };
 
 export const composeCurriculum = (board, variant) => {
-    if (board === 'CBSE') return 'CBSE';
-    if (board === 'IGCSE' && variant) return `IGCSE-${variant}`;
+    if (board === 'IGCSE') return variant ? `IGCSE-${variant}` : '';
+    if (SKILLHUB_BOARDS.includes(board)) return board;
     return '';
 };
 

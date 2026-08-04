@@ -25,6 +25,7 @@ import studentService from '../services/studentService';
 import consultantService from '../services/consultantService';
 import xlsxBuilder from '../services/xlsxBuilder';
 import { skillhubColumns } from '../config/exportColumns/students';
+import { SKILLHUB_BOARDS } from '../utils/constants';
 import { useAdminOrgScope, getAdminOrgScope } from '../utils/adminOrgScope';
 import AdminOrgTabs from '../components/AdminOrgTabs';
 import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFormDialog';
@@ -490,8 +491,11 @@ const SkillhubStudentDatabasePage = () => {
                     },
                 }}
             >
-                <ToggleButton value="CBSE">CBSE</ToggleButton>
-                <ToggleButton value="IGCSE">IGCSE</ToggleButton>
+                {/* Driven off SKILLHUB_BOARDS so a new board (IELTS / GRE /
+                    SAT) gets its tab automatically. */}
+                {SKILLHUB_BOARDS.map((b) => (
+                    <ToggleButton key={b} value={b}>{b}</ToggleButton>
+                ))}
             </ToggleButtonGroup>
             <ToggleButtonGroup
                 value={statusTab}

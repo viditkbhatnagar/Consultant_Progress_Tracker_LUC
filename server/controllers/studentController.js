@@ -117,6 +117,14 @@ exports.getStudents = async (req, res, next) => {
                     { curriculumSlug: 'IGCSE' },
                     { curriculum: { $regex: '^IGCSE', $options: 'i' } },
                 ];
+            } else {
+                // Test-prep boards (IELTS / GRE / SAT) — no variant suffix, so
+                // the slug and the stored curriculum are the same string. Kept
+                // generic so a new board needs no change here.
+                filter.$or = [
+                    { curriculumSlug },
+                    { curriculum: curriculumSlug },
+                ];
             }
         }
 

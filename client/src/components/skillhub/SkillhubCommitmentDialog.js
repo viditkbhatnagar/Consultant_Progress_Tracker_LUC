@@ -21,7 +21,7 @@ import {
     Divider,
     Chip,
 } from '@mui/material';
-import { LEAD_STAGES_LIST } from '../../utils/constants';
+import { leadStagesFor, defaultLeadStage } from '../../utils/commitmentDesign';
 import { getWeekInfo } from '../../utils/weekUtils';
 import instituteService from '../../services/instituteService';
 import { format, startOfWeek, endOfWeek, getWeek } from 'date-fns';
@@ -63,7 +63,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
         gradeOrYear: '',
         studentPhone: '',
         commitmentMade: '',
-        leadStage: 'Cold',
+        leadStage: defaultLeadStage(isInstitute),
         achievementPercentage: 0,
         admissionClosed: false,
         prospectForWeek: 0,
@@ -115,7 +115,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 gradeOrYear: commitment.gradeOrYear || '',
                 studentPhone: commitment.studentPhone || '',
                 commitmentMade: commitment.commitmentMade || '',
-                leadStage: commitment.leadStage || 'Cold',
+                leadStage: commitment.leadStage || defaultLeadStage(isInstitute),
                 achievementPercentage: commitment.achievementPercentage || 0,
                 admissionClosed: !!commitment.admissionClosed,
                 prospectForWeek: commitment.prospectForWeek || 0,
@@ -142,7 +142,7 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                 gradeOrYear: '',
                 studentPhone: '',
                 commitmentMade: '',
-                leadStage: 'Cold',
+                leadStage: defaultLeadStage(isInstitute),
                 achievementPercentage: 0,
                 admissionClosed: false,
                 prospectForWeek: 0,
@@ -342,7 +342,9 @@ const SkillhubCommitmentDialog = ({ open, onClose, onSave, commitment, teamConsu
                                 value={formData.leadStage}
                                 onChange={(e) => set('leadStage', e.target.value)}
                             >
-                                {LEAD_STAGES_LIST.map((s) => (
+                                {/* Same trimmed funnel the tracker shows outside —
+                                    the Institute only uses six stages. */}
+                                {leadStagesFor(isInstitute, formData.leadStage).map((s) => (
                                     <MenuItem key={s} value={s}>{s}</MenuItem>
                                 ))}
                             </Select>

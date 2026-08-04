@@ -9,7 +9,13 @@ const NotificationSchema = new mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ['follow_up_reminder', 'weekly_summary', 'commitment_due', 'team_update'],
+            enum: [
+                'follow_up_reminder',
+                'weekly_summary',
+                'commitment_due',
+                'team_update',
+                'student_birthday',
+            ],
             required: true,
         },
         title: {

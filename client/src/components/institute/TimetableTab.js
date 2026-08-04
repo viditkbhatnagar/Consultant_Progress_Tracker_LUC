@@ -92,8 +92,16 @@ const SessionCard = ({ e, mode, onEdit, onDelete }) => (
             </Box>
         </Box>
         <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{e.studentLabel || e.gradeOrYear}</Typography>
+        {/* Subject gets its own line in BOTH views. These timetables get sent to
+            parents, so the subject has to be readable at a glance — previously
+            the grade view showed only the teacher and the subject was hidden. */}
+        {e.subject ? (
+            <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'var(--d-accent, #2383E2)' }}>
+                {e.subject}
+            </Typography>
+        ) : null}
         <Typography sx={{ fontSize: 11, color: 'var(--d-text-3, #57564E)' }}>
-            {[mode === 'grade' ? e.teacherName : e.subject, e.curriculum].filter(Boolean).join(' · ')}
+            {[mode === 'grade' ? e.teacherName : null, e.curriculum].filter(Boolean).join(' · ')}
         </Typography>
     </Box>
 );

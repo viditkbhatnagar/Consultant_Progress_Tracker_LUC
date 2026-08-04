@@ -168,6 +168,22 @@ if (process.env.NODE_ENV !== 'test') {
     } else {
         console.warn('[db-snapshot] S3 not configured — nightly backup disabled');
     }
+
+    // Student birthday reminders — 08:00 Asia/Dubai, so the branch sees them
+    // at the start of the working day. Posts a heads-up the day before and one
+    // on the morning itself; the job is idempotent, so a retry posts nothing
+    // extra. Needs no external service, unlike the snapshot above.
+    const { runBirthdayNotifications } = require('./services/birthdayNotifier');
+    cron.schedule(
+        '0 8 * * *',
+        () => runBirthdayNotifications()
+            .then((r) => {
+                if (r.created) console.log(`[birthdays] posted ${r.created} notification(s) — ${r.today} today, ${r.tomorrow} tomorrow`);
+            })
+            .catch((e) => console.error('[birthdays] run failed:', e.message)),
+        { timezone: 'Asia/Dubai' }
+    );
+    console.log('[birthdays] student birthday reminders scheduled — 08:00 Asia/Dubai');
 }
 
 // Handle unhandled promise rejections
