@@ -12,6 +12,7 @@ const InstituteEnrollment = require('../models/InstituteEnrollment');
 const Student = require('../models/Student');
 const { ORG_SKILLHUB_INSTITUTE } = require('../config/organizations');
 const { subjectOptions, subjectMatchCondition } = require('../config/instituteSubjects');
+const { upcomingBirthdays } = require('../services/birthdayNotifier');
 const { parseScheduleWorkbook } = require('../services/institute/scheduleParser');
 const { emitToOrg } = require('../services/realtime');
 
@@ -476,6 +477,20 @@ exports.getRoster = async (req, res, next) => {
         }
         const roster = [...byName.values()].sort((a, b) => a.studentName.localeCompare(b.studentName));
         res.status(200).json({ success: true, data: roster });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Upcoming student birthdays. The daily job posts a notification on the day
+// (and the day before), but that leaves nothing to see in between — this backs
+// the panel so the branch can look ahead and know the reminders are armed.
+exports.getUpcomingBirthdays = async (req, res, next) => {
+    try {
+        if (!assertInstitute(req, res)) return;
+        const days = Math.min(Math.max(parseInt(req.query.days, 10) || 45, 1), 365);
+        const data = await upcomingBirthdays({ days, organization: INSTITUTE });
+        res.status(200).json({ success: true, count: data.length, data });
     } catch (error) {
         next(error);
     }

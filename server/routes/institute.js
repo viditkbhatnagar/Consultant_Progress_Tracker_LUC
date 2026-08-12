@@ -72,6 +72,9 @@ router.route('/timetable/:id').put(c.updateTimetableEntry).delete(c.deleteTimeta
 // carry a real Student ref instead of an unlinked free-typed name.
 router.get('/students', c.getInstituteStudents);
 
+// Upcoming student birthdays (backs the panel; the daily job posts the alerts).
+router.get('/birthdays', c.getUpcomingBirthdays);
+
 router.get('/attendance/meta', c.getAttendanceMeta);
 router.route('/attendance/roster')
     .get(c.getRoster)

@@ -54,12 +54,58 @@ async function findBirthdays({ month, day }, organization = ORG) {
     ]);
 }
 
+// Birthdays falling in the next `days` days (0 = today), soonest first.
+// One query plus JS rather than a query per day — the roster is small and this
+// keeps it to a single round trip. Backs the "Upcoming birthdays" panel, which
+// is what makes the reminder visible before the day itself arrives.
+async function upcomingBirthdays({ now = new Date(), days = 45, organization = ORG } = {}) {
+    const today = localDateParts(now);
+    const todayUTC = Date.UTC(today.year, today.month - 1, today.day);
+
+    const students = await Student.find({
+        organization,
+        dob: { $ne: null, $exists: true },
+    }).select('studentName dob yearOrGrade curriculum').lean();
+
+    const out = [];
+    for (const s of students) {
+        const dob = new Date(s.dob);
+        if (Number.isNaN(dob.getTime())) continue;
+        const month = dob.getUTCMonth() + 1;
+        const day = dob.getUTCDate();
+        // This year's occurrence; if it has passed, roll to next year. A 29 Feb
+        // birthday lands on 1 Mar in a non-leap year, which is how Date rolls it.
+        let next = Date.UTC(today.year, month - 1, day);
+        if (next < todayUTC) next = Date.UTC(today.year + 1, month - 1, day);
+        const daysAway = Math.round((next - todayUTC) / 86400000);
+        if (daysAway > days) continue;
+        const on = new Date(next);
+        out.push({
+            studentName: s.studentName,
+            yearOrGrade: s.yearOrGrade || '',
+            curriculum: s.curriculum || '',
+            date: on.toISOString().slice(0, 10),
+            daysAway,
+            turning: ageTurning(s.dob, { year: on.getUTCFullYear() }),
+        });
+    }
+    out.sort((a, b) => a.daysAway - b.daysAway || a.studentName.localeCompare(b.studentName));
+    return out;
+}
+
+// A handful of records were entered with the CURRENT year as the birth year
+// (a Grade 11 student "born" in 2025), which would otherwise render as
+// "turns 0". No school student is under 3, so treat anything below that as a
+// mistyped year and simply omit the age — the birthday itself still shows, and
+// a missing age reads far better than an obviously wrong one.
+const MIN_PLAUSIBLE_STUDENT_AGE = 3;
+
 // Age they turn on that date (null when the birth year is missing/implausible).
 function ageTurning(dob, { year }) {
     const born = new Date(dob).getUTCFullYear();
     if (!born || born < 1900) return null;
     const age = year - born;
-    return age > 0 && age < 120 ? age : null;
+    return age >= MIN_PLAUSIBLE_STUDENT_AGE && age < 120 ? age : null;
 }
 
 function describe(students, target) {
@@ -147,6 +193,7 @@ async function runBirthdayNotifications({ now = new Date(), organization = ORG }
 module.exports = {
     runBirthdayNotifications,
     findBirthdays,
+    upcomingBirthdays,
     localDateParts,
     addDays,
     ageTurning,

@@ -16,6 +16,7 @@ const Notification = require('../../models/Notification');
 const {
     runBirthdayNotifications,
     findBirthdays,
+    upcomingBirthdays,
     localDateParts,
     addDays,
     ageTurning,
@@ -64,6 +65,14 @@ describe('date helpers', () => {
         expect(ageTurning(new Date('2009-06-14T00:00:00Z'), { year: 2026 })).toBe(17);
         expect(ageTurning(new Date('1800-01-01T00:00:00Z'), { year: 2026 })).toBeNull();
     });
+
+    // Several live records were saved with the current year as the birth year,
+    // which would read "turns 0" next to a Grade 11 student.
+    test('a mistyped birth year yields no age rather than a nonsense one', () => {
+        expect(ageTurning(new Date('2025-09-20T00:00:00Z'), { year: 2026 })).toBeNull(); // turns 1
+        expect(ageTurning(new Date('2026-02-27T00:00:00Z'), { year: 2026 })).toBeNull(); // turns 0
+        expect(ageTurning(new Date('2023-05-05T00:00:00Z'), { year: 2026 })).toBe(3);    // boundary kept
+    });
 });
 
 describe('findBirthdays', () => {
@@ -91,6 +100,42 @@ describe('findBirthdays', () => {
             makeStudent({ studentName: 'LUC kid', organization: 'luc', dob: new Date('2009-06-14T00:00:00Z') }),
         ]);
         expect(await findBirthdays({ year: 2026, month: 6, day: 14 })).toHaveLength(0);
+    });
+});
+
+describe('upcomingBirthdays', () => {
+    test('returns the window soonest-first, with days-away and age', async () => {
+        await Student.collection.insertMany([
+            makeStudent({ studentName: 'Today', dob: new Date('2009-06-14T00:00:00Z') }),
+            makeStudent({ studentName: 'In three', dob: new Date('2011-06-17T00:00:00Z') }),
+            makeStudent({ studentName: 'Way off', dob: new Date('2010-12-25T00:00:00Z') }),
+        ]);
+        const rows = await upcomingBirthdays({ now: NOW, days: 30 });
+        expect(rows.map((r) => r.studentName)).toEqual(['Today', 'In three']); // Dec excluded
+        expect(rows[0].daysAway).toBe(0);
+        expect(rows[0].turning).toBe(17);
+        expect(rows[1].daysAway).toBe(3);
+        expect(rows[1].date).toBe('2026-06-17');
+    });
+
+    test('a birthday already passed this year rolls to next year, not negative', async () => {
+        await Student.collection.insertMany([
+            makeStudent({ studentName: 'Passed', dob: new Date('2009-06-01T00:00:00Z') }),
+        ]);
+        const wide = await upcomingBirthdays({ now: NOW, days: 400 });
+        expect(wide).toHaveLength(1);
+        expect(wide[0].daysAway).toBeGreaterThan(300);
+        expect(wide[0].date).toBe('2027-06-01');
+        // and it must not appear in a short window
+        expect(await upcomingBirthdays({ now: NOW, days: 30 })).toHaveLength(0);
+    });
+
+    test('students with no dob and other orgs are excluded', async () => {
+        await Student.collection.insertMany([
+            makeStudent({ studentName: 'No dob' }),
+            makeStudent({ studentName: 'LUC', organization: 'luc', dob: new Date('2009-06-14T00:00:00Z') }),
+        ]);
+        expect(await upcomingBirthdays({ now: NOW, days: 365 })).toHaveLength(0);
     });
 });
 

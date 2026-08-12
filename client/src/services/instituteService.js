@@ -38,6 +38,9 @@ const instituteService = {
         (await axios.delete(`${URL}/attendance/roster`, { data: { gradeOrYear, subject, studentName } })).data,
     // Institute students, for linking added names to real admission records.
     getInstituteStudents: async () => (await axios.get(`${URL}/students`)).data,
+    // Upcoming student birthdays (the daily job posts the reminders themselves).
+    getUpcomingBirthdays: async (days = 45) =>
+        (await axios.get(`${URL}/birthdays`, { params: { days } })).data,
     getAttendance: async (params) => (await axios.get(`${URL}/attendance`, { params })).data,
     markAttendance: async (body) => (await axios.post(`${URL}/attendance`, body)).data,
     // Cancel one wrong mark — the student keeps every other record.
