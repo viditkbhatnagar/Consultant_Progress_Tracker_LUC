@@ -82,29 +82,42 @@ const EntryDialog = ({ open, entry, teachers, subjects = [], onClose, onSaved })
     );
 };
 
-const SessionCard = ({ e, mode, onEdit, onDelete }) => (
-    <Box sx={{ p: 1, mb: 1, borderRadius: '8px', bgcolor: 'var(--d-surface, #fff)', border: '1px solid var(--d-border, #e5e7eb)', borderLeft: '3px solid var(--d-accent, #2383E2)' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
-            <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{e.time}</Typography>
-            <Box sx={{ whiteSpace: 'nowrap' }}>
-                <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onEdit(e)}><EditIcon sx={{ fontSize: 14 }} /></IconButton>
-                <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onDelete(e)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>
+const SessionCard = ({ e, mode, onEdit, onDelete }) => {
+    // The headline is the student label when there is one; it falls back to the
+    // grade so a session with no names still identifies itself.
+    const primary = e.studentLabel || e.gradeOrYear;
+    // Grade / Year is entered on every session but was invisible on the card
+    // whenever a student label existed — it lost the fallback above. Show it in
+    // the meta line too, unless it's already the headline (no point twice).
+    const grade = e.gradeOrYear && e.gradeOrYear !== primary ? e.gradeOrYear : null;
+    // In the By Teacher view the teacher is the thing being filtered on, so
+    // repeating their name on every card adds nothing.
+    const teacher = mode === 'grade' ? e.teacherName : null;
+
+    return (
+        <Box sx={{ p: 1, mb: 1, borderRadius: '8px', bgcolor: 'var(--d-surface, #fff)', border: '1px solid var(--d-border, #e5e7eb)', borderLeft: '3px solid var(--d-accent, #2383E2)' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 0.5 }}>
+                <Typography sx={{ fontSize: 11.5, fontWeight: 700 }}>{e.time}</Typography>
+                <Box sx={{ whiteSpace: 'nowrap' }}>
+                    <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onEdit(e)}><EditIcon sx={{ fontSize: 14 }} /></IconButton>
+                    <IconButton size="small" sx={{ p: 0.25 }} onClick={() => onDelete(e)}><DeleteIcon sx={{ fontSize: 14 }} /></IconButton>
+                </Box>
             </Box>
-        </Box>
-        <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{e.studentLabel || e.gradeOrYear}</Typography>
-        {/* Subject gets its own line in BOTH views. These timetables get sent to
-            parents, so the subject has to be readable at a glance — previously
-            the grade view showed only the teacher and the subject was hidden. */}
-        {e.subject ? (
-            <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'var(--d-accent, #2383E2)' }}>
-                {e.subject}
+            <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{primary}</Typography>
+            {/* Subject gets its own line in BOTH views. These timetables get sent to
+                parents, so the subject has to be readable at a glance — previously
+                the grade view showed only the teacher and the subject was hidden. */}
+            {e.subject ? (
+                <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: 'var(--d-accent, #2383E2)' }}>
+                    {e.subject}
+                </Typography>
+            ) : null}
+            <Typography sx={{ fontSize: 11, color: 'var(--d-text-3, #57564E)' }}>
+                {[grade, teacher, e.curriculum].filter(Boolean).join(' · ')}
             </Typography>
-        ) : null}
-        <Typography sx={{ fontSize: 11, color: 'var(--d-text-3, #57564E)' }}>
-            {[mode === 'grade' ? e.teacherName : null, e.curriculum].filter(Boolean).join(' · ')}
-        </Typography>
-    </Box>
-);
+        </Box>
+    );
+};
 
 const TimetableTab = () => {
     const [teachers, setTeachers] = useState([]);
