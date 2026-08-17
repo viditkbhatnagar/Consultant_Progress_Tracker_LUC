@@ -60,9 +60,49 @@ export function studentOptions(entries = []) {
     return [...byKey.values()].sort((a, b) => a.localeCompare(b));
 }
 
-/** Does this entry belong to `student`? Case-insensitive exact name match. */
+const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Do two names refer to the same student?
+ *
+ * The timetable labels use short names ("Mahi") while the student roster holds
+ * full ones ("Mahi Subhash Chaurasia"), so the picker has to bridge the two.
+ * A match is either exact, or one name being the LEADING part of the other on a
+ * word boundary. Anchoring at the start matters: it keeps "Mahi" ↔ "Mahi
+ * Subhash Chaurasia" while refusing "Nat" → "Natalie" (no boundary) and
+ * "Faizan" → "Mohammed Faizan Hussain" (not a leading part), which would
+ * otherwise pull in another student's classes.
+ */
+export function namesMatch(a, b) {
+    const x = norm(a);
+    const y = norm(b);
+    if (!x || !y) return false;
+    if (x === y) return true;
+    return x.startsWith(`${y} `) || y.startsWith(`${x} `);
+}
+
+/** Does this entry belong to `student`? Accepts a short or full name. */
 export function entryHasStudent(entry, student) {
     if (!student) return false;
-    const target = student.trim().toLowerCase();
-    return extractStudentNames(entry.studentLabel).some((n) => n.toLowerCase() === target);
+    return extractStudentNames(entry.studentLabel).some((n) => namesMatch(n, student));
+}
+
+/**
+ * Options for the By Student picker: every student on the roster, plus any
+ * timetable name that doesn't map to one. Roster-only would silently drop the
+ * nine students who currently hold classes under a name the roster spells
+ * differently ("Mohd. Thekkil", "Faizan", …).
+ */
+export function buildStudentOptions(entries = [], roster = []) {
+    const options = roster.map((s) => ({
+        name: s.studentName,
+        meta: [s.yearOrGrade, s.curriculumSlug || s.curriculum].filter(Boolean).join(' · '),
+        inactive: s.studentStatus === 'inactive',
+        fromRoster: true,
+    }));
+    for (const name of studentOptions(entries)) {
+        if (options.some((o) => namesMatch(o.name, name))) continue;
+        options.push({ name, meta: 'on timetable', inactive: false, fromRoster: false });
+    }
+    return options.sort((a, b) => a.name.localeCompare(b.name));
 }

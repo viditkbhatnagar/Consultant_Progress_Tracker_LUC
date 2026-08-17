@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Box, Button, Paper, ToggleButtonGroup, ToggleButton, FormControl, InputLabel, Select, MenuItem,
     IconButton, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Typography, Snackbar, Menu,
+    TextField, Typography, Snackbar, Menu, Autocomplete,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -12,7 +12,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFileOutlined';
 import instituteService from '../../services/instituteService';
 import ImportScheduleDialog from './ImportScheduleDialog';
 import { exportRawSheet } from '../../services/xlsxBuilder';
-import { studentOptions, entryHasStudent } from '../../utils/timetableStudents';
+import { buildStudentOptions, entryHasStudent } from '../../utils/timetableStudents';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -133,6 +133,7 @@ const TimetableTab = () => {
     const [toast, setToast] = useState(null);
     const [downloadAnchor, setDownloadAnchor] = useState(null);
     const [subjects, setSubjects] = useState([]);
+    const [roster, setRoster] = useState([]);
     const [importOpen, setImportOpen] = useState(false);
 
     const load = useCallback(() => {
@@ -148,12 +149,17 @@ const TimetableTab = () => {
         instituteService.getAttendanceMeta()
             .then((r) => setSubjects(r.data?.subjects || []))
             .catch(() => {});
+        // Full student roster (every board) so By Student can search anyone.
+        instituteService.getInstituteStudents()
+            .then((r) => setRoster(r.data || []))
+            .catch(() => setRoster([]));
     }, []);
 
     const grades = useMemo(() => [...new Set(entries.map((e) => e.gradeOrYear).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [entries]);
-    // Individual students pulled out of the "Grade / Student" labels, which mix
-    // shapes ("Khadija / Natalie", "8 (Rishi, Annie and Tanushri)", "Grade 10").
-    const students = useMemo(() => studentOptions(entries), [entries]);
+    // Every student on the roster (all boards) plus any timetable-only name, so
+    // the picker can find anyone — not just those already on a schedule.
+    const studentOpts = useMemo(() => buildStudentOptions(entries, roster), [entries, roster]);
+    const students = useMemo(() => studentOpts.map((o) => o.name), [studentOpts]);
 
     // Options for whichever mode is active — one place so the default-selection
     // effect below doesn't need a branch per mode.
@@ -168,8 +174,11 @@ const TimetableTab = () => {
     // replaced the grades, or the mode changed), which would otherwise leave an
     // empty grid.
     useEffect(() => {
+        // By Student deliberately starts empty — auto-picking one of ~100 names
+        // would be arbitrary. The search box prompts instead.
+        if (mode === 'student') return;
         if (!optionValues.includes(String(sel)) && optionValues.length) setSel(optionValues[0]);
-    }, [optionValues, sel]);
+    }, [mode, optionValues, sel]);
 
     const filtered = useMemo(() => {
         if (mode === 'teacher') return entries.filter((e) => String(e.teacher) === String(sel));
@@ -231,14 +240,46 @@ const TimetableTab = () => {
                     <ToggleButton value="grade">By Grade / Year</ToggleButton>
                     <ToggleButton value="student">By Student</ToggleButton>
                 </ToggleButtonGroup>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>{selectorLabel}</InputLabel>
-                    <Select label={selectorLabel} value={sel} onChange={(e) => setSel(e.target.value)}>
-                        {mode === 'teacher'
-                            ? teachers.map((t) => <MenuItem key={t._id} value={t._id}>{t.name}</MenuItem>)
-                            : optionValues.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
-                    </Select>
-                </FormControl>
+                {/* Students are searchable — the roster runs to ~100 names
+                    across all boards, which is no longer a usable dropdown. */}
+                {mode === 'student' ? (
+                    <Autocomplete
+                        size="small"
+                        sx={{ minWidth: 280 }}
+                        options={studentOpts}
+                        value={studentOpts.find((o) => o.name === sel) || null}
+                        onChange={(e, v) => setSel(v ? v.name : '')}
+                        getOptionLabel={(o) => o?.name || ''}
+                        isOptionEqualToValue={(o, v) => o.name === v.name}
+                        renderOption={(props, o) => (
+                            <li {...props} key={o.name}>
+                                <Box>
+                                    <Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>
+                                        {o.name}
+                                        {o.inactive ? (
+                                            <Typography component="span" sx={{ fontSize: 10, color: 'var(--d-text-muted, #a3a3a3)', ml: 0.75 }}>
+                                                inactive
+                                            </Typography>
+                                        ) : null}
+                                    </Typography>
+                                    {o.meta ? (
+                                        <Typography sx={{ fontSize: 11, color: 'var(--d-text-muted, #8A887E)' }}>{o.meta}</Typography>
+                                    ) : null}
+                                </Box>
+                            </li>
+                        )}
+                        renderInput={(params) => <TextField {...params} label="Student" placeholder="Type a name…" />}
+                    />
+                ) : (
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>{selectorLabel}</InputLabel>
+                        <Select label={selectorLabel} value={sel} onChange={(e) => setSel(e.target.value)}>
+                            {mode === 'teacher'
+                                ? teachers.map((t) => <MenuItem key={t._id} value={t._id}>{t.name}</MenuItem>)
+                                : optionValues.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+                        </Select>
+                    </FormControl>
+                )}
                 <Box sx={{ flex: 1 }} />
                 <Button size="small" variant="outlined" startIcon={<FileDownloadIcon />} disabled={!filtered.length} onClick={(e) => setDownloadAnchor(e.currentTarget)}>Export</Button>
                 <Menu anchorEl={downloadAnchor} open={!!downloadAnchor} onClose={() => setDownloadAnchor(null)}>
@@ -249,6 +290,14 @@ const TimetableTab = () => {
                 <Button size="small" variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>Upload Schedule</Button>
                 <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => { setEditing(null); setDialogOpen(true); }}>New Session</Button>
             </Box>
+
+            {/* Tell the user which of the two empty cases they're looking at —
+                an unsearched picker vs a student with genuinely no classes. */}
+            {mode === 'student' && !sel ? (
+                <Alert severity="info" sx={{ mb: 2 }}>Search for a student to see their timetable.</Alert>
+            ) : mode === 'student' && !filtered.length ? (
+                <Alert severity="info" sx={{ mb: 2 }}>No sessions scheduled for {sel} yet.</Alert>
+            ) : null}
 
             <Paper variant="outlined" sx={{ borderRadius: '12px', p: 1.5, overflowX: 'auto' }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${DAYS.length}, minmax(150px, 1fr))`, gap: 1 }}>

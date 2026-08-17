@@ -505,7 +505,7 @@ exports.getInstituteStudents = async (req, res, next) => {
     try {
         if (!assertInstitute(req, res)) return;
         const students = await Student.find({ organization: INSTITUTE })
-            .select('studentName yearOrGrade subjects curriculum')
+            .select('studentName yearOrGrade subjects curriculum curriculumSlug studentStatus')
             .sort({ studentName: 1 })
             .lean();
         res.status(200).json({ success: true, count: students.length, data: students });
