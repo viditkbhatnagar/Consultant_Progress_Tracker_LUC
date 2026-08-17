@@ -32,6 +32,7 @@ import SkillhubStudentFormDialog from '../components/skillhub/SkillhubStudentFor
 import SkillhubCommitmentDialog from '../components/skillhub/SkillhubCommitmentDialog';
 import AISummaryCard from '../components/AISummaryCard';
 import DateRangeSelector from '../components/DateRangeSelector';
+import BirthdaysCard from '../components/institute/BirthdaysCard';
 import {
     LeadStageChart,
     AchievementChart,
@@ -770,6 +771,11 @@ const SkillhubDashboard = () => {
                     <DateRangeSelector value={dateRange} onChange={setDateRange} />
                 </SectionCard>
             )}
+
+            {/* Birthdays live on the dashboard rather than inside Institute —
+                teachers land here and were finding the Institute page hard to
+                get to. Institute-only: the endpoint 403s for a Training login. */}
+            {view === 'dashboard' && isInstitute && <BirthdaysCard />}
 
             {error && (
                 <motion.div variants={riseV} style={{ marginBottom: 24 }}>

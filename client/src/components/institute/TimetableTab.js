@@ -12,6 +12,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFileOutlined';
 import instituteService from '../../services/instituteService';
 import ImportScheduleDialog from './ImportScheduleDialog';
 import { exportRawSheet } from '../../services/xlsxBuilder';
+import { studentOptions, entryHasStudent } from '../../utils/timetableStudents';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -90,9 +91,10 @@ const SessionCard = ({ e, mode, onEdit, onDelete }) => {
     // whenever a student label existed — it lost the fallback above. Show it in
     // the meta line too, unless it's already the headline (no point twice).
     const grade = e.gradeOrYear && e.gradeOrYear !== primary ? e.gradeOrYear : null;
-    // In the By Teacher view the teacher is the thing being filtered on, so
-    // repeating their name on every card adds nothing.
-    const teacher = mode === 'grade' ? e.teacherName : null;
+    // Hide the teacher only in the By Teacher view, where it's the thing being
+    // filtered on. By Grade and By Student both need it — that's the question
+    // those views are answering ("who teaches this slot?").
+    const teacher = mode === 'teacher' ? null : e.teacherName;
 
     return (
         <Box sx={{ p: 1, mb: 1, borderRadius: '8px', bgcolor: 'var(--d-surface, #fff)', border: '1px solid var(--d-border, #e5e7eb)', borderLeft: '3px solid var(--d-accent, #2383E2)' }}>
@@ -149,24 +151,33 @@ const TimetableTab = () => {
     }, []);
 
     const grades = useMemo(() => [...new Set(entries.map((e) => e.gradeOrYear).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [entries]);
+    // Individual students pulled out of the "Grade / Student" labels, which mix
+    // shapes ("Khadija / Natalie", "8 (Rishi, Annie and Tanushri)", "Grade 10").
+    const students = useMemo(() => studentOptions(entries), [entries]);
+
+    // Options for whichever mode is active — one place so the default-selection
+    // effect below doesn't need a branch per mode.
+    const optionValues = useMemo(() => {
+        if (mode === 'teacher') return teachers.map((t) => String(t._id));
+        if (mode === 'student') return students;
+        return grades;
+    }, [mode, teachers, students, grades]);
 
     // Default the selector to the first option when data loads — and re-point
     // it if the current selection no longer exists (e.g. a schedule import
-    // replaced the grades), which would otherwise leave an empty grid.
+    // replaced the grades, or the mode changed), which would otherwise leave an
+    // empty grid.
     useEffect(() => {
-        if (mode === 'teacher') {
-            const stillThere = teachers.some((t) => String(t._id) === String(sel));
-            if (!stillThere && teachers.length) setSel(teachers[0]._id);
-        } else {
-            const stillThere = grades.includes(sel);
-            if (!stillThere && grades.length) setSel(grades[0]);
-        }
-    }, [mode, sel, teachers, grades]);
+        if (!optionValues.includes(String(sel)) && optionValues.length) setSel(optionValues[0]);
+    }, [optionValues, sel]);
 
     const filtered = useMemo(() => {
         if (mode === 'teacher') return entries.filter((e) => String(e.teacher) === String(sel));
+        if (mode === 'student') return entries.filter((e) => entryHasStudent(e, sel));
         return entries.filter((e) => e.gradeOrYear === sel);
     }, [entries, mode, sel]);
+
+    const selectorLabel = mode === 'teacher' ? 'Teacher' : mode === 'student' ? 'Student' : 'Grade / Year';
 
     const byDay = useMemo(() => {
         const map = Object.fromEntries(DAYS.map((d) => [d, []]));
@@ -200,7 +211,13 @@ const TimetableTab = () => {
             { key: 'teacherName', lbl: 'Teacher' },
             { key: 'studentLabel', lbl: 'Grade / Student' },
         ];
-        exportRawSheet(exportRows, cols, 'institute-timetable', kind, { sheetName: 'Timetable' });
+        // Name the file after whoever's schedule this is — these get sent on to
+        // parents, so "timetable_Khadija" beats a generic filename.
+        const who = mode === 'teacher'
+            ? (teachers.find((t) => String(t._id) === String(sel))?.name || '')
+            : sel;
+        const suffix = who ? `-${String(who).replace(/[^\w-]+/g, '_')}` : '';
+        exportRawSheet(exportRows, cols, `institute-timetable${suffix}`, kind, { sheetName: 'Timetable' });
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>;
@@ -212,13 +229,14 @@ const TimetableTab = () => {
                 <ToggleButtonGroup exclusive size="small" value={mode} onChange={(e, v) => { if (v) { setMode(v); setSel(''); } }}>
                     <ToggleButton value="teacher">By Teacher</ToggleButton>
                     <ToggleButton value="grade">By Grade / Year</ToggleButton>
+                    <ToggleButton value="student">By Student</ToggleButton>
                 </ToggleButtonGroup>
                 <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>{mode === 'teacher' ? 'Teacher' : 'Grade / Year'}</InputLabel>
-                    <Select label={mode === 'teacher' ? 'Teacher' : 'Grade / Year'} value={sel} onChange={(e) => setSel(e.target.value)}>
+                    <InputLabel>{selectorLabel}</InputLabel>
+                    <Select label={selectorLabel} value={sel} onChange={(e) => setSel(e.target.value)}>
                         {mode === 'teacher'
                             ? teachers.map((t) => <MenuItem key={t._id} value={t._id}>{t.name}</MenuItem>)
-                            : grades.map((g) => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+                            : optionValues.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
                     </Select>
                 </FormControl>
                 <Box sx={{ flex: 1 }} />

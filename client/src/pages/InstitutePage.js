@@ -12,7 +12,6 @@ import TimetableTab from '../components/institute/TimetableTab';
 import AttendanceTab from '../components/institute/AttendanceTab';
 import AttendanceReportTab from '../components/institute/AttendanceReportTab';
 import TestsTab from '../components/institute/TestsTab';
-import BirthdaysCard from '../components/institute/BirthdaysCard';
 
 // Skillhub Institute — Teachers, Timetable, Attendance. Rendered inside the
 // standard dashboard shell (persistent sidebar + light/dark tokens + hero),
@@ -40,11 +39,6 @@ const InstitutePage = () => {
     return (
         <DashboardShell sidebar={sidebar} themeState={themeState}>
             <DashboardHero eyebrow="Skillhub Institute" title="Institute" subtitle="Teachers · Timetable · Attendance" />
-
-            {/* Sits above the tabs so it's seen on every Institute screen — the
-                birthday reminders are otherwise invisible until the day itself.
-                Renders nothing when no birthdays fall in the window. */}
-            <BirthdaysCard />
 
             <Tabs
                 value={tab}
