@@ -19,6 +19,7 @@ const INSTITUTE_SUBJECTS = [
     'English',
     'IELTS',
     'Math',
+    'Mechanics',
     'Physics',
     'Science',
 ];
