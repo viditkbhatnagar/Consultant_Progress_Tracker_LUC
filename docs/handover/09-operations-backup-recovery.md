@@ -91,6 +91,7 @@ Notes that matter operationally:
 6. Uploads `db-snapshots/<date>/_manifest.json` last (`dbSnapshot.js:45`).
 7. Logs one summary line (`dbSnapshot.js:47`):
    `[db-snapshot] 27 collections · 12345 docs · 4210KB gz -> s3://<bucket>/db-snapshots/2026-09-04/`
+   (illustrative numbers — the collection count is whatever the database actually holds, see §3.4)
 
 The manifest is the file to read first during any restore. Its shape, built at `dbSnapshot.js:24-44`:
 
@@ -184,7 +185,11 @@ you have checked.** Do this in your first hour:
    aws s3 ls s3://<S3_BUCKET>/db-snapshots/ --region <AWS_REGION>
    aws s3 cp s3://<S3_BUCKET>/db-snapshots/<latest-date>/_manifest.json - | head -40
    ```
-   Confirm `totalDocs` is plausible and that all 27 collections are listed.
+   Confirm `totalDocs` is plausible and that every collection you expect is listed. **UNVERIFIED —
+   the exact collection count.** There are 27 models in `server/models/`, but the snapshot enumerates
+   what is *in the database*, not the model list (§3.1 step 4), and at least two models (`Counter`,
+   `WeeklySummary`) are unused, so their collections may never have been created. Take the count from
+   the first successful `_manifest.json` and treat that as the baseline to compare future runs against.
 4. **A cheap indirect signal:** the Tier Fight poster history. Posters are stored in S3 under
    `tier-images/YYYY/MM/DD/` with an inline data-URL fallback used only when the S3 upload fails
    (`server/models/TierImage.js:12-15`, `server/controllers/tierController.js:225`). If posters in
@@ -202,10 +207,12 @@ you have checked.** Do this in your first hour:
   history too.
 - **The snapshot loads each collection fully into process memory** (`.toArray()` at
   `dbSnapshot.js:35`). The file's own header comment flags this: it is sized for a few thousand
-  documents, and a much larger database would need streaming. The largest single collection is
-  `docchunks` — it stores two 1536-float embeddings per chunk (~5 MB of JSON at the current 215
-  chunks) and dominates the uncompressed size. Watch Render memory around 00:30 Dubai as the
-  `commitments` and `students` collections grow.
+  documents, and a much larger database would need streaming. `docchunks` is likely the heaviest
+  single collection — it stores two 1536-float embeddings per chunk (`server/models/DocChunk.js:72-77`),
+  which is ~5 MB of JSON at the current 215 chunks (`DEPLOYMENT.md:434-439`). **UNVERIFIED** that it
+  is the largest — compare the per-collection `bytes` figures in a real `_manifest.json` rather than
+  taking this on trust. Watch Render memory around 00:30 Dubai as the `commitments` and `students`
+  collections grow.
 - `server/services/s3.js:71` exports a `listObjects()` helper whose comment says it is "used by the
   snapshot browser". **There is no snapshot browser.** Grep confirms `listObjects` has no callers
   anywhere in `server/` or `client/src/`. There is no admin UI for backups; S3 console or CLI is the
@@ -218,7 +225,7 @@ you have checked.** Do this in your first hour:
 | MongoDB data | Yes — nightly S3 dump (+ Atlas snapshots, unverified) | §4 |
 | Application code | Yes — git, GitHub `main` | `git clone` |
 | The 16 LUC program PDFs | Yes — committed in `client/public/program-docs/` | git |
-| Highlighted PDFs + PNG snippets | No, and they do not need to be | regenerate: `npm run highlight:docs` |
+| Highlighted PDFs + PNG snippets | Yes — they are **committed to git**, not gitignored: 215 tracked files under `client/public/program-docs-highlighted/` and 178 under `client/public/program-docs-snippets/` (`git ls-files client/public/program-docs-highlighted \| wc -l`) | git; or regenerate with `npm run highlight:docs` (Python, needs `server/requirements.txt` installed) |
 | Docs RAG embeddings | Yes, inside the `docchunks` collection dump | restore, or re-run `npm run ingest:docs:force` (costs ~$0.02 in OpenAI embeddings) |
 | Tier poster images in S3 | **No.** They live only in `tier-images/` in the same bucket | none — bucket loss loses poster history |
 | Render environment variables (all secrets) | **No.** They exist only in the Render dashboard | See [11 — Credentials & Access](11-credentials-and-access-handover.md) |
@@ -243,7 +250,7 @@ you have checked.** Do this in your first hour:
 | Bad deploy, data intact | Do **not** restore. Roll back the deploy — §9.3 | Restoring is strictly more dangerous than redeploying |
 
 **Before any restore, always:** snapshot the current (broken) state first, so you can go back and so
-forensics is still possible. `node server/scripts/runDbSnapshot.js` writes today's folder — but note
+forensics is still possible. `cd server && node scripts/runDbSnapshot.js` writes today's folder — but note
 §3.2, it will overwrite today's nightly if one already ran. Copy the existing folder aside in S3
 first if that matters.
 
@@ -270,12 +277,18 @@ you need it**.
 
 ### 4.3 Procedure B — restore from an S3 snapshot
 
-**This procedure has never been executed against production. It is written from the code, and the
-type-revival step below was verified by a round-trip test against an in-memory MongoDB (dump a
+**This procedure has never been executed against production. It is written from the code. The
+type-revival step below was checked with an ad-hoc round-trip against an in-memory MongoDB (dump a
 `Student` with `ObjectId` refs and nested EMI dates exactly the way `dbSnapshot.js` does, wipe,
 restore, confirm `findById` matches, `teamLead` is an `ObjectId`, nested `emis[].dueDate` /
-`emis[].paidOn` are `Date`s, and a `$year: '$closingDate'` aggregation groups correctly). Treat the
-whole procedure as untested until you rehearse it — see §6, "quarterly".**
+`emis[].paidOn` are `Date`s, and a `$year: '$closingDate'` aggregation groups correctly) — but that
+check was never committed: there is no snapshot/restore spec anywhere in `server/tests/`, so nothing
+re-runs it and nothing guards it against drift. Treat the whole procedure as untested until you
+rehearse it — see §6, "quarterly".**
+
+Writing that round-trip as a real Jest spec is a cheap, high-value first task — the repo already has
+`mongodb-memory-server` as a devDependency (`server/package.json:48`) and six test directories under
+`server/tests/` to copy the setup from.
 
 #### Step 1 — Fetch and inspect the snapshot
 
@@ -527,7 +540,8 @@ Do this once, in your first week, and write the answers into this document:
 
 Two related notes:
 
-- **Region latency is a real operational concern here.** `DEPLOYMENT.md:432-443` records that a
+- **Region latency is a real operational concern here.** `DEPLOYMENT.md:432-439` ("Atlas region
+  caveat") records that a
   Render↔Atlas region mismatch pushes boot time to ~25 s (the Docs RAG index ships ~5 MB of
   embeddings over the wire at every boot) versus under 2 s when colocated. Slow boots widen every
   deploy's unavailability window.
@@ -554,7 +568,7 @@ Nothing below is automated. It happens because someone puts it in a calendar.
 
 | Task | How |
 |---|---|
-| Review AI spend | Admin dashboard → AI Usage tab, backed by `GET /api/ai/usage` (`server/routes/ai.js:25`, admin-only) and the `AIUsage` collection. Both OpenAI and Groq are billed per token; there is no spend cap in code |
+| Review AI spend | Admin dashboard → AI Usage tab, backed by `GET /api/ai/usage` (`server/routes/ai.js:26`, admin-only) and the `AIUsage` collection. Both OpenAI and Groq are billed per token; there is no spend cap in code |
 | Review Docs RAG quality | `GET /api/docs-chat/stats` (`server/routes/docsChat.js:121`, admin-only) or the `/admin/docs-rag` page. `tier: 3` rows are refusals — a cluster of them means a corpus gap, not a bug |
 | Check reconciliation drift | The drift monitor drops an admin notification when LUC closed commitments >7 days old still lack a linked Student (`server/services/driftMonitor.js:12-32`). Clear them on the Reconciliation page |
 | Skim Atlas metrics | Connections, slow queries, disk. Atlas Performance Advisor will propose indexes |
@@ -565,7 +579,7 @@ Nothing below is automated. It happens because someone puts it in a calendar.
 |---|---|
 | Dependency audit | `cd server && npm audit` and `cd client && npm audit`. Fix high/critical; be conservative on the client — CRA 5 (`react-scripts 5.0.1`) reports transitive dev-only advisories that are noisy and mostly not exploitable in a build tool |
 | Dependency updates | `npm outdated` in both. **Never bulk-`npm update`.** Update one package per commit and redeploy — there is no CI and no staging, so every upgrade is tested in production by definition |
-| Data-quality audit | `node server/scripts/auditStudents.js` and `node server/scripts/auditLucStudentsDeep.js` — both read-only. They surface duplicates, impossible dates and fee anomalies |
+| Data-quality audit | `cd server && node scripts/auditStudents.js` and `cd server && node scripts/auditLucStudentsDeep.js` — both read-only. They surface duplicates, impossible dates and fee anomalies. Both call bare `require('dotenv').config()`, which resolves `.env` from the **current working directory** — run them from the repo root and `MONGODB_URI` is undefined and the connect fails confusingly, because there is no root `.env` (§7 rule 2) |
 | S3 growth and cost | `aws s3 ls --summarize --human-readable --recursive s3://<bucket>/db-snapshots/`. Decide on a lifecycle policy (§3.5) |
 | Review inactive users | Users are soft-deleted (`isActive: false`). Confirm departed staff are deactivated — see [07 — Roles & Permissions](07-roles-and-permissions.md) |
 
@@ -602,7 +616,13 @@ idempotent script is designed to be safe to re-run precisely because of that.
 
 1. Every script reads `MONGODB_URI` from `server/.env`. That points at **production**. There is no
    dev database (§5).
-2. Run from the `server/` directory: `cd server && node scripts/<name>.js`.
+2. Run from the `server/` directory: `cd server && node scripts/<name>.js`. This is not a style
+   preference. Many scripts call bare `require('dotenv').config()`, which resolves `.env` relative to
+   the **current working directory** (e.g. `runDbSnapshot.js:3`, `auditStudents.js:6`,
+   `backfillCommitmentDate.js:11`). There is no `.env` at the repo root, so `node server/scripts/<name>.js`
+   from the root leaves `MONGODB_URI` undefined and the script fails at connect. Some scripts do pass
+   an explicit path (`require('dotenv').config({ path: … '../.env' })` — e.g. `createManager.js:1`,
+   `migrateOrganization.js:1`) and work from anywhere, but do not rely on remembering which is which.
 3. If the script offers a dry-run flag, **always run the dry run first** and read the output.
 4. Take a snapshot first for anything that writes: `node scripts/runDbSnapshot.js` (mind §3.2's
    overwrite behaviour).
@@ -698,7 +718,7 @@ that they hard-code individuals.
 | Docs RAG readiness | `GET /api/docs-chat/health` → 200 when `chunksLoaded > 0` and the index loaded, else **503**. Public, no auth. Also reports `groqConfigured`, `openaiConfigured`, `lastIngestAt`, `uptime` | `server/routes/docsChat.js:61-76` |
 | Application logs | Unstructured `console.log` / `console.error`, captured by Render's log stream | throughout |
 | Database metrics | MongoDB Atlas dashboard (connections, slow queries, disk, Performance Advisor) | Atlas |
-| AI cost | `AIUsage` collection + admin-only `GET /api/ai/usage` | `server/routes/ai.js:25` |
+| AI cost | `AIUsage` collection + admin-only `GET /api/ai/usage` | `server/routes/ai.js:26` |
 | Docs RAG analytics | Admin-only `GET /api/docs-chat/stats` — chunk counts, cache hit rate, top queries, refusals in the last 24 h | `server/routes/docsChat.js:121` |
 | Data drift | Daily in-app notification to admins when closed commitments lack a linked Student | `server/services/driftMonitor.js` |
 
@@ -862,7 +882,7 @@ confirmed rollback would be worse (e.g. the deploy carried an irreversible migra
    `seedDatabase.js:224-226` and appended to by `seedSkillhub.js:131`. It is tracked by git. Rotate
    and remove.
 5. **`npm test` in `server/` does not run all tests.** The script filters to
-   `tests/(exports|meetings|institute|commitments)` (`server/package.json:8`), silently skipping
+   `tests/(exports|meetings|institute|commitments)` (`server/package.json:9`), silently skipping
    `tests/execOverview` and `tests/hourly`. Use `npx jest` for the full suite — and expect it to be
    less green than `npm test`.
 6. **Keep the Render service at one instance** (§1).
@@ -873,7 +893,7 @@ confirmed rollback would be worse (e.g. the deploy carried an irreversible migra
    (`server/server.js:18-23`), deferred because of CRA's inline styles and dynamic chunks.
    `crossOriginResourcePolicy` is loosened to `same-site` so the auth-gated PDFs and image snippets
    keep working. Re-enabling CSP is pending work, not an oversight.
-9. **CORS is fully open**: `app.use(cors())` with no origin restriction (`server/server.js:26`).
+9. **CORS is fully open**: `app.use(cors())` with no origin restriction (`server/server.js:28`).
 10. **`server/.env` missing locally makes the server bind to port 5000, not 5001** (`server/server.js:119`
     defaults `PORT` to 5000), and the client is configured for 5001. The symptom is "the API is
     unreachable" with no error in either process.

@@ -80,11 +80,11 @@ dashboard for the service. None of it is in this repository, so:
 |---|---|---|
 | Service type | Web Service (Node runtime) | High — the app is a long-running HTTP server |
 | Repository | `viditkbhatnagar/Consultant_Progress_Tracker_LUC` (private) | Verified — `git remote -v` |
-| Branch | `main` | Verified — stated in `00-START-HERE.md` and `DEPLOYMENT_GUIDE.md:35` |
+| Branch | `main` | Verified — stated in `00-START-HERE.md:5` and `DEPLOYMENT_GUIDE.md:36` |
 | Auto-deploy | On push to `main` | High |
-| Root directory | *(empty — repo root)* | From `DEPLOYMENT_GUIDE.md:36` |
-| Build command | `npm run install:all && npm run build` | From `DEPLOYMENT_GUIDE.md:38` — **UNVERIFIED** against the live dashboard |
-| Start command | `npm start` | From `DEPLOYMENT_GUIDE.md:39` — matches `package.json` `"start": "cd server && npm start"` |
+| Root directory | *(empty — repo root)* | From `DEPLOYMENT_GUIDE.md:37` |
+| Build command | `npm run install:all && npm run build` | From `DEPLOYMENT_GUIDE.md:39` — **UNVERIFIED** against the live dashboard |
+| Start command | `npm start` | From `DEPLOYMENT_GUIDE.md:40` — matches `package.json:11` `"start": "cd server && npm start"` |
 | Public URL | `https://team-progress-tracker.onrender.com` | From `DEPLOYMENT_GUIDE.md:64` — **UNVERIFIED** (may have a custom domain now) |
 | Region | Singapore per `docs/engineering/04-deployment-runbook.md` | **UNVERIFIED and possibly wrong** — see §5.3 |
 | Instance type | **UNVERIFIED** — `DEPLOYMENT_GUIDE.md:41` says `Free`, but a Free instance sleeps after 15 min idle, which would break the 00:30 and 08:00 cron jobs. If backups are actually running, the service is on a paid always-on plan. |
@@ -96,7 +96,7 @@ dashboard for the service. None of it is in this repository, so:
 ```
 Render build command:  npm run install:all && npm run build
                             │                      │
-   package.json:9 ──────────┘                      └────── package.json:12
+   package.json:9 ──────────┘                      └────── package.json:10
 ```
 
 **`npm run install:all`** (`package.json:9`) expands to:
@@ -118,7 +118,7 @@ npm install
   so the build still succeeds, and the highlight script is only ever run locally during a docs
   re-ingest. Do not "fix" this by making it fatal.
 
-**`npm run build`** (`package.json:12`) expands to:
+**`npm run build`** (`package.json:10`) expands to:
 
 ```
 cd client && npm install && npm run build     →  react-scripts build  →  client/build/
@@ -145,7 +145,7 @@ PDFs and highlight assets (see §3.3).
 ### 2.4 The start command
 
 ```
-npm start  →  package.json:13  →  cd server && npm start  →  server/package.json:7  →  node server.js
+npm start  →  package.json:11  →  cd server && npm start  →  server/package.json:7  →  node server.js
 ```
 
 Boot sequence, in order (`server/server.js`):
@@ -156,7 +156,7 @@ Boot sequence, in order (`server/server.js`):
 | `:14` | `connectDB()` — `mongoose.connect(process.env.MONGODB_URI)`. On failure it logs and calls `process.exit(1)` (`server/config/db.js:9`), so a bad URI is a crash-loop, not a degraded boot. |
 | `:20-25` | `helmet()` with `contentSecurityPolicy: false` and `crossOriginResourcePolicy: 'same-site'`. |
 | `:28` | `cors()` with **no options** — allows all origins. Acceptable only because the SPA is same-origin; it is still a hardening gap. |
-| `:33-53` | 19 API route groups mounted under `/api/*`. |
+| `:35-53` | 19 API route groups mounted under `/api/*`. |
 | `:59-96` | Three auth-gated static mounts for program PDFs (see §3.3). |
 | `:99` | `GET /api/health`. |
 | `:107-114` | **Production-only** static SPA serving (see §3). |
@@ -177,6 +177,9 @@ Server running in production mode on port <PORT>
 [birthdays] student birthday reminders scheduled — 08:00 Asia/Dubai
 Docs RAG: loaded 215 chunks (N questions in exact-match index) in Xms
 ```
+
+(215 is the corpus size at the time of writing — recorded in `CLAUDE.md:170`, not a constant in the
+code. Any non-zero number is healthy; **zero** is not, and makes `/api/docs-chat/health` return 503.)
 
 If you see `[db-snapshot] S3 not configured — nightly backup disabled` instead, **there are no
 application-level backups running**. See §6.4.
@@ -208,7 +211,7 @@ is **UNVERIFIED** — read it from the top of any build log.
 ### 3.1 The mechanism
 
 ```js
-// server/server.js:106-114
+// server/server.js:107-114
 if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, '../client/build')));
 
@@ -222,8 +225,12 @@ if (process.env.NODE_ENV === 'production') {
 Request resolution order for `https://<host>/some/path`:
 
 1. `helmet` → `cors` → body parsers.
-2. `/api/*` routers — if the path starts with `/api`, it is handled here (or 404s from the error
-   handler).
+2. `/api/*` routers — if the path starts with `/api`, it is handled here. An unmatched `/api` path is
+   **not** caught by `errorHandler` (`server/middleware/errorHandler.js:1` is a four-argument *error*
+   middleware, which Express only invokes when something calls `next(err)`); it falls through to
+   Express's own built-in 404, which returns an HTML `Cannot GET /api/…` page rather than the usual
+   `{ success: false, message }` JSON envelope. Worth knowing when a client reports "the API returned
+   HTML".
 3. `/program-docs`, `/program-docs-highlighted`, `/program-docs-snippets` — auth-gated static.
 4. `express.static(client/build)` — serves `/static/js/main.<hash>.js`, `/favicon.ico`, `/logo.png`,
    `/manifest.json`, `/rdg-styles.css`, etc.
@@ -243,12 +250,14 @@ registered at `:99`, outside the block.
 startup (path-to-regexp no longer accepts a bare `*`). Do not "simplify" this line.
 
 **Trap 3 — it is `app.get`, so only GET falls through.**
-A `POST` to a non-`/api` path is not rewritten to `index.html`; it falls to the error handler. That is
-correct behaviour, but surprising if you are debugging a form post to a wrong URL.
+A `POST` to a non-`/api` path is not rewritten to `index.html`; it falls through to Express's built-in
+404 (not to `errorHandler`, which only runs on `next(err)`). That is correct behaviour, but surprising
+if you are debugging a form post to a wrong URL.
 
 **Trap 4 — `/socket.io` never reaches Express.**
 Socket.IO attaches its own listener to the raw HTTP server (`server/server.js:127`,
-`server/services/realtime.js:31-34`) and intercepts its path before Express sees it. The client uses
+`server/services/realtime.js:26-31`, where `path: '/socket.io'` is set) and intercepts its path before
+Express sees it. The client uses
 `transports: ['websocket', 'polling']` (`client/src/services/socket.js:14-19`) and derives its origin
 by stripping `/api` off `API_BASE_URL`, which in production is the empty string — i.e. same origin. If
 you ever put a proxy or CDN in front of Render, it **must** forward WebSocket upgrades or the app
@@ -300,11 +309,11 @@ All values live **only** in the Render dashboard's Environment panel. Locally th
 |---|---|---|---|
 | `OPENAI_API_KEY` | `server/services/aiService.js`, `chatService.js`, `docsRagService.js`, `controllers/tierController.js` | none | AI dashboard analysis, `/api/chat/stream`, Docs-RAG fallback generation, embeddings, and Tier Fight poster generation all fail. Rest of app unaffected. |
 | `GROQ_API_KEY` | `server/services/docsRagService.js`, `routes/docsChat.js:69` | none | Docs RAG falls back to OpenAI. |
-| `LLM_PRIMARY` | `server/config/docsRagConfig.js:29` | `groq` | — |
-| `LLM_FALLBACK` | `server/config/docsRagConfig.js:30` | `openai` | — |
-| `GROQ_CHAT_MODEL` | `docsRagConfig.js:28` | `llama-3.3-70b-versatile` | — |
-| `OPENAI_CHAT_MODEL` | `docsRagConfig.js:27` | `gpt-4o-mini` | — |
-| `OPENAI_EMBEDDING_MODEL` | `docsRagConfig.js:25` | `text-embedding-3-small` | Changing this **invalidates every stored embedding** — dimensions must match. Re-ingest after any change. |
+| `LLM_PRIMARY` | `server/config/docsRagConfig.js:30` | `groq` | — |
+| `LLM_FALLBACK` | `server/config/docsRagConfig.js:31` | `openai` | — |
+| `GROQ_CHAT_MODEL` | `docsRagConfig.js:29` | `llama-3.3-70b-versatile` | — |
+| `OPENAI_CHAT_MODEL` | `docsRagConfig.js:28` | `gpt-4o-mini` | — |
+| `OPENAI_EMBEDDING_MODEL` | `docsRagConfig.js:26-27` | `text-embedding-3-small` | Changing this **invalidates every stored embedding** — dimensions must match. Re-ingest after any change. |
 
 Tier Fight posters call `gpt-image-2` at `1536x1024`, `quality: medium`
 (`server/controllers/tierController.js:101,103`) — the model id is **hard-coded**, not an env var,
@@ -321,7 +330,7 @@ service restart**, not just a save.
 | `DOCS_RAG_TOPK` | `:19` | `5` |
 | `DOCS_RAG_MIN_SCORE` | `:20` | `0.35` |
 | `DOCS_RAG_EXACT_MATCH_THRESHOLD` | `:21` | `0.82` |
-| `DOCS_RAG_CACHE_TTL_SECONDS` | `:24` | `86400` (24 h) |
+| `DOCS_RAG_CACHE_TTL_SECONDS` | `:25` | `86400` (24 h) |
 
 `DOCS_RAG_ENABLED=false` is the emergency kill switch. `server/middleware/docsRagEnabled.js:13-14`
 reads **both** the frozen config *and* the live `process.env`, so either signal disables the feature.
@@ -355,7 +364,7 @@ data URL inline in MongoDB (`tierController.js:223-238`).
 | `REACT_APP_API_URL` | Client-side. In production it is irrelevant — `client/src/utils/constants.js:157` hard-branches on `NODE_ENV` to `'/api'`. Only used locally. Do **not** set it on Render. |
 | `EXCEL_PATH`, `YEAR`, `DRY_RUN`, `WIPE_YEAR` | `server/scripts/seedTeamEntriesFromExcel.js:25-31`. One-off local import script only. |
 | `ENV_PATH` | `server/scripts/importInstituteFromExcel.js:18`. Local only. |
-| `CSP_ENABLED` | Appears only inside `node_modules` (Helmet internals). Not an app variable. |
+| `CSP_ENABLED` | Not an app variable. The only occurrences of the string in the tree are inside `server/node_modules/sift` (a Mongoose transitive dependency), where it is unrelated to Content-Security-Policy. Setting it on Render does nothing — CSP is turned off in code at `server/server.js:23`. |
 
 ### 4.6 Two secret-hygiene problems in the repo itself
 
@@ -380,18 +389,24 @@ Neither file's contents are reproduced here. Details of ownership and rotation a
 
 ### 5.1 The cluster is named "dev" and it *is* production
 
-The Atlas cluster host is `dev.gdddmth.mongodb.net`. **There is no separate development or staging
-database.** Your laptop, every one-off maintenance script in `server/scripts/`, and the live Render
+The Atlas cluster host is `dev.gdddmth.mongodb.net` — readable from the committed `server/.env.example`,
+which is itself the problem flagged in §4.6. **There is no separate development or staging database.** Your laptop, every one-off maintenance script in `server/scripts/`, and the live Render
 service all point at the same data.
 
 Practical consequences you must internalise before touching anything:
 
-- `npm run seed` **wipes and recreates users and consultants**. Running it "to see what happens"
-  destroys live logins. It is the single most dangerous command in the repo.
+- `npm run seed` **wipes and recreates users, consultants *and* commitments** — the three
+  `deleteMany({})` calls at `server/scripts/seedDatabase.js:35-37` are unconditional and unfiltered.
+  Running it "to see what happens" destroys live logins *and* every commitment record. It is the single
+  most dangerous command in the repo. (Note that `DEPLOYMENT_GUIDE.md:92-95` recommends running it
+  post-deployment. Do not.)
 - Any script in `server/scripts/` that you run locally with your `.env` loaded is a **production write**.
-  Scripts that only read (`audit*`, `profile*`, `verify*`, `analyze*`) are safe; anything named
-  `fix*`, `backfill*`, `clean*`, `import*`, `migrate*`, `normalize*`, `round*`, `deactivate*`,
-  `rename*`, `seed*` is not.
+  Scripts that only read (`audit*`, `profile*`, `verify*`, `analyze*`, `trace*`, `dump*`) are safe;
+  everything else writes. Do **not** treat that as an exhaustive allowlist — the destructive prefixes
+  currently in the directory include `add*`, `backfill*`, `cleanup*`, `clear*`, `create*`,
+  `deactivate*`, `exclude*`, `fire*`, `fix*`, `import*`, `ingest*`, `migrate*`, `normalize*`,
+  `recompute*`, `reconcile*`, `rename*`, `reset*`, `restore*`, `round*` and `seed*`. In particular
+  `clearAndImportStudents.js` and `resetBahrainPassword.js` do exactly what their names say.
 - The one useful mitigation: many scripts honour a dry-run flag or log before writing. Read the top of
   a script before running it, every time. There is no undo.
 
@@ -418,7 +433,7 @@ the correct behaviour: you find out immediately rather than serving a half-broke
 | Item | Status |
 |---|---|
 | Atlas IP allowlist | **UNVERIFIED.** Render does not publish stable egress IPs on lower plans, so this is almost certainly `0.0.0.0/0`. If so, the database is reachable from anywhere with valid credentials — the password is the only control. Confirm in Atlas → Network Access. |
-| Atlas region | `docs/engineering/04-deployment-runbook.md` says Ireland (`eu-west-1`); `DEPLOYMENT.md:436-441` warns that a Render/Atlas region mismatch adds **~25 s to every cold boot** (the Docs RAG index ships ~5 MB of embeddings at startup). Both statements are stale-doc claims — **verify in the Atlas dashboard.** If Render is in Singapore and Atlas is in Ireland, that ~25 s boot penalty is real and is your slow-restart explanation. |
+| Atlas region | `docs/engineering/04-deployment-runbook.md:17` says Ireland (`eu-west-1`); `DEPLOYMENT.md:432-439` warns that a Render/Atlas region mismatch adds **~25 s to every cold boot** (the Docs RAG index ships ~5 MB of embeddings at startup). Both statements are stale-doc claims — **verify in the Atlas dashboard.** If Render is in Singapore and Atlas is in Ireland, that ~25 s boot penalty is real and is your slow-restart explanation. |
 | Atlas automated backups | **UNVERIFIED** — depends on cluster tier. M0/M2/M5 shared tiers have **no** automated snapshots. Check Atlas → Backup. If backups are off, the S3 nightly dump in §6 is your *only* backup. |
 | Atlas cluster tier | **UNVERIFIED.** |
 
@@ -479,8 +494,9 @@ scheduler.
 
 ### 7.1 The `NODE_ENV !== 'test'` guard
 
-Both cron blocks and the drift monitor are wrapped in `if (process.env.NODE_ENV !== 'test')`
-(`server/server.js:149`, `:157`). Socket.IO has the same guard (`realtime.js:17`).
+There are two guarded blocks, not three: the drift monitor at `server/server.js:149-152`, and a single
+`if (process.env.NODE_ENV !== 'test')` at `:157-187` that contains *both* cron jobs. Socket.IO has the
+same guard (`realtime.js:17`).
 
 This exists so the Jest suites — which boot the real app against `mongodb-memory-server` — don't
 schedule timers that keep the Node process alive after the tests finish (the classic
@@ -612,7 +628,7 @@ and confirm the browser console is clean.
 
 | If your change… | Then also… |
 |---|---|
-| Added or replaced a program PDF | Log in as admin → `/admin/docs-rag` → **Force re-ingest** (shells `server/scripts/ingestProgramDocs.js` via `server/routes/docsChat.js:78-84`). Wait for the green banner, then re-check `/api/docs-chat/health` reports 215+ chunks. |
+| Added or replaced a program PDF | Log in as admin → `/admin/docs-rag` → **Force re-ingest** (shells `server/scripts/ingestProgramDocs.js` via `server/routes/docsChat.js:78-84`). Wait for the green banner, then re-check that `/api/docs-chat/health` returns 200 with a non-zero `chunksLoaded`. |
 | Changed `OPENAI_EMBEDDING_MODEL` | Force re-ingest is **mandatory** — old embeddings have the wrong dimensions. |
 | Changed any env var | Save in Render → the service restarts (~90 s). Env vars are read at process start; `docsRagConfig.js` in particular freezes them at require-time. |
 | Added a schema field with a conditional `required` | Remember `findByIdAndUpdate` validators run in *query* context, so org-conditional `required` silently passes. Controllers must re-check in JS. → [03 — Database Schema](03-database-schema.md) |
@@ -724,8 +740,8 @@ infrastructure task you will inherit.
 db-snapshots/YYYY-MM-DD/
 ├── _manifest.json          # startedAt, finishedAt, database, bucket, prefix,
 │                           # per-collection { name, count, bytes, key }, totals
-├── users.json.gz           # gzipped JSON array of raw documents (extended-JSON
-├── students.json.gz        # types preserved as MongoDB driver produced them)
+├── users.json.gz           # gzipped `JSON.stringify` of the raw driver documents
+├── students.json.gz        # (dbSnapshot.js:36) — plain JSON, NOT extended JSON
 ├── commitments.json.gz
 └── … one per non-system collection
 ```
@@ -750,11 +766,15 @@ Restoring is deliberately not one command, because a careless restore is worse t
 1. **Do not overwrite the live database.** Restore into a *new* Atlas database (or a new cluster) so
    the damaged state is preserved for diagnosis.
 2. Download the day's objects from S3 (AWS CLI or console) and `gunzip` them.
-3. Load each collection with `mongoimport --jsonArray`, or a short Node script using the driver's
-   `insertMany`. A Node script is safer here: the dumps are produced by
-   `JSON.stringify` over driver documents, so `ObjectId` and `Date` values are serialised as extended
-   JSON and need the matching parse on the way back in. **Validate this on one small collection before
-   trusting it on `students`.**
+3. Load each collection with a short Node script using the driver's `insertMany`. **A naive
+   `mongoimport --jsonArray` will silently corrupt the data.** `dbSnapshot.js:36` dumps with a plain
+   `JSON.stringify` over driver documents, and BSON's `toJSON` implementations flatten types rather
+   than emitting extended JSON: an `ObjectId` becomes a bare hex **string** (`"6650…"`, not
+   `{"$oid": "6650…"}`) and a `Date` becomes an ISO **string**. Re-imported as-is, every `_id` and
+   every `teamLead` / `consultant` / `user` reference comes back as a string, so all the `populate()`
+   joins across the app quietly return `null`. Your restore script must re-cast: `new ObjectId(v)` for
+   `_id` and every ref field, `new Date(v)` for every date field. **Validate this on one small
+   collection and confirm a `populate()` still resolves before trusting it on `students`.**
 4. Verify: compare document counts against `_manifest.json`, then spot-check a few `User` and `Student`
    documents.
 5. Only then repoint `MONGODB_URI` on Render at the restored database and restart.
@@ -801,10 +821,10 @@ The repo carries three older deployment documents. Read them for background, but
 
 | Document | Verdict |
 |---|---|
-| `DEPLOYMENT.md` (root) | §1-6 describe **Heroku, DigitalOcean, PM2 and Nginx** — none of which are used. It also lists `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` as environment variables; **no such variables exist in the code** — there is no email sending anywhere; notifications are in-app only. The one section still worth reading is `§ Docs RAG Feature — Render Deploy Cutover` (line 407 onward), which is accurate about the Docs RAG env vars and the Atlas region caveat. |
+| `DEPLOYMENT.md` (root) | §1-6 describe **Heroku, DigitalOcean, PM2 and Nginx** — none of which are used. It also lists `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` as environment variables (`:48-51`); **no such variables exist in the code** — `grep -r SMTP_ server client/src` returns nothing and `nodemailer` is not a dependency, so there is no email sending anywhere; notifications are in-app only. The one section still worth reading is `§ Docs RAG Feature — Render Deploy Cutover` (`:407` onward), which is accurate about the Docs RAG env vars and the Atlas region caveat. |
 | `DEPLOYMENT_GUIDE.md` (root) | Closest to reality — it is where the documented build/start commands come from. But it states `JWT_EXPIRE=30d` and `PORT=10000` as if they were fixed (they are not — Render injects `PORT`), says the dev frontend runs on port 3002 (it is **3001**, `client/package.json`), and suggests running `npm run seed` post-deployment, which would **wipe production users**. Do not follow that step. |
-| `docs/engineering/04-deployment-runbook.md` | Structurally correct and correctly notes the absence of `render.yaml`. Stale on specifics: it lists only 8 environment variables (there are 20+ in use), omits S3 and the cron jobs entirely, and states `server npm test` runs only `tests/exports` — it now runs `tests/(exports|meetings|institute|commitments)` (`server/package.json:9`). Its Render/Atlas region claims are unverified. |
-| `docs/engineering/05-environment-and-secrets.md` | Its variable table is missing all seven Docs-RAG tuning vars, all four S3 vars, and the four model-selection vars. It does correctly flag the `server/.env.example` credential problem as a P0 — that flag is still open, four months later. |
+| `docs/engineering/04-deployment-runbook.md` | Structurally correct and correctly notes the absence of `render.yaml` (`:9`). Stale on specifics: its deploy-time list at `:41-43` names only 9 environment variables (there are 20+ in use), and it omits S3, the cron jobs and the drift monitor entirely. Its `server/server.js:114-133` citation (`:53`) for the boot log is stale — the `Server running…` line is emitted at `:122` and the `Docs RAG: loaded…` line at `:134-144`. It says nothing at all about running the test suites, so check `server/package.json:9` for the real pattern (`tests/(exports\|meetings\|institute\|commitments)`) rather than assuming. Its Render/Atlas region claims (`:16-17`) are unverified. |
+| `docs/engineering/05-environment-and-secrets.md` | Its variable table is missing all five Docs-RAG tuning vars, all four S3 vars, and every model-selection var except `GROQ_CHAT_MODEL` (`:21`) — so `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL`, `LLM_PRIMARY` and `LLM_FALLBACK` are undocumented there. It does correctly flag the `server/.env.example` credential problem as a P0 (`:69-80`) — that flag is still open, four months later. |
 
 ---
 

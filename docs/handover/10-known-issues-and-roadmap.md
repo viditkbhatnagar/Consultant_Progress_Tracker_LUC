@@ -25,7 +25,8 @@ Two documents in this repo will lie to you, in different ways:
 
 - **`CLAUDE.md`** (repo root) is broadly accurate on architecture but its **"Known Issues"** section
   is partly stale — three of its five bullets are already fixed. Section 1 below audits it line by line.
-- **`docs/engineering/`, `docs/security/`, `docs/legal/`, `docs/user-guides/`** (~13,140 lines) were
+- **`docs/engineering/`, `docs/security/`, `docs/legal/`, `docs/user-guides/`** (44 files, 6,057
+  lines; 45 files / 6,182 lines if you count `docs/README.md` — VERIFIED by `wc -l`) were
   last touched by commit `560b12e` on **2026-04-26**, which is **207 commits behind `main`**
   (VERIFIED: `git rev-list --count 560b12e..HEAD` → `207`). They predate roughly a third of the
   product. See section 9.
@@ -40,7 +41,7 @@ Each claim, re-checked against the code today.
 |---|---|---|
 | Close admission route mismatch (server `PUT /:id/close-admission`, client `PATCH /:id/close`) | **STILL BROKEN — P1, user-facing** | `server/routes/commitments.js:54` vs `client/src/services/commitmentService.js:59`. See §2.1. |
 | Update meetings route mismatch (server `PUT`, client `PATCH`) | **STILL BROKEN, but dead code** | `server/routes/commitments.js:55` vs `client/src/services/commitmentService.js:68`. Nothing in the UI calls `commitmentService.updateMeetings` — only its own definition and the export list at `:155`. Zero live impact. Note: the *Meeting Tracker's* separate `PUT /api/meetings/:id` mismatch **is fixed** — `client/src/services/meetingService.js:47` now uses `axios.put`. |
-| Team consultants route mismatch (`/users/teamlead/:id/consultants`) | **FIXED (docs stale)** | `client/src/services/userService.js:54` now calls `${API_URL}/team/${teamLeadId}`, and lines 50–53 carry a comment explaining the old path never matched. |
+| Team consultants route mismatch (`/users/teamlead/:id/consultants`) | **FIXED (docs stale)** | `client/src/services/userService.js:54` now calls `${API_URL}/team/${teamLeadId}`, and lines 50–52 carry a comment explaining the old path never matched. |
 | `STATUS_LIST` includes `not_achieved` but the model enum uses `missed` | **FIXED (docs stale)** | `client/src/utils/constants.js:170` is `['pending', 'in_progress', 'achieved', 'missed']`. A repo-wide grep for `not_achieved` across `client/src` and `server` returns **zero hits**. Matches `server/models/Commitment.js:232`. |
 | Duplicate `leadStage` field in the Commitment model | **FIXED (docs stale)** | Only one `leadStage` definition remains, at `server/models/Commitment.js:170`; the other `leadStage` hit is the index at `:270`. `server/tests/exports/commitments.test.js` asserts the enum has exactly 12 values so a regression fails loudly. |
 | `client/src/pages/ConsultantDashboard.js` is dead code | **CONFIRMED DEAD** | 430 lines. Not imported by any file, not in `App.js`'s route table. Last touched 2025-11-29. See §4.1. |
@@ -75,12 +76,12 @@ clicks Close Admission, gets prompted for an amount, and then sees the generic
 `'Failed to close admission'` snackbar because the 404 body has no `message` field.
 
 **Why nobody noticed:** there is a working alternative path. `updateCommitment`
-(`server/controllers/commitmentController.js:275–286`) auto-closes any row whose post-update state
+(`server/controllers/commitmentController.js:276–287`) auto-closes any row whose post-update state
 is `leadStage === 'Admission'` **and** `status === 'achieved'`, flipping `admissionClosed = true`
-itself. Users close admissions by editing the row instead, and the dedicated button quietly never
-worked. The consequence is not lost data — it is that **`closedAmount` is never captured on that
-path** (the auto-close comment at `:271–274` says so explicitly: *"closedAmount stays empty — has to
-be filled via edit before Revenue picks it up"*).
+itself (`:286`). Users close admissions by editing the row instead, and the dedicated button quietly
+never worked. The consequence is not lost data — it is that **`closedAmount` is never captured on
+that path** (the auto-close comment at `:270–275` says so explicitly: *"closedAmount stays empty —
+has to be filled via edit before Revenue picks it up"*).
 
 **Fix:** change the client to `axios.put(\`${API_URL}/${id}/close-admission\`, …)`. One line. Do the
 same for `updateMeetings` at `:68` (→ `PUT …/meetings`) while you are there, or delete it.
@@ -122,7 +123,7 @@ sits broken. See §5 for the full coverage picture.
 **hardcoded** revenue target to the Executive Overview roll-up:
 
 ```js
-// server/services/execOverview/aggregate.js:416–419
+// server/services/execOverview/aggregate.js:417–419
 const ADMIN_MONTHLY_TARGET = 80000;
 totalMtdTarget += ADMIN_MONTHLY_TARGET;
 totalYtdTarget += ADMIN_MONTHLY_TARGET * currentMonth;
@@ -259,11 +260,15 @@ router.use(protect);
 ```
 
 ```js
-// server/services/chatTools.js:1261
+// server/services/chatTools.js:1261 (error handling elided)
 async function runTool(name, args) {          // ← no `user` parameter at all
     const fn = DISPATCH[name];
-    const parsed = typeof args === 'string' ? JSON.parse(args || '{}') : args || {};
-    return await fn(parsed);
+    if (!fn) return { error: `Unknown tool: ${name}` };
+    try {
+        const parsed = typeof args === 'string' ? JSON.parse(args || '{}') : args || {};
+        const result = await fn(parsed);       // ← args come from the LLM, unfiltered
+        return result;
+    } catch (err) { … }
 }
 ```
 
@@ -426,10 +431,13 @@ a posture the code does not implement — read it as aspiration, not description
 
 ### 4.1 `client/src/pages/ConsultantDashboard.js` — 430 lines, fully dead
 Not imported anywhere; absent from `App.js`'s route table (`client/src/App.js:62–292`). Last
-modified 2025-11-29. It is also the **only consumer** of `STATUS_LIST` and `LEAD_STAGES_LIST` from
-`constants.js` (`:41`, `:319`), and one of only two callers of the broken `closeAdmission` service
-method (`:130`). Deleting it removes the file, retires two exported constants, and halves the
-close-admission blast radius. `client/src/services/exportService.js:5` already annotates it as dead.
+modified 2025-11-29. It is the **only consumer** of `STATUS_LIST` from `constants.js` (imported at
+`:41`, used at `:319`), and one of only two callers of the broken `closeAdmission` service method
+(`:130`). It also uses `LEAD_STAGES_LIST` (`:318`), but that constant is **not** exclusive to it —
+`AdminAddCommitmentDialog.js:25,405` and `TeamLeadCommitmentDialog.js:22,421` both use it, so it must
+stay. Deleting the page removes the file, retires exactly one exported constant (`STATUS_LIST`), and
+halves the close-admission blast radius. `client/src/services/exportService.js:5` already annotates
+it as dead.
 
 ### 4.2 Unused models
 | Model | Status |
@@ -461,7 +469,7 @@ The hazard is that **importing a service module has an invisible global side eff
 service that installs a *different* interceptor gets it silently ordered by import order. Consolidate
 into one `client/src/services/http.js` that owns a single configured instance.
 
-### 4.5 47 one-off scripts and 55 local branches
+### 4.5 47 one-off scripts and 55 branch refs (30 of them local)
 `server/scripts/` holds 47 `.js` files. Some are load-bearing and documented (`seedDatabase.js`,
 `migrateOrganization.js`, `backfillCommitmentDate.js`, `ingestProgramDocs.js`, `importInstituteFromExcel.js`,
 `runDbSnapshot.js`). Most are single-use archaeology — `fixAnishTwin.js`, `backfillEslamManoj.js`,
@@ -469,8 +477,9 @@ into one `client/src/services/http.js` that owns a single configured instance.
 record of what was done to the data, but they are not a toolbox: **most will not be safe to re-run.**
 Read the header comment of any script before executing it. Several connect to `MONGODB_URI` and write.
 
-`git branch -a` shows **55 branches**, 8 unmerged into `main`. Prune after confirming nothing is
-pending.
+`git branch -a` shows **55 refs** — that count includes remote-tracking branches; `git branch`
+alone shows **30 local**. `git branch --no-merged main` shows **8 unmerged**. Prune after confirming
+nothing is pending.
 
 ---
 
@@ -514,7 +523,8 @@ Tests:       39 passed, 39 total
 |---|---|---|---|
 | `server/` app code (excl. tests, scripts, node_modules) | 102 | — | 18 suites |
 | `server/` everything (excl. node_modules) | 168 | 29,910 | — |
-| `client/src/` (excl. `__tests__`) | 194 `.js` | 50,926 | 6 suites |
+| `client/src/` (excl. `__tests__`) | 194 `.js` | 50,063 | 6 suites |
+| `client/src/` (incl. `__tests__`) | 200 `.js` | 50,926 | — |
 
 ### Which controllers are tested at all
 
@@ -525,11 +535,14 @@ across `server/tests` returns **zero**:
 > `authController`, `userController`, `studentController`, `consultantController`,
 > `notificationController`, `aiController`, `chatController`, `docsChat` routes,
 > `announcementController`, `tierController`, `paymentPlanController`,
-> `reconciliationController`, `exportController`
+> `reconciliationController`, `exportController`, `execOverviewController`
 
-Note that `exportController` shows zero even though `tests/exports/` is the largest suite — those
-tests exercise the **pivot builder services** directly (`services/exports/pivots/students.js` etc.),
-not the HTTP layer. Only **7 of 18** test files use `supertest` and therefore hit real routes:
+That is all 13 remaining controllers (`docsChat` has routes but no controller file). Two of them
+mislead if you only read the directory listing: `exportController` shows zero even though
+`tests/exports/` is the largest suite, and `execOverviewController` shows zero even though
+`tests/execOverview/` exists — in both cases the tests exercise the **service layer** directly
+(`services/exports/pivots/students.js`, `services/execOverview/aggregate.js`), not the HTTP layer.
+Only **7 of 18** test files use `supertest` and therefore hit real routes:
 `commitments/admissionLock`, `commitments/gradeOrYear`, `exports/rateLimit`, `institute/attendance`,
 `institute/scheduleImport`, `institute/tests`, `meetings/meetings`.
 
@@ -617,7 +630,7 @@ today.** Re-derive it with an aggregation on `Student` where `organization = 'sk
 and `$year: '$dob'` is within a couple of years of `$year: '$createdAt'`.
 
 **Why it matters beyond tidiness:** `server/services/birthdayNotifier.js` matches on month+day only
-(`findBirthdays`, `:37–54`) and `upcomingBirthdays` (`:63+`) drives the visible "Upcoming birthdays"
+(`findBirthdays`, `:38–55`) and `upcomingBirthdays` (`:61+`) drives the visible "Upcoming birthdays"
 panel and an 08:00 Asia/Dubai cron. A wrong *year* does not break the reminder — but any downstream
 age calculation, and the Institute's own reporting, will be wrong. Add `max: Date.now()` plus a
 sensible minimum-age check to the schema and a `max` attribute to the input.
@@ -694,7 +707,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 …
 // :22–24
 await mongoose.connect(process.env.MONGODB_URI);
-// :34–37
+// :33–36
 console.log('🗑️  Clearing existing data...');
 await User.deleteMany({});
 await Consultant.deleteMany({});
@@ -777,9 +790,12 @@ if (!s3.isEnabled()) {
 }
 ```
 
-`s3.isEnabled()` (`server/services/s3.js:35–37`) is true only when `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`, `AWS_REGION` and `S3_BUCKET` are all present. The only signal that backups
-are off is a `console.warn` at boot — no alert, no dashboard, no health check.
+`s3.isEnabled()` (`server/services/s3.js:35–37`) just returns `!!getClient()`, and `getClient()`
+(`:19`) bails only when `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` **or** `S3_BUCKET` is missing.
+Note that **`AWS_REGION` is *not* required** — `server/services/s3.js:13` defaults it to
+`'me-central-1'`, so an unset region silently picks that region rather than disabling backups. Three
+variables gate the feature, not four. The only signal that backups are off is a `console.warn` at
+boot — no alert, no dashboard, no health check.
 
 **UNVERIFIED — needs confirmation, and this is urgent.** As of a 2026-05-31 note the S3 bucket and
 its four Render environment variables were still *pending*. If that was never completed, **there
@@ -788,7 +804,8 @@ whatever MongoDB Atlas's own backup tier provides (which depends on the cluster 
 UNVERIFIED).
 
 **Day-one checks:**
-1. Open Render → Environment. Are all four `AWS_*`/`S3_BUCKET` variables set?
+1. Open Render → Environment. Are `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `S3_BUCKET` set?
+   (`AWS_REGION` is optional — it defaults to `me-central-1`, so check it matches your bucket.)
 2. Open the S3 bucket. Is there a `db-snapshots/` prefix with recent dates?
 3. Open Atlas → Backup. What is the retention and the recovery point objective?
 4. Grep the Render logs for `[db-snapshot]` and see which of the two messages appears at boot.
@@ -846,7 +863,8 @@ in §2.1).
 
 ## 9. Documentation debt
 
-The `docs/engineering|security|legal|user-guides` set (~13,140 lines, 45 files) was last updated by
+The `docs/engineering|security|legal|user-guides` set (44 files, 6,057 lines — 45 files and 6,182
+lines counting `docs/README.md`) was last updated by
 commit `560b12e` on **2026-04-26** — **207 of 394 commits ago**. It is genuinely useful for
 policies, the legal set, and the general shape of the system. It is **not** a reliable API or
 architecture reference.
@@ -891,7 +909,7 @@ Every one of these has cost someone a day. They are correct as written.
 | Blank Day cells in an imported schedule are forward-filled | Excel merges the Day column; without forward-fill the parser dropped most of a normal schedule and the replace then deleted real sessions. Non-blank unparseable days are reported in `warnings`, never dropped. | `server/services/institute/scheduleParser.js` |
 | Institute grades are never auto-matched to students | Admissions grade labels are inconsistent (`g11` / `grade 11` / `G11`); auto-matching would mis-file students. | `server/controllers/instituteController.js:499–503` |
 | The chatbot answers any user on any topic | Stated product decision — **but see §3.1**, because the *data scoping* consequence may not have been part of that decision. | `server/routes/chat.js:15–16` |
-| `Notification` delete is a hard delete | No soft-delete flag on the model; the controller aligned to the model during Skillhub integration. | `server/controllers/notificationController.js:152` |
+| `Notification` delete is a hard delete | No soft-delete flag on the model; the controller aligned to the model during Skillhub integration. `deleteNotification` at `:151` calls `notification.deleteOne()` at `:170`. | `server/controllers/notificationController.js:151,170` |
 | Users and Consultants delete softly (`isActive: false`) but Commitments/Students delete permanently | History is preserved through denormalised string fields (`consultantName`, `teamLeadName`, `teamName`) rather than tombstones. | `server/controllers/userController.js:156`, `consultantController.js:189` |
 | Commitment routes are in a fussy order | `/date-range`, `/linkable`, `/ai-analysis`, `/week/:n/:y`, `/consultant/:name/performance` **must** precede `/:id` or the catch-all eats them. Comments say so at `:30–31` and `:57`. | `server/routes/commitments.js` |
 
@@ -911,7 +929,8 @@ understand the whole product first.
 2. **Guard `server/scripts/seedDatabase.js`.** (§7.1) Refuse to run unless `MONGODB_URI` is a
    localhost URI *or* an explicit destructive flag is passed. Ten lines. Prevents an unrecoverable
    accident that the current docs actively invite.
-3. **Verify backups actually run.** (§7.4) Check the four `AWS_*`/`S3_BUCKET` variables in Render,
+3. **Verify backups actually run.** (§7.4) Check `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and
+   `S3_BUCKET` in Render (those three are what `s3.isEnabled()` gates on; `AWS_REGION` defaults),
    check for recent objects under `db-snapshots/`, and check the Atlas backup tier. If S3 was never
    configured, configure it today. **Then write and test a restore script** — restore an S3 snapshot
    into a scratch database and confirm the data is intact.
@@ -960,7 +979,7 @@ understand the whole product first.
 16. Add a CSP with nonces. (§3.2) Budget a full day; CRA will fight you.
 17. Delete the dead code: `ConsultantDashboard.js`, `WeeklySummary.js`, `express-validator`, the
     `updateMeetings` client method, `client/.env`. Consolidate the three axios interceptors into one
-    `http.js`. Prune the 47 unmerged branches. (§4)
+    `http.js`. Prune the 8 unmerged branches. (§4)
 18. Split the client bundle by route. 940 kB gzipped is roughly 6× a healthy app-page budget. (§8)
 19. Restrict CORS to the production origin plus `http://localhost:3001`. (§3.5)
 20. Stop leaking raw error messages in production. (§3.6)

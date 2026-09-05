@@ -119,8 +119,13 @@ Error:
 
 [`server/middleware/errorHandler.js`](../../server/middleware/errorHandler.js) is mounted last
 (`server.js:117`). Controllers use plain `try/catch` with `next(error)` — there is no
-`asyncHandler` wrapper, so **a controller that forgets its `try/catch` will hang the request**
-rather than 500.
+`asyncHandler` wrapper, but none is needed: this is **Express 5**, which auto-forwards a rejected
+promise from an async handler straight to this middleware. A controller that forgets its `try/catch`
+still returns a 500 here (verified empirically) — it does not hang the request or crash the process.
+
+One route family is outside this handler entirely: `announcementController.js` answers errors inline
+with `res.status(500)` and never calls `next`, so the table below does not apply to
+`/api/announcements` — a malformed ObjectId there returns 500, not 404.
 
 | Condition | Detected at | Status | `message` |
 |---|---|---|---|
@@ -141,7 +146,7 @@ Some controllers bypass the handler and build their own responses:
 `exportController` throws errors carrying `err.statusCode` and catches them itself
 ([`exportController.js:97–102`](../../server/controllers/exportController.js));
 `consultantController.createConsultant` returns a raw 500 instead of calling `next`
-([`consultantController.js:97`](../../server/controllers/consultantController.js));
+([`consultantController.js:98–102`](../../server/controllers/consultantController.js));
 `tierController.generateImage` does the same
 ([`tierController.js:290`](../../server/controllers/tierController.js)).
 
@@ -150,7 +155,7 @@ Some controllers bypass the handler and build their own responses:
 | Code | Meaning in this codebase |
 |---|---|
 | 200 | OK |
-| 201 | created (`POST` on auth/register, consultants, students, meetings, commitments, teachers, timetable, saved-templates, roster) |
+| 201 | created (`POST` on auth/register, consultants, students, meetings, commitments, payment-plans, teachers, timetable, saved-templates, roster) |
 | 400 | missing/invalid body, business-rule violation (e.g. reopening a closed admission) |
 | 401 | no token / bad token / user not found / user deactivated / wrong current password |
 | 403 | wrong role (`authorize`), wrong org (`orgGate`), or `canAccessDoc` denial |
@@ -306,7 +311,7 @@ them.
 | `routes/institute.js:66,73–90` | `/timetable/import`, `/attendance/meta`, `/attendance/roster`, `/attendance/entry`, `/attendance/student`, `/tests/meta` | `/timetable/:id`, `/tests/:id`, and the generic `/attendance` |
 | `routes/exports.js:24–25` | `/templates` | `/template/:templateId` (different words, but the comment warns anyway) |
 | `routes/execOverview.js:17–19` | `/teams`, `/consultant-performance` | `/team/:teamLeadId` |
-| `routes/docsChat.js:61–121` | `/health`, `/admin/reingest`, `/stats`, `/feedback` | the `POST /` chat route |
+| `routes/docsChat.js:61–275` | `/health` (`:61`), `/admin/reingest` (`:78`), `/stats` (`:121`), `/feedback` (`:275`) | the `POST /` chat route at `:320` |
 
 If you add a route, add it **above** the parameterised block, and re-run the relevant test suite —
 a mis-ordered route usually fails as a confusing `CastError → 404 "Resource not found"` (Mongoose
@@ -359,7 +364,7 @@ The validation branch `role === 'consultant'` (`:20`) is dead — `consultant` i
 role enum (`models/User.js:32`).
 
 **`PUT /updatepassword`** — body `{ currentPassword, newPassword }`; `401 "Password is incorrect"`
-on mismatch. Hashing happens in a `pre('save')` hook (`models/User.js:80`), so it only applies on
+on mismatch. Hashing happens in a `pre('save')` hook (`models/User.js:75–82`), so it only applies on
 `.save()` — a `findByIdAndUpdate` that sets `password` would store plaintext. Nothing does that
 today; do not add one.
 
@@ -400,7 +405,7 @@ be locked out on the next request (`protect` rejects `isActive: false`).
 controller's checks only cover the (impossible) `consultant` role and `team_lead`
 (`userController.js:60–72`, `:99–110`). A `manager` or `skillhub` login can therefore read **any**
 user document — including users in other organisations — and can `PUT` any user's `name` and
-`phone`. Role/`isActive`/`teamLead` changes remain admin-only (`:104–110`), so this is a
+`phone`. Role/`isActive`/`teamLead` changes remain admin-only (`:119–125`), so this is a
 confidentiality/integrity issue rather than a privilege-escalation one. See
 [§10](#10-clientserver-mismatches-and-authorization-gaps).
 
@@ -428,11 +433,11 @@ deactivated consultants, team leads do not.
 `POST /` body `{ name (required), email?, phone?, teamName?, teamLead? }`. `teamLead`/`teamName`
 are read from the body **only for admin**; team leads and skillhub logins always own what they
 create (`:57–71`). The org is taken from the target team lead's own user document
-(`:72`), not from the body — which is why an admin can create a Skillhub consultant even though
+(`:70–71`), not from the body — which is why an admin can create a Skillhub consultant even though
 they cannot create a Skillhub *user*.
 
 Failure mode note: `createConsultant` catches its own errors and returns a raw
-`500 { success:false, message: error.message }` (`:97`) instead of calling `next(error)`. A
+`500 { success:false, message: error.message }` (`:98–102`) instead of calling `next(error)`. A
 duplicate-key error therefore surfaces as 500 here, not the usual 400.
 
 Deleting emits Socket.IO `consultant:deactivated` / `consultant:deleted` — see
@@ -469,20 +474,21 @@ not the schema.
 
 | Rule | Where | Behaviour |
 |---|---|---|
-| **`commitmentDate` fallback** | `ensureCommitmentDate` (`:137`) | if the body omits `commitmentDate`, it is set to `weekStartDate`. Defends against stale client bundles. |
-| **No cross-week backdating** | `validateCommitmentDateInWeek` (`:147`) | for `team_lead` only, `commitmentDate` must be in `[weekStartDate, weekEndDate]` → else `400 "Commitment date must fall within the selected week"`. **`skillhub` is exempt** (`:186–195`, so branches can backfill history); admin is exempt. |
-| **Auto-close** | create `:203–212`, update `:270–286` | `leadStage === 'Admission'` **and** `status === 'achieved'` ⇒ `admissionClosed = true`, `status = 'achieved'`, `achievementPercentage = 100`, `admissionClosedDate = now`. On update the incoming patch is merged over the stored doc first, so flipping only `status` still triggers it. `closedAmount` is **not** set — revenue stays 0 until someone edits it. |
-| **Closing is irreversible** | update `:295–300` | sending `admissionClosed: false` on an already-closed row → `400 "Cannot reopen a closed admission - this action is irreversible"`. |
-| **`demos[]` is Skillhub-only** | create `:213–222` | validated/normalised by `normalizeDemos` for Skillhub orgs; **silently `delete`d** from LUC payloads. |
-| **Ownership from token** | create `:172–184` | `team_lead`/`skillhub` creates always stamp `teamLead`, `teamName`, `organization` from `req.user`. Admin **must** supply `teamLead` + `teamName` or gets `400`. |
+| **`commitmentDate` fallback** | `ensureCommitmentDate` (`:141`) | if the body omits `commitmentDate`, it is set to `weekStartDate`. Defends against stale client bundles. |
+| **No cross-week backdating** | `validateCommitmentDateInWeek` (`:151`) | for `team_lead` only, `commitmentDate` must be in `[weekStartDate, weekEndDate]` → else `400 "Commitment date must fall within the selected week"`. **`skillhub` is exempt** (`:188–193`, so branches can backfill history); admin is exempt. |
+| **Auto-close** | create `:206–224`, update `:270–294` | `leadStage === 'Admission'` **and** `status === 'achieved'` ⇒ `admissionClosed = true`, `status = 'achieved'`, `achievementPercentage = 100`, `admissionClosedDate = now`. On update the incoming patch is merged over the stored doc first, so flipping only `status` still triggers it. `closedAmount` is **not** set — revenue stays 0 until someone edits it. |
+| **Closing is irreversible** | update `:296–302` | sending `admissionClosed: false` on an already-closed row → `400 "Cannot reopen a closed admission - this action is irreversible"`. A closed row also cannot be moved off `status: 'achieved'` → `400 "This admission is closed - its status stays Achieved"` (`:309–318`). |
+| **`demos[]` is Skillhub-only** | create `:226–236` | validated/normalised by `normalizeDemos` for Skillhub orgs; **silently `delete`d** from LUC payloads. |
+| **Ownership from token** | create `:176–204` | `team_lead`/`skillhub` creates always stamp `teamLead`, `teamName`, `organization` from `req.user`. Admin **must** supply `teamLead` + `teamName` or gets `400`. |
 
 `GET /date-range` and `GET /consultant/:name/performance` filter on **`commitmentDate`**, not
-`weekStartDate` (`:585`, `:632`) — this matters because `weekStartDate` is always a Monday, so a
+`weekStartDate` (`:587`, `:634`) — this matters because `weekStartDate` is always a Monday, so a
 month-boundary week would leak into the wrong month. Both push `endDate` to `23:59:59.999`.
 
-`GET /:id/performance` response is **not** the standard envelope:
+`GET /consultant/:consultantName/performance` response is **not** the standard envelope:
 `{ success, consultant: { name }, totalCommitments, monthlyStats: [...], allCommitments: [...] }`
-(`:661–667`).
+(`:664–670`). It also accepts `?months` (default 3) when `startDate`/`endDate` are not both given
+(`:610–623`).
 
 `GET /ai-analysis` deliberately **removes the ownership clause for LUC team leads**
 (`:687–689`) so a TL can benchmark against the whole org. Filters: `startDate`, `endDate`,
@@ -491,7 +497,7 @@ month-boundary week would leak into the wrong month. Both push `endDate` to `23:
 string rather than an error when nothing matches (`:711`).
 
 `GET /linkable` params: `?consultantName`, `?search` (regex on `studentName`), `?limit` (default
-50, capped 500). Hard-filters `organization: 'luc'` and `studentId: null` (`:527–537`), so a
+50, capped 500). Hard-filters `organization: 'luc'` and `studentId: null` (`:525–534`), so a
 Skillhub caller always gets an empty list.
 
 ---
@@ -566,7 +572,8 @@ status already matches, and is Skillhub-only too.
 update is checked against its would-be final state.
 
 **Schema trap that bites on update, not create:** `Student.js` marks LUC-only fields with
-`required: [lucOnly, ...]`. `findByIdAndUpdate` runs validators in *query* context, where
+`required: lucOnly` (a validator function, e.g. `models/Student.js:90`, `:112`) and Skillhub-only
+fields with `required: skillhubOnly` (`:145`, `:151`, `:154`). `findByIdAndUpdate` runs validators in *query* context, where
 `this.organization` is `undefined`, so **every `required: lucOnly` / `required: skillhubOnly` rule
 silently passes on update**. `meetingController.updateMeeting` re-checks `program` in JS for this
 exact reason (`meetingController.js:299–314`); the equivalent re-checks for `Student` are **not**
@@ -652,7 +659,7 @@ Things that will surprise you:
 - **`DELETE /slot` takes a JSON body** (`{ consultantId, date, slotId }`, `:465`). The client sends
   it via axios `{ data }` (`client/src/services/hourlyService.js:42`). Some proxies drop DELETE
   bodies — if slot-clearing mysteriously stops working behind a new proxy, that's the cause.
-- **`?month` is 0-based** — `new Date(Date.UTC(y, m, 1))` (`:573`). `month=0` is January. The
+- **`?month` is 0-based** — `new Date(Date.UTC(y, m, 1))` (`:572`). `month=0` is January. The
   admissions/references month endpoints use the same convention.
 - **`hourlyScopeFilter` deliberately drops the ownership clause** (`:18–21`): `const { teamLead,
   ...rest } = buildScopeFilter(req)`. A `team_lead` sees and can edit **the whole organisation's**
@@ -660,19 +667,20 @@ Things that will surprise you:
   router" it means a `manager` (org `luc`) can also read and write LUC hourly data. See §10.
 - `DELETE /day` refuses non-admins on any date other than today
   (`403 "Can only clear today's data"`, `:531`), and skips `LOCKED_TYPES` slots for non-admins
-  (`:545`).
+  (`:547`; the list itself — `call`, `followup`, `call_followup` — is at `:103`).
 - `getConsultants` hides "self-consultant" rows — a consultant record whose name equals its team
   lead's, holding the lead's personal sales (`excludeSelfConsultants`, `:250`).
 - The org being viewed is `resolveViewOrg(req)` (`:786`): admin uses `?organization=` defaulting to
   `'luc'`; everyone else uses their own org. Skillhub orgs branch into entirely separate
   aggregation + prompt paths (`runSkillhubAnalysis` / `runSkillhubLeaderboard`).
-- All four AI endpoints return `{ success: true, data: "<markdown string>" }` — `data` is a
+- All three AI endpoints (`/ai-analysis`, `/leaderboard`, `/leaderboard/weekly`) return
+  `{ success: true, data: "<markdown string>" }` — `data` is a
   **string**, not an object — and return a plain "No activity data found for this date." string
   (still 200) when there is nothing to analyse.
 - `HourlyActivity` has two shapes: legacy flat (`activityType`/`count`/`duration`, LUC) and
   `activities[]` (Skillhub multi-activity). `upsertSlot` normalises both into one `items` list
   (`:305–322`). Anywhere else that reads activities must use `getActivityItems`
-  (`hourlyController.js:88–103`) or, in aggregation pipelines,
+  (`hourlyController.js:113–125` — note CLAUDE.md still cites the pre-refactor line 88–103) or, in aggregation pipelines,
   `normalizeHourlyActivities` (`server/services/exports/pivots/_shared.js`). **Do not write a third
   normaliser.**
 
@@ -789,10 +797,11 @@ Two rules that must stay in step:
 1. **The upsert key is `(organization, date@UTC-midnight, gradeOrYear, subject, testTopic,
    studentName)`** and is backed by a unique compound index, so a double-click cannot race two
    inserts. `bulkWrite` runs `ordered: false` and an all-`E11000` failure is swallowed as benign
-   (`isAllDuplicateKeyError`, `:857`). Re-recording a session only touches the students in the
+   (`isAllDuplicateKeyError`, defined `:756`, applied `:897`). Re-recording a session only touches the students in the
    payload — remove a stray result with the per-row `DELETE`.
 2. **`bulkWrite` upserts do not run Mongoose validators** (not even with `runValidators`). The
-   schema's `min: 0` on marks is enforced by the JS guard `toNonNegativeNumber()` (`:846`), which
+   schema's `min: 0` on marks is enforced by the JS guard `toNonNegativeNumber()` (defined `:746`,
+   applied `:851`/`:860`), which
    trims whitespace (`'  '` → skipped, not `0`) and drops negatives. `updateTest` uses `row.save()`
    and *does* validate. **Keep the two paths in step.** Specs:
    `server/tests/institute/tests.test.js`.
@@ -865,8 +874,9 @@ Dimensions of `kind: 'distinct'` are resolved to actual in-scope values by the b
 `POST /template/:templateId` body `{ filters?, organization? }` → a JSON envelope
 `{ success, templateId, name, dataset, organization, orgScope, sheets: [...] }` where each sheet is
 `{ name, kind: 'raw'|'pivot', ... }`; the client serialises it to a multi-sheet xlsx. 26 templates
-are registered in `server/services/exports/templates.js` (LUC ×8, Skillhub ×7, commitments ×4,
-meetings ×2, hourly ×2, cross-org ×3), each with its own `roles` allowlist checked at `:221`. Raw
+are registered in `server/services/exports/templates.js` — students ×18 (LUC ×8, Skillhub Training
+×6, cross-org `all` ×4), commitments ×4, meetings ×2, hourly ×2, every one of the non-students
+templates being LUC — each with its own `roles` allowlist checked at `:221`. Raw
 sheets inside templates are capped at 5,000 rows (`:251`).
 
 `POST /saved-templates` body `{ name, dataset, config, organization? }` → 201.
@@ -903,7 +913,7 @@ Controller: [`server/controllers/aiController.js`](../../server/controllers/aiCo
 | Method | Path | Roles | Controller | Body / params |
 |---|---|---|---|---|
 | POST | `/analysis` | `admin`, `team_lead`, `skillhub` | `generateDashboardAnalysis` (`:20`) | `{ startDate, endDate }` (both required) |
-| POST | `/student-analysis` | `admin`, `team_lead`, `skillhub` | `generateStudentAnalysis` (`:469`) | `{ startDate, endDate, curriculumSlug? }` |
+| POST | `/student-analysis` | `admin`, `team_lead`, `skillhub` | `generateStudentAnalysis` (`:469`) | `{ startDate, endDate, curriculumSlug?, organization? }` (`organization` honoured for admin only, via `resolveOrganization`) |
 | GET | `/analysis-targets` | `admin` | `getAnalysisTargets` (`:119`) | `?startDate&endDate` |
 | POST | `/team-analysis` | `admin` | `generateTeamAnalysis` (`:140`) | `{ startDate, endDate, teamLeadId }` |
 | POST | `/consultant-analysis` | `admin` | `generateConsultantAnalysis` (`:224`) | `{ startDate, endDate, consultantName, organization? }` |
@@ -1219,7 +1229,7 @@ Controller: [`server/controllers/notificationController.js`](../../server/contro
 
 Every per-document route checks `notification.user.toString() !== req.user.id` → `403`
 (`:37`, `:163`). There is no soft-delete flag on `Notification` — `DELETE` really removes the row
-(`:167`).
+(`notification.deleteOne()`, `:170`).
 
 `POST /generate-reminders` scans `Commitment` for `followUpDate <= tomorrow`,
 `admissionClosed: false`, `isActive: true` (`:106–110`), and creates one `follow_up_reminder`
@@ -1232,8 +1242,10 @@ The model/controller alignment bug noted in older docs (controller using `recipi
 fields that do not exist on `Notification`) **is fixed** — the controller uses `user` and
 `isRead`/`readAt` throughout.
 
-Notifications are also written by two cron jobs (`server.js:149–187`): the drift monitor, and
-student birthday reminders at 08:00 Asia/Dubai.
+Notifications are also written by two scheduled jobs (`server.js:149–187`): the drift monitor —
+which is **not** node-cron but a boot-delayed `setTimeout` plus a 24 h `setInterval`
+(`services/driftMonitor.js:72–73`) — and student birthday reminders, a real `node-cron` job at
+08:00 Asia/Dubai (`server.js:177–185`). Both are skipped when `NODE_ENV === 'test'`.
 
 ---
 
@@ -1414,7 +1426,7 @@ That is why this has survived unnoticed.
 ### 10.2 Live route mismatch — update meetings count (**still broken**)
 
 Server: `PUT /api/commitments/:id/meetings` (`routes/commitments.js:55`).
-Client: `axios.patch(\`${API_URL}/${id}/meetings\`)` (`commitmentService.js:66`). Same 404. No
+Client: `axios.patch(\`${API_URL}/${id}/meetings\`)` (`commitmentService.js:68`). Same 404. No
 current page calls `commitmentService.updateMeetings`, so this is latent rather than user-facing —
 but fix it in the same change as 10.1.
 
@@ -1478,7 +1490,9 @@ repository and need a human to check:
    missing (non-expiring tokens). `.env` files are not in the repo. Check the Render dashboard.
 2. **UNVERIFIED — needs confirmation:** whether anything calls
    `POST /api/notifications/generate-reminders` on a schedule. There is no cron entry for it in
-   `server.js` and no client call site was found; it may be manually triggered, or effectively dead.
+   `server.js`. A client wrapper exists (`notificationService.generateReminders`,
+   `client/src/services/notificationService.js:31–34`) but **no component imports or calls it**, so
+   the endpoint appears reachable only by hand (curl/Postman) today.
 3. **UNVERIFIED — needs confirmation:** the exact behaviour of `hourly` slot continuation IDs and
    the `LOCKED_TYPES` list beyond what `clearDay` uses — the helper set is defined in
    `hourlyController.js` but its product meaning ("which activities a team lead may not clear") is

@@ -94,7 +94,9 @@ Names only — values live in Render's environment settings and in the local `se
 | `PORT` | `server/server.js:119` | **Defaults to 5000, not 5001**, if `server/.env` is absent. |
 | `DOCS_RAG_CACHE_TTL_SECONDS` | `server/config/docsRagConfig.js:25` → `server/models/QueryCache.js:41` | **Read at require-time and baked into a MongoDB TTL index.** See [§11](#11-ttl-and-expiry-behaviour). |
 | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET` | `server/services/s3.js` | Nightly DB snapshot destination + tier-image storage. Snapshot is skipped entirely if unset (`server/server.js:161-170`). |
-| `OPENAI_API_KEY`, `GROQ_API_KEY`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL`, `GROQ_CHAT_MODEL`, `LLM_PRIMARY`, `LLM_FALLBACK` | `server/config/docsRagConfig.js`, `server/services/aiService.js` | Populate `AIUsage`, `DocChunk.embedding`, `DocsChatLog`. |
+| `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL`, `GROQ_CHAT_MODEL`, `LLM_PRIMARY`, `LLM_FALLBACK` | `server/config/docsRagConfig.js:26-31` | Populate `AIUsage`, `DocChunk.embedding`, `DocsChatLog`. |
+| `OPENAI_API_KEY` | `server/services/aiService.js:9-12`, `server/controllers/tierController.js:93`, `server/controllers/meetingController.js:13-16` — and **8 more files** (`aiController.js`, `hourlyController.js`, `chatController.js`, `commitmentController.js`, `chatService.js`, `classifierService.js`, `docsRagService.js`, `routes/docsChat.js`) | OpenAI client construction. Each call site checks it separately and throws its own error — there is no single shared guard. |
+| `GROQ_API_KEY` | `server/services/docsRagService.js:46-50`, `server/services/classifierService.js:43-47`, plus a read-only presence check at `server/routes/docsChat.js:69` (the `groqConfigured` flag on `GET /api/docs-chat/health`) | Groq client construction. **Not** read by `docsRagConfig.js` or `aiService.js` — those two services are the only places a Groq client is built. |
 | `DOCS_RAG_ENABLED`, `DOCS_RAG_TOPK`, `DOCS_RAG_MIN_SCORE`, `DOCS_RAG_EXACT_MATCH_THRESHOLD` | `server/config/docsRagConfig.js` | Retrieval tuning; not schema-affecting. |
 | `EXCEL_PATH`, `DRY_RUN`, `YEAR`, `WIPE_YEAR`, `ENV_PATH` | Various scripts in `server/scripts/` | Script-only inputs. |
 
@@ -239,10 +241,13 @@ Two additional gates exist beyond the generic helpers:
 
 Collection names follow Mongoose's default pluralisation. The ones marked ✔ are confirmed against
 raw-driver usage in scripts (`server/scripts/importInstituteFromExcel.js:237-239`,
-`server/scripts/normalizeInstituteSubjects.js:30`, `server/scripts/roundSkillhubWholeAed.js:26`);
+`server/scripts/normalizeInstituteSubjects.js:31`, `server/scripts/roundSkillhubWholeAed.js:26`);
 the rest are derived from the pluralisation rule and are **UNVERIFIED against the live database** —
-if you need certainty, run `server/scripts/runDbSnapshot.js`, which prints every real collection
-name.
+if you need certainty, list them read-only from `mongosh` (`db.getCollectionNames()`).
+`server/scripts/runDbSnapshot.js` also prints them, but only as a side effect of taking a **full
+production snapshot and uploading it to S3** — and if S3 is not configured it returns
+`{ skipped: true }` and prints nothing at all (`server/services/dbSnapshot.js:12-15`). Do not reach
+for it just to read collection names.
 
 | # | Model | Collection | Org? | Status | Purpose |
 |---|---|---|---|---|---|
@@ -382,8 +387,8 @@ Three separate pieces of code have had to re-implement it:
 
 | Derived field | Hook (authoritative) | Re-implementation | Status |
 |---|---|---|---|
-| `conversionTime` | `Student.js:301-306` | `studentController.js:562-566` | In sync. |
-| `month` | `Student.js:307-316` — uses **`getUTCMonth()`** | `studentController.js:571` — uses **`getMonth()`** (local time) | ⚠️ **Divergent.** The hook was deliberately switched to UTC (comment at `Student.js:312-314`) so a UTC-midnight `closingDate` labels correctly regardless of server TZ. The update path was not. On a server west of UTC, editing a student's dates can label them with the previous month. |
+| `conversionTime` | `Student.js:301-306` | `studentController.js:563-567` | In sync. |
+| `month` | `Student.js:307-316` — uses **`getUTCMonth()`** | `studentController.js:573` — uses **`getMonth()`** (local time) | ⚠️ **Divergent.** The hook was deliberately switched to UTC (comment at `Student.js:312-314`) so a UTC-midnight `closingDate` labels correctly regardless of server TZ. The update path was not. On a server west of UTC, editing a student's dates can label them with the previous month. |
 | `curriculumSlug` | `Student.js:321-329` — board = `curriculum.split('-')[0]`, valid slugs `CBSE / IGCSE / IELTS / GRE / SAT` | `studentController.js:556-558` — `startsWith('IGCSE') ? 'IGCSE' : 'CBSE'` | ⚠️ **Divergent and wrong.** Editing a student whose curriculum is `IELTS`, `GRE` or `SAT` writes `curriculumSlug: 'CBSE'`, filing them under the CBSE tab. The hook's comment at `Student.js:323-326` explicitly warns against exactly this behaviour. |
 
 There is a repair script for one of these: `server/scripts/recomputeStaleConversionTime.js`. There is
@@ -433,8 +438,9 @@ enrollmentNumber: { type: String, index: true, sparse: true, unique: true,
 * `sparse` means documents *missing* the field are excluded from the index — that is what lets
   ~all LUC rows coexist. **But `sparse` does not exclude empty strings.** If any code path ever
   writes `enrollmentNumber: ''`, the *second* such write fails with `E11000`.
-  `server/scripts/auditStudents.js:58` explicitly counts `'' | null` as "missing enrollment", so the
-  condition has been seen in the data.
+  `server/scripts/auditStudents.js:58` defensively counts `'' | null` as "missing enrollment".
+  (Whether any `''` rows actually exist today is **UNVERIFIED** — run that audit script to find out;
+  the counter's existence is not by itself evidence.)
 * It is **manually typed by the counsellor**. The UI hints the shape `SH/IGCSE/26/11/042` but nothing
   enforces it. The auto-generation pre-validate hook was removed in commit `c5effc2`.
 * Duplicate check: `server/scripts/auditStudents.js:72-77`.
@@ -476,8 +482,10 @@ Consequences:
 * Reading `doc.description` through a Mongoose document returns `commitmentMade`.
 * Reading it through `.lean()` or an aggregation returns **nothing**, because there is no stored
   value.
-* Getters do not fire on `toJSON` unless `toObject: { getters: true }` is set — and it is not on this
-  schema. So the API response for a commitment has **no** `description` field.
+* Getters do not fire on `toJSON` unless `toJSON: { getters: true }` is set (likewise
+  `toObject: { getters: true }` for `.toObject()`) — and neither is set on this schema, whose only
+  option is `{ timestamps: true }` (`Commitment.js:261-263`). So the API response for a commitment
+  has **no** `description` field.
 
 Treat `description` as write-only sugar. Always read/query `commitmentMade`.
 
@@ -510,7 +518,10 @@ There are exactly two normalisers, and you must use one of them rather than writ
 | Layer | Helper | Location |
 |---|---|---|
 | Aggregation | `normalizeHourlyActivities(pipeline)` → emits `activityTypeNorm` / `countNorm` / `durationNorm` after `$unwind` | `server/services/exports/pivots/_shared.js` |
-| JS | `getActivityItems(doc)` | `server/controllers/hourlyController.js:88-103` |
+| JS | `getActivityItems(doc)` | `server/controllers/hourlyController.js:113-125` (callers at `:822`, `:982`, `:1514`) |
+
+> ⚠️ `CLAUDE.md` cites this helper at `hourlyController.js:88-103`. That line range is stale — at
+> `:88` you will find `fmtDayShort()`. The helper is at `:113-125`.
 
 ### 4.10 `Skillhub subjects` is an array — `count` double-counts
 
@@ -827,11 +838,18 @@ only one definition remains, at `:170-174`).
 | `admissionClosedDate` | Date | ❌ | `null` | Stamped by the controller. |
 | `closedDate` | Date | ❌ | — | Separate legacy field; **not** the same as `admissionClosedDate`. |
 | `closedAmount` | Number | ❌ | — | `min: 0`. Revenue. Not auto-set by the auto-close path, so back-filled rows under-report revenue. |
-| `status` | String | ❌ | `pending` | Enum `pending` \| `in_progress` \| `achieved` \| `missed`. ⚠️ The client's `STATUS_LIST` in `client/src/utils/constants.js` still lists `not_achieved`, which the server rejects. |
+| `status` | String | ❌ | `pending` | Enum `pending` \| `in_progress` \| `achieved` \| `missed`. The client's `STATUS_LIST` (`client/src/utils/constants.js:170`) matches exactly — see the note below. |
 | `isActive` | Boolean | ❌ | `true` | Soft delete. |
 | `studentId` | ObjectId → `Student` | ❌ | `null` | Indexed. Reverse FK of `Student.commitmentId`; written in lockstep. |
 | `createdBy` / `lastUpdatedBy` | ObjectId → `User` | ❌ | — | |
 | `createdAt` / `updatedAt` | Date | auto | — | |
+
+> **Correction to `CLAUDE.md`.** Its "Known Issues" section claims *"`constants.js` `STATUS_LIST`
+> includes `not_achieved` but the backend Commitment model enum uses `missed`."* **That is no longer
+> true.** `client/src/utils/constants.js:170` reads
+> `export const STATUS_LIST = ['pending', 'in_progress', 'achieved', 'missed'];`, and the string
+> `not_achieved` appears **nowhere** in `server/` or `client/src/` (verified by grep). The mismatch
+> was fixed at some point and `CLAUDE.md` was not updated. Do not go hunting for it.
 
 **Indexes** — `:267-273`
 
@@ -1472,9 +1490,10 @@ An atomic sequence generator.
 returns the new `seq`. Genuinely atomic.
 
 **Nothing calls it.** It was the backing store for auto-generated Skillhub enrollment numbers before
-commit `c5effc2` made them manual. (The `snoCounters` `Map` in `server/scripts/importStudents.js:136`
-and `clearAndImportStudents.js:147` is a plain in-memory object with a coincidentally similar name —
-unrelated.)
+commit `c5effc2` made them manual. (The `snoCounters` in `server/scripts/importStudents.js:136` and
+`clearAndImportStudents.js:147` is a genuine `new Map()`, but it is a **per-run, in-process** cache
+of the highest `sno` seen per team lead — it never touches the `counters` collection. Similar name,
+unrelated mechanism.)
 
 ⚠️ **Do not reuse the collection key format `enroll:{organization}:{IGCSE|CBSE}:{year}` without
 coordinating** — stale counter documents for those keys may still exist in the `counters` collection
@@ -1599,7 +1618,8 @@ await Commitment.deleteMany({});
 
 Then creates: LUC admin, 9 LUC team leads, LUC consultants, 2 Skillhub branch logins
 (`training@skillhub.com`, `institute@skillhub.com`), 4 Skillhub counsellors — and **writes the
-plaintext credentials to `LOGIN_CREDENTIALS.md` and prints them to stdout** (`:226-236`).
+plaintext credentials to `LOGIN_CREDENTIALS.md`** (`:224-226`) **and prints them to stdout**
+(`:232-239`).
 
 **Do not run this against production.** Given [§1.2](#12-the-cluster-is-called-dev-and-it-is-production),
 that means: do not run it at all without first pointing `MONGODB_URI` somewhere else.
@@ -1642,8 +1662,12 @@ that means: do not run it at all without first pointing `MONGODB_URI` somewhere 
   per-collection counts and byte sizes.
 * Read-only on Mongo. **Loads each collection fully into memory** (`toArray()`) — fine at current
   scale (a few thousand docs), will need streaming if the data grows.
-* Manual run: `cd server && node scripts/runDbSnapshot.js` — also the easiest way to get an
-  authoritative list of real collection names.
+* Manual run: `cd server && node scripts/runDbSnapshot.js`. **This is a real snapshot, not a dry
+  run** — it reads every collection and uploads the gzipped dump to S3. If S3 is unconfigured,
+  `runDbSnapshot()` bails at `dbSnapshot.js:12-15` with `{ skipped: true }` and the script's own
+  print loop (`runDbSnapshot.js:10-14`) is guarded on `manifest.collections`, so you get **no
+  output at all** — not an error. To simply read collection names, use `db.getCollectionNames()`
+  in `mongosh` instead.
 * This is a *logical* backup only. Point-in-time recovery depends on the Atlas tier — see
   [09 — Operations, Backup & Recovery](09-operations-backup-recovery.md).
 
@@ -1694,13 +1718,17 @@ The script actually sets `commitmentDate = $ifNull($createdAt, $weekStartDate)` 
 
 ### Things this document could not verify
 
-* **Actual collection names in the live database.** Names marked ✔ in [§3](#3-model-index-all-27)
-  are confirmed from raw-driver usage in scripts; the rest are derived from Mongoose's default
-  pluralisation. Run `server/scripts/runDbSnapshot.js` to get the authoritative list. Specifically
-  **UNVERIFIED**: `hourlyactivities`, `dailyadmissions`, `dailyreferences`, `instituteenrollments`,
-  `teammonthlyentries`, `aiusages`, `chatconversations`, `docchunks`, `querycaches`, `docschatlogs`,
-  `savedexporttemplates`, `weeklysummaries`, `counters`, `tierimages`, `paymentplans`,
-  `announcements`.
+* **Actual collection names in the live database.** Only **5** are confirmed from raw-driver usage
+  in scripts (the ✔ rows in [§3](#3-model-index-all-27)): `students`, `teachers`,
+  `timetableentries`, `attendances` (`importInstituteFromExcel.js:237-239`,
+  `roundSkillhubWholeAed.js:26`) and `testrecords` (`normalizeInstituteSubjects.js:31`). The other
+  **22** are derived from Mongoose's default pluralisation and are **UNVERIFIED**: `users`,
+  `consultants`, `commitments`, `meetings`, `hourlyactivities`, `dailyadmissions`,
+  `dailyreferences`, `paymentplans`, `notifications`, `announcements`, `instituteenrollments`,
+  `teammonthlyentries`, `tiers`, `tierimages`, `aiusages`, `chatconversations`, `docchunks`,
+  `querycaches`, `docschatlogs`, `savedexporttemplates`, `weeklysummaries`, `counters`. Confirm
+  with `db.getCollectionNames()` in `mongosh` — **not** with `runDbSnapshot.js`, which writes a
+  full dump to S3 (see [§14](#14-backups)).
 * **Actual document counts per collection** (e.g. the "215 chunks" and "626 hidden LUC rows" figures
   are taken from `CLAUDE.md` / memory notes, not measured here). No production query was run.
 * **Whether stale `counters` documents still exist** from the pre-`c5effc2` enrollment-number scheme.

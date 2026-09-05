@@ -232,11 +232,23 @@ LUC-only feature routes work for admin at all. Used on:
 | `POST /api/docs-chat` | `orgGate('luc')` | `server/routes/docsChat.js:320` |
 | `/program-docs*` static | `orgGate('luc')` | `server/server.js:59-96` |
 
-**6. Controller.** All 18 controllers use raw `try { … } catch (error) { next(error) }` — there is
-**no `asyncHandler` wrapper**, so a controller that forgets the try/catch will crash the process on
-an async throw. Inside, the controller does the tenant scoping (§4) and talks to Mongoose directly;
-there is no repository or service layer for CRUD. Heavier read paths (exports, exec-overview,
-institute) delegate to `server/services/`.
+**6. Controller.** The dominant pattern is raw `try { … } catch (err) { next(err) }` — there is
+**no `asyncHandler` wrapper**. Two caveats worth knowing before you rely on that sentence:
+
+- **`announcementController.js` never forwards.** Both of its handlers (`getActive:8`,
+  `acknowledge:29`) are declared `async (req, res)` — no `next` parameter — and answer errors inline
+  with `res.status(500)`. They therefore bypass `middleware/errorHandler.js` completely: a Mongoose
+  `CastError` on that route returns 500 where every other route returns 404. Several other
+  controllers also answer inline for *specific* cases (409 on duplicate name, 400 on validation)
+  while still forwarding everything else — that part is deliberate and fine.
+- **A forgotten try/catch does not crash the process.** This is Express 5 (`5.1.0`), which
+  auto-forwards a rejected promise from an async handler to the error middleware. Verified
+  empirically: an uncaught async throw returns 500 through the error handler and the process stays
+  up. Write the try/catch for control over the response shape, not to prevent a crash.
+
+Inside, the controller does the tenant scoping (§4) and talks to Mongoose directly; there is no
+repository or service layer for CRUD. Heavier read paths (exports, exec-overview, institute)
+delegate to `server/services/`.
 
 **7. Response envelope.** Consistent by convention, not by a helper:
 

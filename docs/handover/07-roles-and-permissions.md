@@ -117,7 +117,7 @@ const isLuc = (org) => org === ORG_LUC;
 | Value | Business unit | Who logs in | Notes |
 |---|---|---|---|
 | `luc` | Learners Education Consultancy — the original org | admin, 9 × team_lead, manager | 9 sales teams. Default for every model (`User.js:38`). |
-| `skillhub_training` | Skillhub Training branch | `training@skillhub.com` | **Currently empty** — 0 students ever recorded. |
+| `skillhub_training` | Skillhub Training branch | `training@skillhub.com` | Reported as **empty** (0 students ever recorded) as of 2026-06-18. **UNVERIFIED** — this is a database-state claim, not derivable from code; re-check in Atlas before relying on it. |
 | `skillhub_institute` | Skillhub Institute branch — IGCSE/CBSE coaching | `institute@skillhub.com` | The active Skillhub branch. Sole owner of the `/institute` feature. |
 
 Every tenant-scoped collection carries an `organization` field with this enum. `User.organization` is
@@ -404,8 +404,8 @@ Routers that mount it (always after `protect`, before `authorize`):
 | `/api/payment-plans` | `server/routes/paymentPlans.js:17` |
 | `POST /api/docs-chat/` | `server/routes/docsChat.js:320` (per-route, not router-wide) |
 | `/program-docs/*` static | `server/server.js:63` |
-| `/program-docs-highlighted/*` static | `server/server.js:76` |
-| `/program-docs-snippets/*` static | `server/server.js:90` |
+| `/program-docs-highlighted/*` static | `server/server.js:77` |
+| `/program-docs-snippets/*` static | `server/server.js:91` |
 
 Because `orgGate` runs before `authorize` on those routers, a `skillhub` login hitting
 `/api/exec-overview` gets *"This resource is restricted to luc users"*, not a role error. Useful when
@@ -499,8 +499,10 @@ The file carries explicit comments about this (`:30-31`, `:53`, `:57`).
 | PUT | `/api/students/:id` | ✓ | ✓ | — | ✓ | `:40` |
 | DELETE | `/api/students/:id` | ✓ | ✓ | — | ✓ | `:41` |
 
-`manager` is read-only here by construction: present on all four read routes, absent from all four
-write routes. That is the cleanest expression of the role's intent anywhere in the codebase.
+`manager` is read-only here by construction: present on three of the four read routes (`/stats`,
+`GET /`, `GET /:id` — **not** `/programs`, which is `authorize('admin','team_lead')` at `students.js:25`),
+and absent from all five write routes. That is the cleanest expression of the role's intent anywhere in
+the codebase.
 
 The `activate` / `status` transitions are Skillhub-only in the controller too — they 400 on a LUC
 student (`studentController.js:659-661`).
@@ -763,7 +765,7 @@ all point the same way:
 | List reads | `buildScopeFilter` (`auth.js:78, 81-83`) | `{ organization: <own branch>, teamLead: <own _id> }` |
 | Single-doc access | `canAccessDoc` (`auth.js:94-98`) | org **and** ownership must match |
 | Creates | `resolveOrganization` (`auth.js:109`) + per-controller overrides | org taken from the token; a body `organization` is discarded |
-| Feature locks | `orgGate('luc')` on 4 routers + 3 static mounts | Skillhub 403s out of every LUC-only feature |
+| Feature locks | `orgGate('luc')` on 4 routers + `POST /api/docs-chat/` + 3 static mounts (full list in [§6](#6-orggate--whole-feature-organisation-locks)) | Skillhub 403s out of every LUC-only feature |
 
 Because the branch login is also the `teamLead` FK on everything it creates
 (`studentController.js:326-330`, `commitmentController.js:176-181`, `meetingController.js:206-208`),
@@ -833,7 +835,7 @@ const m = {
 };
 ```
 
-Then five further rules, in order:
+Then six checks run, in order (rule 1 is the matrix above):
 
 | # | Rule | Line | Status |
 |---|---|---|---|
@@ -1044,8 +1046,10 @@ Two consequences:
   creates something while "viewing Skillhub", the page must send `organization` in the body itself.
 - Pages resolve their display org with `resolveViewOrg(user, adminScope)`
   (`client/src/utils/hourlyConfig.js:97-100`): admins use the scope, everyone else uses
-  `user.organization`. `MeetingTrackerPage`, `HourlyTrackerPage` and `StudentDatabasePage` all
-  dispatch to a LUC or Skillhub variant on that value.
+  `user.organization`. `MeetingTrackerPage` and `HourlyTrackerPage` import that helper;
+  `StudentDatabasePage.js:15-16` inlines the identical expression instead of importing it (so
+  grepping for `resolveViewOrg` will not find it). All three then dispatch to a LUC or Skillhub
+  variant on that value.
 
 ### 9.4 Role-conditional rendering
 
@@ -1080,8 +1084,13 @@ Export Center specifics:
 
 ### 10.1 The accounts that exist
 
-Seeded by `npm run seed` → `server/scripts/seedDatabase.js` (**destructive — it wipes users and
-consultants; see `00-START-HERE.md` point 2**):
+Seeded by `npm run seed` → `server/scripts/seedDatabase.js`.
+
+> **Destructive.** `seedDatabase.js:35-37` deletes *every* `User`, `Consultant` **and `Commitment`**
+> document before recreating anything. Students, meetings and hourly rows survive; commitments do not.
+> Older descriptions of this script that say it "wipes users and consultants" understate it — the
+> commitment wipe is unrecoverable without a restore. See `00-START-HERE.md` point 2 and
+> `09-operations-backup-recovery.md`.
 
 | Account | Role | Organisation | Source line |
 |---|---|---|---|
@@ -1173,8 +1182,10 @@ Not fixed here — this document changes no code.
 ### 11.2 `manager` can read commitments over REST but not through the Export Center
 
 `GET /api/commitments`, `GET /api/commitments/week/:weekNumber/:year` and `GET /api/commitments/:id`
-have no `authorize()` (`routes/commitments.js:27, 44, 60`), so a manager reaches them and
-`buildScopeFilter` hands back `{organization:'luc'}` — every LUC commitment, every team. Meanwhile
+have no `authorize()` (`routes/commitments.js:27, 44, 60`), so a manager reaches all three. On the two
+list reads `buildScopeFilter` hands back `{organization:'luc'}` — every LUC commitment, every team. On
+`GET /:id` the gate is `canAccessDoc` instead (`commitmentController.js:121`), which for a `manager`
+checks the organisation and nothing else — same outcome, different mechanism. Meanwhile
 `assertDatasetAccess` explicitly 403s the same role on the commitments dataset
 (`exportController.js:30-34`).
 

@@ -41,7 +41,7 @@ pnpm); the root `package.json` just shells into the two sub-projects.
 | `client/package.json` | React SPA (CRA) | `cd client && npm install` |
 | `server/requirements.txt` | Python 3 — used by **one** optional script | `pip3 install -r server/requirements.txt` |
 
-`npm run install:all` (root `package.json:8`) does all four in sequence, and deliberately tolerates
+`npm run install:all` (root `package.json:9`) does all four in sequence, and deliberately tolerates
 the Python step failing:
 
 ```
@@ -69,15 +69,15 @@ All 21 are in `server/package.json` `dependencies`.
 |---|---|---|---|
 | `express` | `^5.1.0` / 5.1.0 | The whole HTTP layer. 19 route groups mounted under `/api`, plus static serving of the React build and the auth-gated PDF directories. **Express 5 specific:** the SPA catch-all is a *regex* (`app.get(/^(?!\/api).*/)`) because Express 5's path-to-regexp v8 rejects the old `'*'` string form. Do not "simplify" it back. | `server/server.js:2`, catch-all at `server/server.js:111` |
 | `mongoose` | `^9.0.0` / 9.0.0 | ODM for all 27 models. Single connection opened at boot. **Trap:** `findByIdAndUpdate` runs validators in *query* context, so conditional `required` functions see `this.organization === undefined` and silently pass — controllers re-check in JS. | `server/config/db.js:5` |
-| `dotenv` | `^17.2.3` / 17.2.3 | Loads `server/.env`. Called once at the top of `server.js`, and again independently by ~30 one-off scripts (each with its own explicit path, because scripts run with a different cwd). | `server/server.js:1`; e.g. `server/scripts/backfillCommitmentDate.js:11` |
+| `dotenv` | `^17.2.3` / 17.2.3 | Loads `server/.env`. Called once at the top of `server.js`, and again independently by ~50 one-off scripts (46 files in `server/scripts/`, 4 in `server/utils/`), each with its own explicit path because scripts run with a different cwd. | `server/server.js:1`; e.g. `server/scripts/backfillCommitmentDate.js:11` |
 | `jsonwebtoken` | `^9.0.2` / 9.0.2 | Signs JWTs on the User model, verifies them in the `protect` middleware, and **also** authenticates every Socket.IO connection with the same token. | `server/models/User.js:3`, `server/middleware/auth.js:1`, `server/services/realtime.js:10` |
 | `bcryptjs` | `^3.0.3` / 3.0.3 | Password hashing (salt rounds 10) in a `pre('save')` hook, and `matchPassword()` on login. Pure-JS implementation — no native build step, which is why it was chosen over `bcrypt`. | `server/models/User.js:2,80,93` |
 | `cors` | `^2.8.5` / 2.8.5 | `app.use(cors())` — **fully permissive, all origins**. Fine today because prod is same-origin (Render serves the SPA and the API from one service) and dev is 3001→5001. It would need tightening the moment the API is consumed from anywhere else. | `server/server.js:3,29` |
 | `helmet` | `^8.1.0` / 8.1.0 | Global security headers. Two deliberate relaxations: `contentSecurityPolicy: false` (CRA's inline styles and dynamic chunks would need a longer pass) and `crossOriginResourcePolicy: 'same-site'` (so the auth-blob PDF viewer and PNG snippets keep working). | `server/server.js:4,20-25` |
-| `express-rate-limit` | `^7.5.1` / 7.5.1 | Two limiters only. (1) Export Center pivot/template endpoints: 5 req/min keyed on `req.user._id` with IP fallback. (2) Institute schedule import: 10 req/min, because SheetJS parsing is CPU-heavy on a single Node process. Everything else is unlimited. | `server/middleware/exportRateLimit.js:4-24`, `server/routes/institute.js:3,28-36` |
+| `express-rate-limit` | `^7.5.1` / 7.5.1 | Two limiters only. (1) Export Center pivot/template endpoints: 5 req/min keyed on `req.user._id` with IP fallback. (2) Institute schedule import: 10 req/min, because SheetJS parsing is CPU-heavy on a single Node process. Everything else is unlimited. | `server/middleware/exportRateLimit.js:4-24`, `server/routes/institute.js:3,29-36` |
 | `multer` | `^2.1.1` / 2.1.1 | Three multipart upload paths, **all `memoryStorage()` — nothing is ever written to disk**: voice notes for Whisper (25 MB cap), Institute schedule workbooks (8 MB, extension-filtered to `.xlsx/.xlsm/.xls/.csv`), Tier Fight base images (12 MB). | `server/routes/chat.js:22-25`, `server/routes/institute.js:13-25`, `server/routes/tiers.js:12-15` |
 | `socket.io` | `^4.8.3` / 4.8.3 | Real-time "something changed" broadcasts so open dashboards re-fetch. Attached to the same HTTP server at path `/socket.io`. Clients join rooms `org:<org>`, `org:<org>:admin`, `org:<org>:team:<id>`. **Required lazily inside a `try/catch`** so a missing install degrades to "no realtime" instead of crashing boot; also a no-op when `NODE_ENV=test`. | `server/services/realtime.js:16-31` |
-| `node-cron` | `^4.2.1` / 4.2.1 | Exactly **two** scheduled jobs, both registered inline in `server.js` and both skipped when `NODE_ENV=test`: nightly DB snapshot at `30 0 * * *` and student birthday notifications at `0 8 * * *`, both `timezone: 'Asia/Dubai'`. | `server/server.js:158-190` |
+| `node-cron` | `^4.2.1` / 4.2.1 | Exactly **two** scheduled jobs, both registered inline in `server.js` and both skipped when `NODE_ENV=test`: nightly DB snapshot at `30 0 * * *` and student birthday notifications at `0 8 * * *`, both `timezone: 'Asia/Dubai'`. (A third recurring job, the LUC drift monitor at `server.js:149-152`, is **not** node-cron — it uses `setTimeout` + `setInterval` inside `server/services/driftMonitor.js:72-73`.) | `server/server.js:157-187` |
 | `openai` | `^6.22.0` / 6.22.0 | Every OpenAI call — chat completions, embeddings, Whisper transcription, and `gpt-image-2` poster generation. Instantiated separately in 10 files (there is no shared client module; see §B.4). | `server/services/aiService.js:1`, `server/services/chatService.js:22`, `server/controllers/tierController.js:1`, +7 more |
 | `groq-sdk` | `^1.1.2` / 1.1.2 | Groq chat completions. Two consumers: the Docs-RAG answer generator (primary provider) and the tracker/docs query classifier. Both share an HTTP keep-alive agent with the OpenAI client. | `server/services/docsRagService.js:16,43-53`, `server/services/classifierService.js:13,41-53` |
 | `wink-bm25-text-search` | `^3.1.2` / 3.1.2 | The lexical half of the Docs-RAG hybrid retriever. An in-memory BM25 index over the ~215 chunks, fused with dense cosine similarity via RRF in "Tier 2" retrieval. | `server/services/docsRagService.js:17` |
@@ -102,6 +102,8 @@ All 21 are in `server/package.json` `dependencies`.
 
 ### A.3 Root dependencies
 
+The root manifest has **no** `dependencies` block at all — only `devDependencies`, with one entry.
+
 | Package | Range / locked | Used for |
 |---|---|---|
 | `concurrently` | `^8.2.2` / 8.2.2 | `npm run dev` — runs `dev:server` and `dev:client` in one terminal. Dev-only; irrelevant in production. |
@@ -119,21 +121,21 @@ list misleading at a glance; the "Ships to browser?" column below disambiguates.
 |---|---|---|---|---|
 | `react` | `^19.2.0` / 19.2.0 | Yes | The UI framework. | `client/src/index.js` |
 | `react-dom` | `^19.2.0` / 19.2.0 | Yes | `createRoot` render, `StrictMode`. | `client/src/index.js:60-66` |
-| `react-scripts` | **`5.0.1` (exact, no caret)** / 5.0.1 | No (build tool) | Create React App: webpack, Babel, Jest, dev server. Pinned exactly. **CRA is unmaintained upstream** — this is the single largest long-term maintenance liability in the client. Migrating to Vite is the natural exit but is a real project, not a patch. | `client/package.json:29` |
+| `react-scripts` | **`5.0.1` (exact, no caret)** / 5.0.1 | No (build tool) | Create React App: webpack, Babel, Jest, dev server. Pinned exactly. **CRA is unmaintained upstream** — this is the single largest long-term maintenance liability in the client. Migrating to Vite is the natural exit but is a real project, not a patch. | `client/package.json:30` |
 | `react-router-dom` | `^7.9.6` / 7.9.6 | Yes | All routing, `PrivateRoute` guards, `HomeRedirect` role-based landing. 34 files. | `client/src/App.js` |
-| `@mui/material` | `^7.3.5` / 7.3.5 | Yes | The entire component library — 141 files import from it. The custom theme (Geist font, 12 px radius, gradient AppBar) is built on it. | `client/src/theme.js` |
+| `@mui/material` | `^7.3.5` / 7.3.5 | Yes | The entire component library — 141 files import from it. The base theme (12 px radius at `theme.js:101`, gradient buttons/AppBar) is built on it. **Note the font split:** the base theme declares `fontFamily: '"Inter", "Roboto", …'` (`theme.js:49`) but Inter is *not* one of the families loaded from Google Fonts, so it resolves to a fallback; the newer dashboard/tracker themes override it with a Geist-first stack (`client/src/utils/trackerTheme.js:10`, `client/src/components/dashboard/DashboardShell.js:12`) and Geist *is* loaded. See §B.6. | `client/src/theme.js:49,101` |
 | `@mui/icons-material` | `^7.3.5` / 7.3.5 | Yes | Icons. 89 files. |  |
 | `@mui/x-date-pickers` | `^8.19.0` / 8.19.0 | Yes | Date pickers in 13 dialogs. **Wired to `date-fns` via `AdapterDateFns`** — that is why `date-fns` is a hard requirement, not just a convenience. Note the MUI X major (8) intentionally differs from MUI core (7); they version independently. | `client/src/components/StudentFormDialog.js:21-22,624` |
 | `@emotion/react` | `^11.14.0` / 11.14.0 | Yes | **INDIRECT.** Zero direct imports. It is MUI v7's default style engine and a required peer. Do not remove it because "nothing imports it". | — |
 | `@emotion/styled` | `^11.14.1` / 11.14.1 | Yes | **INDIRECT.** Same as above. | — |
-| `axios` | `^1.13.2` / 1.13.2 | Yes | Every API call, across 20 service/component files. **Gotcha:** several modules register *global* `axios.interceptors.request` handlers independently (`authService`, `userService`, `commitmentService`, plus an admin-org interceptor), so they stack on the shared default instance. `userService.js:6-9` carries an explicit warning never to set `axios.defaults.baseURL` — in production `API_BASE_URL === '/api'`, so a baseURL would double-prefix every request to `/api/api/...`. | `client/src/services/userService.js:1-10` |
+| `axios` | `^1.13.2` / 1.13.2 | Yes | Every API call, across 20 service/component files. **Gotcha:** three modules register *global* `axios.interceptors.request` handlers independently — `services/userService.js:12`, `services/commitmentService.js:7` and `utils/axiosAdminOrgInterceptor.js:21` — so they stack on the shared default instance. `authService.js` is a fourth writer to that same global axios but works differently: it sets/clears `axios.defaults.headers.common['Authorization']` (`authService.js:9,12`) rather than registering an interceptor — easy to miss when debugging auth headers. `userService.js:6-9` carries an explicit warning never to set `axios.defaults.baseURL` — in production `API_BASE_URL === '/api'`, so a baseURL would double-prefix every request to `/api/api/...`. | `client/src/services/userService.js:1-12` |
 | `date-fns` | `^4.1.0` / 4.1.0 | Yes | All week maths (`weekStartsOn: 1`, ISO week numbers), date formatting in exports, and the MUI date-picker adapter. 32 files. | `client/src/utils/weekUtils.js:1` |
-| `echarts` | `^6.1.0` / 6.1.0 | Yes | Charting engine. **Imported once, tree-shaken:** `echartsCore.js` imports from `echarts/core` and registers only Pie/Bar/Line + 7 components + `CanvasRenderer`. If a new chart renders blank with a console warning, the missing series/component must be registered *there*. | `client/src/components/charts/echartsCore.js:8-35` |
+| `echarts` | `^6.1.0` / 6.1.0 | Yes | Charting engine. **Imported once, tree-shaken:** `echartsCore.js` imports from `echarts/core` and registers only Pie/Bar/Line + 7 components (Grid, Tooltip, Legend, Title, Graphic, Dataset, MarkLine) + 2 features (LabelLayout, UniversalTransition) + `CanvasRenderer`. If a new chart renders blank with a console warning, the missing series/component must be registered *there*. | `client/src/components/charts/echartsCore.js:8-36` |
 | `echarts-for-react` | `^3.0.6` / 3.0.6 | Yes | The React wrapper — imported as `echarts-for-react/lib/core` so it uses the tree-shaken instance above rather than pulling all of ECharts. | `client/src/components/charts/EChart.js:2` |
 | `framer-motion` | `^12.38.0` / 12.38.0 | Yes | Dashboard motion: number count-ups, reduced-motion handling, card/panel transitions. 17 files. | `client/src/utils/dashboardMotion.js:11` |
 | `react-data-grid` | **`7.0.0-beta.59` (exact, no caret)** / 7.0.0-beta.59 | Yes | The Export Center preview grid — the only consumer. **Deliberately pinned to an exact beta.** See §A.6 for both reasons why. | `client/src/components/exports/DataGrid.js:2` |
 | `xlsx` (SheetJS) | `^0.18.5` / 0.18.5 | Yes | Client-side workbook generation for every export (raw sheets, pivot sheets, multi-sheet template workbooks). | `client/src/services/xlsxBuilder.js:1` |
-| `file-saver` | `^2.0.5` / 2.0.5 | Yes | `saveAs()` — turns the generated blob into a browser download. | `client/src/services/xlsxBuilder.js:2,121` |
+| `file-saver` | `^2.0.5` / 2.0.5 | Yes | `saveAs()` — turns the generated blob into a browser download. | `client/src/services/xlsxBuilder.js:2,122` |
 | `jspdf` | `^2.5.2` / 2.5.2 | Yes, **lazily** | PDF export option in the Export Center. **Dynamically imported** so ~150 KB stays out of the main bundle. | `client/src/services/xlsxBuilder.js:129-137` |
 | `jspdf-autotable` | `^3.8.4` / 3.8.4 | Yes, lazily | Table layout inside the jsPDF export. Same dynamic import. | `client/src/services/xlsxBuilder.js:131` |
 | `react-markdown` | `^10.1.0` / 10.1.0 | Yes | Renders LLM answers in the chat drawer as Markdown. | `client/src/components/chat/ChatMessage.js:9` |
@@ -181,7 +183,7 @@ Two independent reasons:
    rules from the production bundle**, so the grid's `display: grid` never applies and the header row
    falls to natural DOM order — i.e. it renders *below* the rows, but only in a production build.
    The fix was to load the stylesheet as a static `public/` asset that bypasses the PostCSS pipeline:
-   `client/public/rdg-styles.css`, linked from `client/public/index.html:30`. If you upgrade rdg you
+   `client/public/rdg-styles.css`, linked from `client/public/index.html:31`. If you upgrade rdg you
    must re-copy that stylesheet, and you must verify in a **production build**, not `npm start`.
 
 Also note `client/src/setupTests.js:8-16` stubs `ResizeObserver`, which rdg needs and jsdom does not
@@ -249,8 +251,8 @@ already flags this as a gap.
 | **AWS S3** | Tier Fight posters + nightly DB snapshots. | **BILLED** | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` | `server/services/s3.js` |
 | **OpenAI** | Chat, analyses, embeddings, Whisper, poster images. | **BILLED** | `OPENAI_API_KEY` (+ model overrides) | 10 files; see §B.4 |
 | **Groq** | Primary LLM for Docs-RAG answers + query classification. | **BILLED** (free tier exists) | `GROQ_API_KEY`, `GROQ_CHAT_MODEL` | `server/services/docsRagService.js`, `server/services/classifierService.js` |
-| **Google Fonts** | Geist / Geist Mono / Instrument Serif web fonts. | Free | `client/public/index.html:14-19` | — |
-| **CodePen asset CDN (`s.cdpn.io`)** | Parallax layer images on the **login page**. Third-party, not owned by the org. | Free | Hard-coded URL | `client/src/components/MountainVistaParallax.js:214` |
+| **Google Fonts** | Geist / Geist Mono / Instrument Serif web fonts. | Free | `client/public/index.html:13-18` | — |
+| **CodePen asset bucket** (served from `s3-us-west-2.amazonaws.com/s.cdpn.io/24650/`) | Parallax layer images on the **login page**. Third-party, not owned by the org. | Free | Hard-coded URL | `client/src/components/MountainVistaParallax.js:214` |
 | **GitHub** | Source of truth; Render deploys from `main`. | Free/paid plan | — | — |
 | **npm registry** | Package installs at build time. | Free | — | — |
 | **`fastdl.mongodb.org`** | `mongodb-memory-server` binary download, first test run only. | Free | — | `server/tests/exports/_setup.js` |
@@ -278,14 +280,21 @@ rather than starting degraded.
 **Critical gotcha — the cluster is named "dev" and it IS production.** The host is
 `dev.gdddmth.mongodb.net`. There is no separate development database. Local development, ad-hoc
 scripts in `server/scripts/`, and the live site all point at the same data. In particular
-`npm run seed` (`server/scripts/seedDatabase.js`) **wipes and recreates users and consultants** — do
-not run it "to try things out".
+`npm run seed` (`server/scripts/seedDatabase.js`) opens with three unconditional `deleteMany({})`
+calls — **it wipes every User, every Consultant *and* every Commitment** and recreates only the
+seed accounts (`seedDatabase.js:35-37`), then overwrites `LOGIN_CREDENTIALS.md` at the repo root
+(`:224-226`). Do not run it "to try things out".
 
 **What breaks if it is unavailable.** Everything. Boot fails, or in-flight requests hang until
 Mongoose's buffering times out. `/api/health` (`server/server.js:99`) does **not** check the database
 — it returns 200 as long as the Node process is alive, so it will happily report healthy during a
-total database outage. `GET /api/docs-chat/health` is the closer thing to a real readiness probe
-because it reports `chunksLoaded`.
+total database outage. `GET /api/docs-chat/health` is the closer thing to a readiness probe because
+it reports `chunksLoaded` — but be precise about what that proves: it reads
+`docsRag.getStats()`, which is purely in-memory (`server/services/docsRagService.js:195-197`), so a
+non-zero `chunksLoaded` means *the boot-time load from Mongo succeeded at some point*, **not** that
+the database is reachable right now. **There is no endpoint in this app that live-checks the
+database.** Adding one (a `mongoose.connection.readyState` check on `/api/health`) is a cheap,
+high-value first task.
 
 **Cost/billing.** Paid Atlas cluster; tier, region and monthly spend are **UNVERIFIED** from the
 repository. `docs/legal/06-subprocessor-list.md` records the region as Ireland (`eu-west-1`), while
@@ -337,29 +346,31 @@ idempotent, but the nightly S3 snapshot would duplicate work and overwrite itsel
 2. **Nightly database snapshots.** `server/services/dbSnapshot.js` dumps **every non-system
    collection** as gzipped JSON to `db-snapshots/YYYY-MM-DD/<collection>.json.gz` plus a
    `_manifest.json` with per-collection counts and byte sizes. Scheduled at 00:30 Asia/Dubai
-   (`server/server.js:158-172`). Also runnable on demand:
+   (`server/server.js:157-170`). Also runnable on demand:
    `cd server && node scripts/runDbSnapshot.js`.
 
 **Configuration.** Four environment variables, all read in `server/services/s3.js`:
 
 | Var | Line | Note |
 |---|---|---|
-| `AWS_ACCESS_KEY_ID` | `s3.js:19` | Static IAM user credentials (no role assumption). |
-| `AWS_SECRET_ACCESS_KEY` | `s3.js:19` | |
+| `AWS_ACCESS_KEY_ID` | `s3.js:19,26` | Static IAM user credentials (no role assumption). |
+| `AWS_SECRET_ACCESS_KEY` | `s3.js:19,27` | |
 | `AWS_REGION` | `s3.js:13` | Defaults to `me-central-1` (UAE) if unset. |
 | `S3_BUCKET` | `s3.js:14` | Defaults to `''`, which disables S3 entirely. |
 
-**Graceful degradation is built in.** `isEnabled()` (`s3.js:34-36`) returns false unless all of key,
+**Graceful degradation is built in.** `isEnabled()` (`s3.js:35-37`) returns false unless all of key,
 secret and bucket are present. When false: the nightly cron is **never registered** and the server
 logs `[db-snapshot] S3 not configured — nightly backup disabled` (`server/server.js:169`), and
 poster generation still works but the image is only returned inline as a data URL and is not
-persisted (`tierController.js:223-226`).
+persisted (`tierController.js:223-233` — the same inline fallback also fires when the upload itself
+throws).
 
 **What breaks if it is unavailable.** Nothing user-facing goes down. You silently lose the nightly
 backup — which is the *only* automated backup in the system — and historical poster thumbnails 404.
 **The dangerous failure is the silent one:** nothing alerts when snapshots stop. There is no
-monitoring, and no code path anywhere lists or restores snapshots (`s3.listObjects` is exported at
-`s3.js:69-83` but has **no caller** — the "snapshot browser" it was written for does not exist).
+monitoring, and no code path anywhere lists or restores snapshots (`s3.listObjects` is defined at
+`s3.js:71-82` and exported at `s3.js:84`, but has **no caller** anywhere in the repo — the
+"snapshot browser" its comment refers to does not exist).
 Restoring is a manual S3-download-and-`mongoimport` job. **Verify a recent snapshot exists in the
 bucket on day one**, because nothing else will tell you.
 
@@ -399,7 +410,7 @@ feature hard-codes `gpt-4o-mini` in source.**
 | Voice input → text | `POST /api/chat/transcribe` | `whisper-1` | `server/controllers/chatController.js:142` |
 | Chat route classifier (**fallback** — Groq is primary) | `POST /api/chat/classify` | `OPENAI_CHAT_MODEL` | `server/services/classifierService.js:95` |
 | Docs-RAG query embedding (**every uncached query**) | `POST /api/docs-chat` | `OPENAI_EMBEDDING_MODEL` | `server/services/docsRagService.js` |
-| Docs-RAG answer generation (**fallback** — Groq is primary) | `POST /api/docs-chat` | `OPENAI_CHAT_MODEL` | `server/services/docsRagService.js:546` |
+| Docs-RAG answer generation (**fallback** — Groq is primary) | `POST /api/docs-chat` | `OPENAI_CHAT_MODEL` | `server/services/docsRagService.js:507` (model), `:546` (fallback swap) |
 | Commitment AI analysis | `GET /api/commitments/ai-analysis` | `gpt-4o-mini` | `server/controllers/commitmentController.js:798` |
 | Meeting AI analysis | `GET /api/meetings/ai-analysis` | `gpt-4o-mini` | `server/controllers/meetingController.js:499` |
 | Hourly Tracker AI analysis | `GET /api/hourly/ai-analysis` | `gpt-4o-mini` | `server/controllers/hourlyController.js:936+` |
@@ -414,13 +425,18 @@ lazy-singleton guard that throws `'OPENAI_API_KEY is not configured'` on first u
 `https.Agent({ keepAlive: true, maxSockets: 10 })`; everything else opens fresh sockets. If you ever
 need to add a proxy, a timeout, retry policy, or an org header, you will be editing ten files.
 
-**Cost tracking is built in.** Every call writes an `AIUsage` row (`server/models/AIUsage.js`) with
-user, role, team, organization, model, prompt/completion/total tokens and computed USD cost, tagged
-`type: 'analysis' | 'chat' | 'image'`. Prices are **hard-coded constants that will drift from
-reality**:
+**Cost tracking is built in — but it has a hole.** Six modules write an `AIUsage` row
+(`server/models/AIUsage.js`) with user, role, team, organization, model, prompt/completion/total
+tokens and computed USD cost, tagged `type: 'analysis' | 'chat' | 'image'`: `aiController.js`,
+`commitmentController.js:821`, `meetingController.js:522`, `hourlyController.js` (8 call sites),
+`tierController.js:257` and `chatService.js:616`. **The entire Docs-RAG path writes nothing** —
+`server/services/docsRagService.js` and `server/services/classifierService.js` never import
+`AIUsage`, so every query embedding, every Docs-RAG answer (Groq *or* the OpenAI fallback) and every
+LLM classification is invisible to the in-app AI Usage dashboard. Prices are **hard-coded constants
+that will drift from reality**:
 
 - `server/services/aiService.js:373` — `'gpt-4o-mini': { input: 0.15, output: 0.60 }` per 1M tokens.
-- `server/controllers/tierController.js:47` — `IMAGE_COST_USD = 0.041` per poster
+- `server/controllers/tierController.js:48` — `IMAGE_COST_USD = 0.041` per poster
   (gpt-image-2 medium 1536×1024).
 - `DEPLOYMENT.md:417` — embeddings quoted at $0.02/M tokens.
 
@@ -438,9 +454,10 @@ OpenAI dashboard; reconcile the two before trusting either. Actual monthly spend
 - Tier Fight poster generation fails.
 - **Docs-RAG breaks even when Groq is healthy**, because the *query embedding* is always OpenAI. Groq
   only replaces the generation step, not retrieval. There is no embedding fallback.
-- The route classifier silently degrades: it catches everything and returns `route: 'tracker'`
-  (`classifierService.js:71-74` sets that default), so the chat drawer keeps working but ambiguous
-  docs questions get answered by the wrong backend.
+- The route classifier silently degrades: it catches everything and returns `route: 'tracker'` — at
+  `classifierService.js:75` for an unexpected model reply, and at `:122-126` when Groq *and* OpenAI
+  both throw (that path deliberately does **not** cache, so the next call retries). The chat drawer
+  keeps working but ambiguous docs questions get answered by the wrong backend.
 - **Everything non-AI is unaffected** — trackers, exports, student database, institute, dashboards.
 
 **Cost-control levers that exist today:** none for AI. Neither `/api/ai/*` nor `/api/chat/*` nor
@@ -483,22 +500,29 @@ Docs-RAG answers and classification transparently move to OpenAI, at higher cost
 latency. If **both** providers are down, `/api/docs-chat` fails and the classifier returns
 `route: 'tracker'` for everything.
 
-**Cost/billing.** Usage-based with a free tier. Groq calls are **not** written to `AIUsage` — the
-model only records OpenAI-shaped token accounting — so **Groq spend is invisible inside the app**.
-Check the Groq console directly. Actual spend **UNVERIFIED**.
+**Cost/billing.** Usage-based with a free tier. Groq calls are **not** written to `AIUsage`, because
+neither `docsRagService.js` nor `classifierService.js` imports the model at all (§B.4) — so **Groq
+spend is invisible inside the app**, and so is the OpenAI spend on those same two paths. Check the
+Groq console directly. Actual spend **UNVERIFIED**.
 
 ---
 
 ## B.6 Google Fonts — free, but a real runtime dependency
 
-`client/public/index.html:14-19` preconnects to `fonts.googleapis.com` / `fonts.gstatic.com` and
+`client/public/index.html:13-18` preconnects to `fonts.googleapis.com` / `fonts.gstatic.com` and
 loads **Geist**, **Geist Mono** and **Instrument Serif**. If Google Fonts is blocked (corporate
 proxy, some networks) or slow, the UI renders in fallback fonts — cosmetic, not functional. Two
 notes: (a) it is an unavoidable third-party request on **every** page load, which matters for the
-privacy documentation; (b) `CLAUDE.md` still says the theme uses "Inter font" — that is stale, the
-actual loaded family is Geist.
+privacy documentation; (b) there is a **font mismatch worth knowing about**: `CLAUDE.md` says the
+theme uses "Inter", and for the base MUI theme that is still literally true —
+`client/src/theme.js:49` sets `fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif'`.
+But Inter is **not** among the families loaded above, so on a machine without Inter installed the
+base theme silently falls through to Roboto/Helvetica/Arial. The screens that actually look like
+the product (dashboards, trackers) sidestep this by overriding the stack with a Geist-first one at
+`client/src/utils/trackerTheme.js:10` and `client/src/components/dashboard/DashboardShell.js:12`.
+Either load Inter or change `theme.js:49` to the Geist stack — today the two disagree.
 
-## B.7 CodePen asset CDN (`s.cdpn.io`) — undeclared, third-party, on the login page
+## B.7 CodePen asset bucket (`s3-us-west-2.amazonaws.com/s.cdpn.io/24650/`) — undeclared, third-party, on the login page
 
 `client/src/components/MountainVistaParallax.js:214` builds background-image URLs as:
 
@@ -538,12 +562,12 @@ appear in this document or in any handover document**.
 | `MONGODB_URI` | MongoDB Atlas | **Yes** — process exits on failure | none | `server/config/db.js:5` (+ ~30 scripts, + the Python script) |
 | `JWT_SECRET` | — (internal) | **Yes** | none | `server/middleware/auth.js`, `server/models/User.js`, `server/services/realtime.js:38` |
 | `JWT_EXPIRE` | — (internal) | Yes | none | `server/models/User.js` |
-| `NODE_ENV` | — | No | undefined | Gates prod static serving (`server.js:106`), disables cron + Socket.IO under `test` |
+| `NODE_ENV` | — | No | undefined | Gates prod static serving (`server.js:107`), disables cron, the drift monitor and Socket.IO under `test` (`server.js:149,157`, `realtime.js:17`) |
 | `PORT` | Render | No | **`5000`** | `server/server.js:119` — **gotcha: the app's own default is 5000, not 5001.** With no `server/.env`, the client (which expects 5001 in dev) cannot reach it. |
 | `OPENAI_API_KEY` | OpenAI | For all AI features | none | 10 files |
 | `OPENAI_CHAT_MODEL` | OpenAI | No | `gpt-4o-mini` | `docsRagConfig.js:28`, `classifierService.js:95` |
 | `OPENAI_EMBEDDING_MODEL` | OpenAI | No | `text-embedding-3-small` | `docsRagConfig.js:27`, `ingestProgramDocs.js:34` |
-| `GROQ_API_KEY` | Groq | No (falls back to OpenAI) | none | `docsRagService.js:42-53`, `classifierService.js:41-53` |
+| `GROQ_API_KEY` | Groq | No (falls back to OpenAI) | none | `docsRagService.js:43-55`, `classifierService.js:41-52`; also surfaced as `groqConfigured` on the health probe (`routes/docsChat.js:69`) |
 | `GROQ_CHAT_MODEL` | Groq | No | `llama-3.3-70b-versatile` | `docsRagConfig.js:29`, `classifierService.js:81` |
 | `LLM_PRIMARY` | Groq/OpenAI | No | `groq` | `docsRagConfig.js:30` |
 | `LLM_FALLBACK` | Groq/OpenAI | No | `openai` | `docsRagConfig.js:31` |
@@ -595,14 +619,14 @@ What actually happens when each dependency is unavailable. Useful during an inci
 | Groq down | Docs-RAG + classifier only | Transparent pre-flight swap to OpenAI; higher cost/latency | **Yes** (`docsRagService.js:523-547`) |
 | Both LLM providers down | Docs-RAG + chat | `/api/docs-chat` errors; classifier returns `tracker` | Partially |
 | S3 unavailable / unconfigured | Nightly backups + poster history | **Silent.** Cron is never registered; a warning is logged once at boot | Yes — dangerously so; nothing alerts |
-| Docs-RAG index fails to load at boot | Docs chatbot | `GET /api/docs-chat/health` returns 503 with `chunksLoaded: 0`; boot is **not** blocked (`server.js:135-147`) | Yes — admin re-triggers via `/admin/docs-rag` → Force re-ingest |
+| Docs-RAG index fails to load at boot | Docs chatbot | `GET /api/docs-chat/health` returns 503 with `chunksLoaded: 0`; boot is **not** blocked (`server.js:135-144`) | Yes — admin re-triggers Force re-ingest from the admin dashboard (the old `/admin/docs-rag` URL now redirects to `/admin/dashboard?section=ai-usage&tab=docs-rag`, `client/src/App.js:273-276`) |
 | `DOCS_RAG_ENABLED=false` | Docs chatbot + program PDFs | Deliberate kill switch: 503 on `/api/docs-chat/*` **and** on `/program-docs*` static routes, in lockstep, mounted *before* `protect` so it never leaks 401-vs-403 | Yes, by design (`middleware/docsRagEnabled.js`) |
 | Socket.IO fails to init | Live dashboard refresh | Emit helpers become no-ops; REST API unaffected | Yes (`realtime.js:16-31`) |
 | Google Fonts blocked | Cosmetic | Fallback fonts | Yes |
 | `s.cdpn.io` gone | Login page background | Parallax layers blank | Yes (cosmetic) |
 | npm registry / GitHub down | Deploys only | Cannot build or ship | Live service unaffected |
 
-> **Correction to existing docs:** `DEPLOYMENT.md:494-497` states that `DOCS_RAG_ENABLED` "is loaded
+> **Correction to existing docs:** `DEPLOYMENT.md:492-495` states that `DOCS_RAG_ENABLED` "is loaded
 > but not enforced as a kill-switch yet". That is **out of date** — `server/middleware/docsRagEnabled.js`
 > enforces it on both the chat routes and the static PDF routes, and reads `process.env` live on every
 > request so a Render env change plus restart is sufficient.
@@ -625,8 +649,11 @@ Do these before the outgoing developer's access is revoked. Each is a service th
 | 7 | **Google Fonts / CodePen CDN** | Nothing to transfer (no account). Optional hardening: self-host both. | — |
 
 **After every rotation:** update the Render env vars, restart the service, then re-verify
-`GET /api/health` (200) **and** `GET /api/docs-chat/health` (200 with a non-zero `chunksLoaded`) —
-the second one is the only endpoint that actually proves the database is reachable.
+`GET /api/health` (200) **and** `GET /api/docs-chat/health` (200 with a non-zero `chunksLoaded`).
+Neither endpoint live-checks Mongo — `/api/health` only proves the process is up, and
+`/api/docs-chat/health` reads an in-memory counter (§B.1) — so a non-zero `chunksLoaded` proves only
+that the boot-time read from Mongo succeeded *on that boot*. To actually confirm the database, log
+in through the UI and load a data page.
 
 ---
 
@@ -640,10 +667,10 @@ to this document:
 | `docs/legal/06-subprocessor-list.md` | "The Platform does **not** use … Cloud object storage (S3, GCS, Cloudinary)." | **Wrong.** AWS S3 stores Tier Fight posters and a nightly gzipped dump of **every collection**, including student personal data. S3 must be added to the sub-processor list, DPA and retention schedule. |
 | `docs/engineering/05-environment-and-secrets.md` | Env table lists only `NODE_ENV`, `PORT`, `MONGODB_URI`, `JWT_*`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `GROQ_CHAT_MODEL`. | **Incomplete.** Missing all four `AWS_*`/`S3_BUCKET` vars, `OPENAI_CHAT_MODEL`, `OPENAI_EMBEDDING_MODEL`, `LLM_PRIMARY`, `LLM_FALLBACK`, and the five `DOCS_RAG_*` vars. |
 | `docs/engineering/05-environment-and-secrets.md:27` | Client reads `REACT_APP_API_URL`. | **Wrong.** No `REACT_APP_*` variable is read anywhere in `client/src`; the base URL is derived from `NODE_ENV` at `client/src/utils/constants.js:157`. |
-| `DEPLOYMENT.md:494-497` | `DOCS_RAG_ENABLED` "is loaded but not enforced as a kill-switch yet." | **Wrong now.** `server/middleware/docsRagEnabled.js` enforces it on chat routes and static PDF routes. |
+| `DEPLOYMENT.md:492-495` | `DOCS_RAG_ENABLED` "is loaded but not enforced as a kill-switch yet." | **Wrong now.** `server/middleware/docsRagEnabled.js` enforces it on chat routes and static PDF routes. |
 | `DEPLOYMENT.md` §"Backend Deployment" | Documents Heroku / DigitalOcean / PM2, and Vercel / Netlify / S3+CloudFront for the frontend. | **Obsolete.** Production is a single Render web service serving both. Only the "Docs RAG — Render Deploy Cutover" section (line 407 onward) reflects reality. |
 | `CLAUDE.md` | "Charts: Recharts (`recharts`). Heatmap: `react-calendar-heatmap`." | **Wrong.** `recharts` is **not installed** — charts are Apache ECharts 6 via `echarts-for-react`. `react-calendar-heatmap` is installed but has zero imports. Only stale comments mentioning recharts remain. |
-| `CLAUDE.md` | "Theme … Inter font". | Stale — `client/public/index.html:14-19` loads Geist, Geist Mono and Instrument Serif. |
+| `CLAUDE.md` | "Theme … Inter font". | **Half true, and the half that is true is a bug.** `client/src/theme.js:49` really does declare Inter — but `client/public/index.html:13-18` loads only Geist, Geist Mono and Instrument Serif, so Inter is never fetched and the base theme falls back to Roboto/Helvetica/Arial. The dashboard/tracker themes override the stack with Geist (`utils/trackerTheme.js:10`, `components/dashboard/DashboardShell.js:12`). See §B.6. |
 | `docs/security/06-vulnerability-management-policy.md:27,53` | `npm audit` run manually, weekly. | Accurate as *policy*, but there is no CI and no evidence of a cadence. `xlsx@0.18.5` carries known advisories today (§A.6). |
 
 ---

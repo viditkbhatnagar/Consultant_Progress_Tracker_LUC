@@ -98,7 +98,7 @@ Source: `client/src/App.js:61-292`.
 | `/team-dashboard/:teamLeadId` | `pages/TeamDetailPage.js` | admin, team_lead | "All Teams" sheet |
 | `/team-dashboard` | `pages/TeamDetailPage.js` | team_lead | Own team |
 | `/consultant-performance` | `pages/ConsultantPerformancePage.js` | admin, team_lead | Category A/B rankings |
-| `/monthly-targets` | `pages/MonthlyTargetsPage.js` | admin, team_lead | Not in the sidebar for admin any more |
+| `/monthly-targets` | `pages/MonthlyTargetsPage.js` | admin, team_lead | Reachable from the sidebar: "Monthly Targets" inside the collapsible Leadership group (`components/AdminSidebar.js:326-335`, `components/Sidebar.js:277`) |
 | `/tiers` | `pages/TierPage.js` | admin, team_lead | Tier Fight |
 | `/payment-plans` | `pages/PaymentPlanTrackerPage.js` | admin, team_lead | |
 | `/exports` | `pages/ExportCenterPage.js` | admin, team_lead, manager, skillhub | |
@@ -255,16 +255,16 @@ catch-all (`server/routes/commitments.js:30-62`). If you add a route, add it abo
 **Business rules.**
 
 1. **`commitmentDate` must fall inside the committed week — for LUC team leads only.**
-   `validateCommitmentDateInWeek` (`commitmentController.js:143-159`) compares `yyyy-mm-dd`
+   `validateCommitmentDateInWeek` (`commitmentController.js:151-165`) compares `yyyy-mm-dd`
    strings so time-of-day is ignored. It is applied on create for `team_lead` but explicitly
-   **skipped for `skillhub`** (`commitmentController.js:180-188`) because branch logins are the
+   **skipped for `skillhub`** (`commitmentController.js:183-193`) because branch logins are the
    admins of their own branch and need to backfill history that predates the rollout. Admins
-   bypass it too. Same asymmetry on update (`commitmentController.js:325-341`).
+   bypass it too. Same asymmetry on update (`commitmentController.js:331-347`).
 
 2. **Defensive `commitmentDate` backfill.** If a client posts without `commitmentDate` but with
    `weekStartDate`, the server copies one to the other (`ensureCommitmentDate`,
-   `commitmentController.js:130-135`; the update path repeats it at
-   `commitmentController.js:319-322`). This exists because `commitmentDate` was added after
+   `commitmentController.js:141-146`; the update path repeats it inline at
+   `commitmentController.js:323-329`). This exists because `commitmentDate` was added after
    launch and a cached client bundle would otherwise 400 — or, worse, blank the stored value on
    a `runValidators` update.
 
@@ -277,7 +277,7 @@ catch-all (`server/routes/commitments.js:30-62`). If you add a route, add it abo
 
 4. **Closing sets four fields at once**: `admissionClosedDate = now`, `status = 'achieved'`,
    `achievementPercentage = 100`, and (via the dedicated endpoint) `leadStage = 'Admission'`
-   (`commitmentController.js:219-224` and `closeAdmission`, `commitmentController.js:400-437`).
+   (`commitmentController.js:219-224` and `closeAdmission`, `commitmentController.js:412-450`).
 
 5. **Closure is irreversible, twice over.** Sending `admissionClosed: false` on a closed row is a
    400 (`commitmentController.js:294-300`). Sending any `status` other than `'achieved'` on a
@@ -291,15 +291,15 @@ catch-all (`server/routes/commitments.js:30-62`). If you add a route, add it abo
    `Demo 1..4`, no duplicates, `done: true` requires a `scheduledAt`, `doneAt` is server-stamped
    (never trusted from the client, never in the future), clearing `done` clears `doneAt`. Demos
    are **stripped entirely** from LUC commitments on both create and update
-   (`commitmentController.js:231-235`, `344-352`) — a LUC row can never carry them.
+   (`commitmentController.js:233-236`, `356-359`) — a LUC row can never carry them.
 
 7. **`demoDoneBy`** on a demo slot is a plain name string, not a `Teacher` ref
    (`Commitment.js:39`), deliberately: renaming or removing a teacher must not rewrite history.
    The Institute UI populates the dropdown from `instituteService.getTeachers()`.
 
 8. **Delete is admin-only and hard.** `deleteCommitment` re-checks the role even though the route
-   already gates it (`commitmentController.js:369-375`) and then calls `deleteOne()`. There is no
-   soft delete on `Commitment`, despite an unused `isActive` field on the schema
+   already gates it (`commitmentController.js:380-386`) and then calls `deleteOne()` (`:397`).
+   There is no soft delete on `Commitment`, despite an unused `isActive` field on the schema
    (`Commitment.js:235-238`).
 
 **Traps.**
@@ -360,14 +360,15 @@ whole filtered window, not the current page. Form: `components/StudentFormDialog
 2. **Linking is bidirectional and closes the commitment.** After the student is created the
    controller writes `Commitment.studentId` and, if the commitment wasn't already closed, flips
    `admissionClosed`/`admissionClosedDate`/`status`/`achievementPercentage`
-   (`studentController.js:429-443`).
+   (`studentController.js:437-450`).
 3. **`sno` auto-increments.** `Student.getNextSno(teamLeadId, organization)`
    (`Student.js:339-346`) reads the highest existing `sno` **within the team** for LUC and
    **within the organisation** for Skillhub, and adds one. It is a read-then-write with no lock —
    two simultaneous creates on the same team can collide. There is no unique index on `sno`, so
    the failure mode is a duplicate serial, not an error.
 4. **`month` and `conversionTime` are derived, not entered.** A `pre('validate')` hook
-   (`Student.js:288-315`) sets `conversionTime` = ceil(|closingDate − enquiryDate|) in days, and
+   (`Student.js:298-338`; the LUC branch is `:300-317`) sets `conversionTime` =
+   ceil(|closingDate − enquiryDate|) in days, and
    `month` = the English month name of `closingDate` read via `getUTCMonth()` (deliberately UTC —
    the form posts UTC midnight, and a local-time read would shift the label by one month for
    part of the year).
@@ -395,7 +396,7 @@ whole filtered window, not the current page. Form: `components/StudentFormDialog
   `this.organization` is `undefined`. If you add a field like this you must also re-check it in
   JavaScript inside the controller — see how `meetingController.updateMeeting` does it for
   `program` (`meetingController.js:298-313`).
-- `createStudent` swallows errors into a bare 500 (`studentController.js:449-455`) instead of
+- `createStudent` swallows errors into a bare 500 (`studentController.js:456-462`) instead of
   calling `next(error)` like every other handler, so Mongoose validation messages surface as
   500s rather than 400s.
 
@@ -425,7 +426,7 @@ KPI cards: student count for the current status, Course Fees, Outstanding, Couns
 |---|---|
 | `enrollmentNumber` | **Required + unique. Entered by hand** by the counselor. The UI hints at `SH/IGCSE/26/11/042` but does not enforce it |
 | `curriculum` | Enum: `CBSE`, `IGCSE-Cambridge`, `IGCSE-Edexcel`, `IGCSE-AQA`, `IELTS`, `GRE`, `SAT` |
-| `curriculumSlug` | Derived board — `"IGCSE-Edexcel"` → `"IGCSE"`; everything else stored verbatim (`Student.js:307-313`) |
+| `curriculumSlug` | Derived board — `"IGCSE-Edexcel"` → `"IGCSE"`; everything else stored verbatim, falling back to `'CBSE'` for an unrecognised board (`Student.js:321-329`) |
 | `yearOrGrade`, `academicYear`, `mode`, `courseDuration` | All required for Skillhub |
 | `academicYear` | Enum `2024-25` / `2025-26` / `2026-27` |
 | `subjects[]` | Enum of 11 values (`Student.js:9-21`) |
@@ -437,9 +438,14 @@ KPI cards: student count for the current status, Course Fees, Outstanding, Couns
 **Business rules.**
 
 1. **Enrollment numbers are manual.** They used to be auto-generated from the `Counter`
-   collection; that pre-validate hook was removed in commit `c5effc2`. `Counter`
-   (`server/models/Counter.js`) is still in the repo but **unused**. Do not reuse the collection
-   key `enroll:{organization}:{IGCSE|CBSE}:{year}` without checking.
+   collection; that pre-validate hook was removed in commit `8464e77` (2026-04-17,
+   *"feat(skillhub): manager feedback — enrollment, board/variant, academic year, Meeting
+   activity"*). The root `CLAUDE.md` cites this as `c5effc2` — **that hash does not exist in this
+   repository** (`git cat-file -t c5effc2` fails); `8464e77` is the commit that actually deleted
+   the `Counter` require and the `SH/${curriculumSlug}/…` generator from `server/models/Student.js`.
+   `Counter` (`server/models/Counter.js`) is still in the repo but **unused** — nothing outside the
+   model file references it. Do not reuse the collection key
+   `enroll:{organization}:{IGCSE|CBSE}:{year}` without checking.
 2. **Activation collects extra data.** `PATCH /:id/activate`
    (`studentController.js:641-693`) is the specific `new_admission → active` transition: it
    accepts `addressEmirate`, `registrationFee`, `dateOfEnrollment` and `emis[]` alongside the
@@ -622,10 +628,12 @@ the largest controller in the codebase), `server/models/HourlyActivity.js`,
 9. **Leaderboards are LLM-generated, not computed.** `getLeaderboard`
    (`hourlyController.js:1315+`) aggregates real counters, formats them into a prompt with
    explicit weighting guidance, and asks `gpt-4o-mini` to rank and score
-   (`hourlyController.js:1417-1465`). Every call writes an `AIUsage` row with a hand-computed cost
-   (`$0.00000015`/prompt token, `$0.0000006`/completion token —
-   `hourlyController.js:1394`). The Skillhub path (`runSkillhubLeaderboard`,
-   `runSkillhubAnalysis` at `hourlyController.js:798`) uses a coaching-institute prompt and a
+   (`hourlyController.js:1461-1468`). Every call writes an `AIUsage` row with a hand-computed cost
+   (`$0.00000015`/prompt token, `$0.0000006`/completion token — `hourlyController.js:1476` for
+   the consultant leaderboard, `:1402` for the `?groupBy=team` variant; the same two constants are
+   repeated at `:949` and `:1068` in the Skillhub paths). The Skillhub path
+   (`runSkillhubAnalysis` at `hourlyController.js:797`, `runSkillhubLeaderboard` at
+   `:966`) uses a coaching-institute prompt and a
    deterministic pre-sort weight: `admissions×15 + demoMeetings×6 + followupAdmissions×4 +
    meetings×3 + paymentFollowups×3 + calls×1 + schedules×0.5`; break and operations score zero
    (`hourlyController.js:888-896`).
@@ -774,16 +782,17 @@ classes that predate the enrollment collection still have a roster.
 - The delete-first step matches legacy spellings via `subjectMatchCondition(subject)`, so a day
   stored as `"Maths"` is properly replaced when re-marked as `"Math"`; the insert always writes
   the canonical spelling.
-- Dates are normalised to **UTC midnight** (`instituteController.js:634-637`) so single-day reads
-  bucket correctly.
+- Dates are normalised to **UTC midnight** — `dayStart` / `dayEnd` via `Date.UTC(...)`
+  (`instituteController.js:625-627`) — so single-day reads bucket correctly.
 - **Marking also enrolls.** Every marked student is upserted into `InstituteEnrollment`
-  (best-effort, errors swallowed — the marks are already saved,
-  `instituteController.js:664-682`), so a roster built purely by marking self-heals.
+  (a `bulkWrite` of `$setOnInsert` upserts, `ordered: false`, errors swallowed by a bare
+  `.catch()` — the marks are already saved, `instituteController.js:660-674`), so a roster built
+  purely by marking self-heals.
 - Two different deletes: `DELETE /attendance/entry` cancels **one** mark (the student keeps every
-  other record and stays on the roster); `DELETE /attendance/student` wipes the student from the
-  whole grade.
+  other record and stays on the roster, `instituteController.js:688`+);
+  `DELETE /attendance/student` wipes the student from the whole grade.
 - Status enum is only `Present` / `Absent` (`Attendance.js:29`). Anything else in the payload is
-  filtered out silently (`instituteController.js:648`).
+  filtered out silently by the `.filter()` at `instituteController.js:641`.
 
 ### 9.6 Tests
 
@@ -806,7 +815,9 @@ date range, student search.
   (`instituteController.js:746-754`): it trims whitespace (`'  '` → skipped, **not** 0) and drops
   negatives. `updateTest` uses `row.save()`, which *does* validate. **Keep the two paths in step.**
   Specs: `server/tests/institute/tests.test.js`.
-- **The client never wipes typed input.** `RecordTestDialog` keeps a `touchedRef` set of student
+- **The client never wipes typed input.** `RecordTestDialog` — not its own file; it is a component
+  defined inside `client/src/components/institute/TestsTab.js:35` — keeps a `touchedRef`
+  (`TestsTab.js:53`) set of student
   names the user has typed a mark for; the marks-rebuild effect (fired on subject/topic change)
   re-pulls pre-filled marks for *untouched* students but carries touched values over verbatim.
   Without this, filling in Subject *after* typing marks silently blanked them.
@@ -1225,8 +1236,10 @@ carry the JWT.
 
 **Adding a programme.** Drop two PDFs in `client/public/program-docs/<new-slug>/` → extend
 `PROGRAMS` in `server/models/DocChunk.js` → extend `DOC_TYPE_MAP` in
-`server/scripts/ingestProgramDocs.js` → run `npm run ingest:docs:force` → deploy → have an admin
-click "Force re-ingest". The full spec is `DOCS_RAG_FEATURE_SPEC.md` (16 sections).
+`server/scripts/ingestProgramDocs.js` → run `npm run ingest:docs:force` (defined in the **root**
+`package.json`, not `server/`) → deploy → have an admin click "Force re-ingest". The full spec is
+`DOCS_RAG_FEATURE_SPEC.md` — **19 numbered sections plus "Appendix A — Reference: content
+inventory per program"** (the root `CLAUDE.md` says 16; it is out of date).
 
 ---
 
@@ -1257,10 +1270,13 @@ dashboard.
    fire-and-forget so it never blocks the response.
 3. **Error mapping**: a missing `OPENAI_API_KEY` becomes a 503 with a human message; an upstream
    429 becomes a 502 (`aiController.js:92-105`).
-4. `AIUsage` rows come from four places, not one: `aiController`, `commitmentController`,
-   `meetingController`, `hourlyController` (leaderboards) and `tierController` (image
-   generation). The admin dashboard buckets them by `type` — `analysis`, `chat`, `image` — and
-   reports per-day, per-user and per-team totals (`aiController.js:313-460`).
+4. `AIUsage` rows come from **six** places, not one — `grep -rl "AIUsage.create" server/` returns
+   `controllers/aiController.js`, `controllers/commitmentController.js`,
+   `controllers/meetingController.js`, `controllers/hourlyController.js` (leaderboards + day
+   analysis), `controllers/tierController.js` (image generation) and
+   `services/chatService.js` (the "Ask me" copilot). The admin dashboard buckets them by `type`
+   — the model's enum is exactly `['analysis', 'chat', 'image']` (`AIUsage.js:23`) — and reports
+   per-day, per-user and per-team totals (`getUsageStats`, `aiController.js:313`+).
 
 Other AI entry points that bill the same key: `GET /api/commitments/ai-analysis`,
 `GET /api/meetings/ai-analysis`, `GET /api/hourly/ai-analysis`,
@@ -1403,9 +1419,9 @@ Commitment lifecycle there).
 - Only admins may change `role`, `teamLead`, `teamName`, `isActive`
   (`userController.js:120-125`). Everyone else can change `name` and `phone`.
 - **`GET /api/users/team/:teamLeadId` always returns an empty list.** It queries
-  `User.find({ teamLead, role: 'consultant' })` (`userController.js:210-213`), and `consultant`
-  is not in the `User.role` enum. Consultants live in the `Consultant` collection. Use
-  `GET /api/consultants` instead. *(Code-verified.)*
+  `User.find({ teamLead, role: 'consultant' })` (`userController.js:216-219`), and `consultant`
+  is not in the `User.role` enum (`User.js:32`). Consultants live in the `Consultant`
+  collection. Use `GET /api/consultants` instead. *(Code-verified.)*
 
 **Consultants** (`server/routes/consultants.js`, `server/controllers/consultantController.js`):
 
@@ -1432,13 +1448,16 @@ Commitment lifecycle there).
 
 ## 21. Background jobs
 
-All are registered in `server/server.js` and all are **skipped when `NODE_ENV === 'test'`**.
-There is no external scheduler — these run inside the single Render web process, so they stop when
-it sleeps or restarts.
+All are registered in `server/server.js`. The **three scheduled** jobs are skipped under test —
+they sit inside two `if (process.env.NODE_ENV !== 'test')` blocks (`server.js:149` for the drift
+monitor, `server.js:157` for the two cron jobs). The **Docs RAG index load is not** — it runs
+unconditionally at `server.js:134-136`, outside any `NODE_ENV` guard. There is no external
+scheduler — these run inside the single Render web process, so they stop when it sleeps or
+restarts.
 
 | Job | Schedule | Source | What it does |
 |---|---|---|---|
-| Docs RAG index load | once, at boot | `server/server.js:135` | Loads ~215 chunks into memory. Failure does **not** block boot; `/api/docs-chat` returns 503 until an admin re-ingests |
+| Docs RAG index load | once, at boot (**not** test-guarded) | `server/server.js:134-136` | Loads ~215 chunks into memory. Failure does **not** block boot; `/api/docs-chat` returns 503 until an admin re-ingests |
 | Drift monitor | 30 s after boot, then every 24 h | `server/services/driftMonitor.js:59` | Counts LUC closed commitments **older than 7 days** with no linked student; if any, drops a `team_update` notification on every active admin. Idempotent per admin per 24 h. Priority becomes `high` at ≥ 10 orphans |
 | Nightly DB snapshot | cron `30 0 * * *`, **Asia/Dubai** | `server/server.js:157-170`, `services/dbSnapshot.js` | Dumps every collection as gzipped JSON to S3 under `db-snapshots/YYYY-MM-DD/`. **Silently disabled when S3 is unconfigured** — it logs a warning and moves on |
 | Birthday reminders | cron `0 8 * * *`, **Asia/Dubai** | `server/server.js:172-186`, `services/birthdayNotifier.js` | See below |
@@ -1647,21 +1666,26 @@ produced either inline or by `server/middleware/errorHandler.js`, which maps Mon
 ### 23.6 Tests
 
 `cd server && npm test` runs Jest filtered to four directories:
-`tests/(exports|meetings|institute|commitments)` (`server/package.json:8`). Six suites exist
-overall — `tests/execOverview` and `tests/hourly` are **not** run by that script even though
-`testMatch` would find them. Run everything with `npx jest` from `server/`.
+`tests/(exports|meetings|institute|commitments)` (`server/package.json:9`). There are **six test
+directories holding 18 `.test.js` files** — `tests/execOverview` (3 files) and `tests/hourly`
+(1 file) are **not** run by that script even though `testMatch`
+(`<rootDir>/tests/**/*.test.js`) would find them, so `npm test` executes 14 of the 18. Run
+everything with `npx jest` from `server/`.
 
-| Directory | Covers |
-|---|---|
-| `tests/exports` | 6 suites — scope enforcement + pivot correctness; the 66-row fixture `students_2026-04-22.json` codifies four reference-workbook pivots |
-| `tests/meetings` | The conditional-`required` update trap |
-| `tests/institute` | Attendance, birthdays, schedule import, tests upsert |
-| `tests/commitments` | Admission lock, `gradeOrYear`, `normalizeDemos` |
-| `tests/execOverview` | Bucketing, aggregation, team-entry writes — **not in `npm test`** |
-| `tests/hourly` | Self-consultant guard — **not in `npm test`** |
+| Directory | Files | Covers |
+|---|---|---|
+| `tests/exports` | 6 | scope enforcement + pivot correctness; the 66-row fixture `students_2026-04-22.json` codifies four reference-workbook pivots |
+| `tests/meetings` | 1 | The conditional-`required` update trap |
+| `tests/institute` | 4 | Attendance, birthdays, schedule import, tests upsert |
+| `tests/commitments` | 3 | Admission lock, `gradeOrYear`, `normalizeDemos` |
+| `tests/execOverview` | 3 | Bucketing, aggregation, team-entry writes — **not in `npm test`** |
+| `tests/hourly` | 1 | Self-consultant guard — **not in `npm test`** |
 
-Client: `cd client && npm test` — RTL specs under `client/src/components/exports/__tests__/` and
-`client/src/services/__tests__/`.
+Client: `cd client && npm test` — six RTL/jsdom specs: four under
+`client/src/components/exports/__tests__/`, one at
+`client/src/services/__tests__/xlsxBuilder.test.js`, and one at
+`client/src/utils/__tests__/timetableStudents.test.js` (this last one is easy to miss — it is the
+only client spec outside the Export Center work).
 
 ---
 
@@ -1677,7 +1701,7 @@ was verified against the code at handover time.
 | `engineering/02-api-reference.md` | `POST /api/users` creates a user | No such route. Creation is `POST /api/auth/register` |
 | `engineering/02-api-reference.md` | `GET /api/users/team/:teamLeadId` "lists a team lead's roster" | It queries `User` with `role: 'consultant'`, which is not in the enum — it always returns `[]` |
 | `engineering/02-api-reference.md` | Only `/exports/pivot` and `/exports/template/:id` are rate-limited | `POST /api/institute/timetable/import` is also limited, 10/min/user (`routes/institute.js:29-36`) |
-| `engineering/02-api-reference.md` | Route list as of 2026-04-26 | Missing the whole `/api/institute` group (13 endpoints) and the `/api/tiers` image-history endpoints |
+| `engineering/02-api-reference.md` | Route list as of 2026-04-26 | Missing the whole `/api/institute` group (15 route paths / 24 verb+path endpoints) and the whole `/api/tiers` group — the string "tiers" appears zero times in that file |
 | `CLAUDE.md` (repo root) | `constants.js STATUS_LIST` contains `not_achieved` | Fixed — it is `['pending','in_progress','achieved','missed']` (`constants.js:170`) |
 | `CLAUDE.md` | Commitment has a duplicate `leadStage` definition | Fixed — one definition, 12 values, locked by a test |
 | `CLAUDE.md` | Notification controller uses `recipient`/`isActive` | Fixed — uses `user`/`isRead` |
@@ -1706,5 +1730,5 @@ having no rate limit, logout being stateless, and CSP being disabled in Helmet
 | [11 — Credentials & Access Handover](11-credentials-and-access-handover.md) | The secret inventory and the rotation runbook — **start this on day 1** |
 
 Repo-level references that are still authoritative and worth keeping:
-`DOCS_RAG_FEATURE_SPEC.md` (16 sections on the RAG pipeline), `DEPLOYMENT.md`,
+`DOCS_RAG_FEATURE_SPEC.md` (19 sections + an appendix on the RAG pipeline), `DEPLOYMENT.md`,
 and the root `CLAUDE.md` (accurate except for the four rows in [§24](#24-where-the-old-docs-are-wrong)).

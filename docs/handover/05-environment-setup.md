@@ -24,7 +24,7 @@ your local `server/.env` — which is the path of least resistance and what the 
 `npm run seed` operates on live business data.
 
 **Recommendation for a new developer: do not point your local machine at production on day one.**
-[§5](#5-step-4--choose-your-database) gives you two safe alternatives.
+[§6](#6-step-4--choose-your-database) gives you two safe alternatives.
 
 ### 0.2 `npm run seed` is destructive and unguarded
 
@@ -38,7 +38,7 @@ await Commitment.deleteMany({});
 
 There is no confirmation prompt, no `--yes` flag, no environment check, and no dry-run. Run it
 against production and you destroy every login account, every consultant record, and every
-commitment. See [§6](#6-step-5--seed-the-database).
+commitment. See [§8](#8-step-6--seed-the-database).
 
 ### 0.3 Ports are 3001 and 5001, not 3000 and 5000
 
@@ -78,7 +78,7 @@ Root scripts (`package.json:6-15`):
 | `npm run install:all` | root install → server install → client install → `pip install -r server/requirements.txt` |
 | `npm run build` | `cd client && npm install && npm run build` |
 | `npm start` | `cd server && npm start` → `node server.js` |
-| `npm run seed` | `cd server && node scripts/seedDatabase.js` — **destructive**, see §6 |
+| `npm run seed` | `cd server && node scripts/seedDatabase.js` — **destructive**, see §8 |
 | `npm run ingest:docs` | Docs RAG ingest, then `highlight:docs` |
 | `npm run ingest:docs:force` | Same with `--force` (deletes all LUC chunks first) |
 | `npm run highlight:docs` | `python3 server/scripts/generateHighlightedPdfs.py` |
@@ -94,7 +94,7 @@ Root scripts (`package.json:6-15`):
 | **Node.js** | 20 LTS or newer; **24.x is what was actually used** | `node -v` | See the warning below. |
 | **npm** | 10 or newer (ships with Node 20+) | `npm -v` | Verified working on 11.6.0. |
 | **git** | any recent | `git --version` | |
-| **MongoDB access** | Atlas connection string **or** a local `mongod` | — | See [§5](#5-step-4--choose-your-database). |
+| **MongoDB access** | Atlas connection string **or** a local `mongod` | — | See [§6](#6-step-4--choose-your-database). |
 
 > ### ⚠️ The repository declares no Node version
 >
@@ -141,7 +141,7 @@ already treats the pip step as best-effort and prints a warning rather than fail
 |---|---|---|
 | OpenAI API key | `/api/ai/analysis`, `/api/chat/*`, Docs RAG embeddings + fallback generation | Those endpoints throw `OPENAI_API_KEY is not configured on the server` (`server/services/aiService.js:9`). Everything else works. |
 | Groq API key | Primary Docs RAG generation | Falls back to OpenAI (`server/config/docsRagConfig.js:30-31`). |
-| AWS credentials + S3 bucket | Nightly DB snapshots, Tier-Fight poster images | `s3.isEnabled()` returns false (`server/services/s3.js:19`); boot logs `[db-snapshot] S3 not configured — nightly backup disabled` and moves on. |
+| AWS credentials + S3 bucket | Nightly DB snapshots, Tier-Fight poster images | `s3.isEnabled()` returns false (`server/services/s3.js:35`, which delegates to the credential check at `:19`); boot logs `[db-snapshot] S3 not configured — nightly backup disabled` and moves on. |
 
 **None of these are needed to get the app running and logging in.**
 
@@ -202,7 +202,7 @@ npm install
 |---|---|---|---|
 | 1. root `npm install` | `concurrently` only | tiny | Yes — `npm run dev` won't work |
 | 2. `server/ npm install` | Express, Mongoose, jsonwebtoken, bcryptjs, openai, groq-sdk, socket.io, xlsx, helmet, multer, node-cron, pdf-parse, tiktoken, AWS SDK v3, plus Jest/supertest/mongodb-memory-server as devDeps | ~400 packages | Yes |
-| 3. `client/ npm install` | React 19, MUI 7, react-scripts 5, recharts/echarts, react-data-grid (pinned beta), axios, xlsx, framer-motion, socket.io-client | ~1000 packages | Yes |
+| 3. `client/ npm install` | React 19, MUI 7, react-scripts 5, echarts + echarts-for-react, react-data-grid (pinned beta), axios, xlsx, framer-motion, socket.io-client, jspdf | ~1000 packages | Yes |
 | 4. pip | PyMuPDF, pymongo, python-dotenv | ~50 MB | **No** — wrapped in `|| echo` |
 
 Because steps 1–3 are joined with `&&`, **a failure in the server install silently skips the client
@@ -262,7 +262,7 @@ inheriting.**
 
 | Variable | Purpose | Read at | If missing |
 |---|---|---|---|
-| `MONGODB_URI` | Mongo connection string | `server/config/db.js:5` (+ 44 more in scripts) | Boot fails: `The 'uri' parameter to openUri() must be a string, got "undefined"` then `process.exit(1)` (`db.js:8-11`) |
+| `MONGODB_URI` | Mongo connection string | `server/config/db.js:5` (+ 44 more across `server/scripts/` and `server/utils/`) | Boot fails: `The 'uri' parameter to openUri() must be a string, got "undefined"` then `process.exit(1)` (`db.js:8-11`) |
 | `JWT_SECRET` | HS256 signing key for auth tokens | `server/models/User.js:86` (sign), `server/middleware/auth.js:25` (verify) | Server boots fine; **first login 500s** with `secretOrPrivateKey must have a value` |
 | `JWT_EXPIRE` | Access-token lifetime, e.g. `1h` | `server/models/User.js:87` | Server boots fine; **first login 500s** with `"expiresIn" should be a number of seconds or string representing a timespan` (verified by running `jwt.sign` with `expiresIn: undefined`) |
 | `PORT` | HTTP port | `server/server.js:119` | Falls back to **5000** — client cannot reach it. Set `5001`. |
@@ -392,7 +392,7 @@ This is the decision that matters most, and the existing docs skip it.
    throwaway dev cluster).
 3. Put that connection string in `server/.env` as `MONGODB_URI`, with a database name at the end,
    e.g. `.../team_progress_tracker?retryWrites=true&w=majority`.
-4. Run `npm run seed` (§7) to populate accounts. You will have an empty but working system.
+4. Run `npm run seed` (§8) to populate accounts. You will have an empty but working system.
 
 You get a real Atlas environment — including `$` aggregation behaviour the export pivots depend on —
 with zero risk to production.
@@ -410,7 +410,7 @@ Fastest and fully offline. Caveat: the code is written against Atlas and uses Mo
 MongoDB 6+ aggregation features. Local MongoDB **must be 6.0 or newer**.
 **UNVERIFIED — the app has not been exercised end-to-end against a local `mongod`; the entire
 development history used Atlas.** The Jest suite does run against a local in-memory MongoDB
-(6.0.14 / 7.0.24 binaries, §9), which is strong evidence the data layer is portable.
+(6.0.14 / 7.0.24 binaries, §10), which is strong evidence the data layer is portable.
 
 ### Option C — the production cluster (what the outgoing developer did)
 
@@ -516,7 +516,7 @@ npm run seed
 - **all** `Commitment` documents
 
 It does **not** touch `Student`, `Meeting`, `HourlyActivity`, `Attendance`, `TestRecord`,
-`Teacher`, `TimetableEntry`, `DocChunk`, or the other 18 collections. That is arguably worse than a
+`Teacher`, `TimetableEntry`, `DocChunk`, or the other 16 collections (27 models total, minus the 3 wiped, minus the 8 named here). That is arguably worse than a
 full wipe: you end up with orphaned students and commitments referencing `teamLead` ObjectIds that
 no longer exist.
 
@@ -525,8 +525,8 @@ no longer exist.
 | Group | Count | Detail |
 |---|---|---|
 | LUC admin | 1 | `admin@learnerseducation.com`, role `admin`, org `luc` (`:44-50`) |
-| LUC team leads | 9 | Arfath, Bahrain, Manoj, Jamshad, Anousha, Shakil, Shasin, Shaik, Tony — each `@learnerseducation.com`, role `team_lead` (`:59-69`) |
-| LUC consultants | 26 | Mapped to their team lead (`:95-105`) |
+| LUC team leads | 9 | Arfath, Bahrain, Manoj, Jamshad, Anousha, Shakil, Shasin, Shaik, Tony — each `@learnerseducation.com`, role `team_lead` (defined `:63-73`, created `:76-93`) |
+| LUC consultants | 25 | Mapped to their team lead (`:96-106`) |
 | Skillhub branch logins | 2 | `training@skillhub.com` (org `skillhub_training`), `institute@skillhub.com` (org `skillhub_institute`), role `skillhub` (`:129-144`) |
 | Skillhub counselors | 4 | Shiju, Divyanji (Training); Umme, Ayisha (Institute) |
 
@@ -663,12 +663,14 @@ cd client && npm start       # PORT=3001 react-scripts start
 
 ### 9.4 The working-directory trap for scripts
 
-`server/server.js:1` and 33 of the 42 scripts in `server/scripts/` call
-`require('dotenv').config()` **with no path**, so they read `.env` from the current working
-directory. Only 9 scripts use the explicit form
+`server/server.js:1` and **35 of the 47** `.js` scripts in `server/scripts/` load `.env`
+**from the current working directory** — 33 via a bare `require('dotenv').config()`, plus
+`importStudents.js` and `clearAndImportStudents.js`, which assign `const dotenv = require('dotenv')`
+and then call `dotenv.config()`. Only **10** use the working-directory-independent form
 `require('dotenv').config({ path: path.join(__dirname, '../.env') })` —
 among them `seedDatabase.js:1`, `seedSkillhub.js:1`, `migrateOrganization.js:1`,
-`createManager.js:1` and `ingestProgramDocs.js:13`.
+`createManager.js:1` and `ingestProgramDocs.js:13`. The remaining 2 (`analyzeExcel.js`,
+`analyzeExcelData.js`) never load `.env` at all.
 
 **Practical rule: always `cd server` before running anything in `server/scripts/`.** Running
 `node server/scripts/backfillCommitmentDate.js` from the repo root loads no environment at all, and
@@ -721,10 +723,9 @@ in-memory instance.
 > "test": "jest --testPathPattern=\"tests/(exports|meetings|institute|commitments)\""
 > ```
 >
-> But `testMatch` is `<rootDir>/tests/**/*.test.js`. There are **20** test files on disk; the
-> pattern runs **14**. The six excluded files live in `tests/execOverview/` (3) and `tests/hourly/` (1)
-> — plus two of the exports/institute files are already counted, so concretely the excluded suites
-> are:
+> But `testMatch` is `<rootDir>/tests/**/*.test.js`. There are **18** test files on disk; the
+> pattern runs **14**. The **four** excluded files all live in `tests/execOverview/` (3) and
+> `tests/hourly/` (1):
 >
 > - `tests/execOverview/aggregate.test.js`
 > - `tests/execOverview/bucketing.test.js`
@@ -879,7 +880,7 @@ Ordered roughly by how often they bite.
 | Boot warns `[db-snapshot] S3 not configured` | Expected locally. Not an error. | Leave AWS vars unset on your laptop. |
 | Changed a `DOCS_RAG_*` variable, nothing happened | `server/config/docsRagConfig.js` parses env once at require-time. | Restart the server. |
 | Following `HOW_TO_RUN.md` and nothing matches | That file is badly out of date (port 3000, absolute paths under `/Users/viditkbhatnagar/`, `utils/seedUsers.js`, obsolete `consultant` role, fixed test passwords). | Use this document. §13. |
-| Ran a `server/scripts/*.js` from the repo root and it did nothing / used no config | 33 of 42 scripts call bare `dotenv.config()` and read `.env` from the cwd. | Always `cd server` first. |
+| Ran a `server/scripts/*.js` from the repo root and it did nothing / used no config | 35 of the 47 scripts read `.env` from the cwd; only 10 use an explicit path. | Always `cd server` first. |
 
 ---
 
@@ -892,14 +893,14 @@ they conflict, trust this document and the code.
 | Source | Claim | Reality |
 |---|---|---|
 | `docs/engineering/09-developer-onboarding.md` | "Credentials are written to `LOGIN_CREDENTIALS.md` (gitignored)." | **It is tracked by git.** Verified with `git ls-files --error-unmatch LOGIN_CREDENTIALS.md`. Not in `.gitignore`. |
-| `docs/engineering/09-developer-onboarding.md` | "There are **no** backend tests outside `server/tests/exports/`." | There are now 20 test files across 6 directories: `exports`, `meetings`, `institute`, `commitments`, `execOverview`, `hourly`. |
+| `docs/engineering/09-developer-onboarding.md` | "There are **no** backend tests outside `server/tests/exports/`." | There are now 18 test files across 6 directories: `exports`, `meetings`, `institute`, `commitments`, `execOverview`, `hourly`. |
 | `docs/engineering/09-developer-onboarding.md` | `cd teamProgressTracker` after cloning. | `git clone` creates `Consultant_Progress_Tracker_LUC`. |
 | `docs/engineering/09-developer-onboarding.md`, `docs/engineering/05-environment-and-secrets.md` | `REACT_APP_API_URL` overrides the backend URL. | **Nothing reads it.** `client/src/utils/constants.js:157-159` derives the URL from `NODE_ENV` alone. |
-| `docs/engineering/05-environment-and-secrets.md` | Lists 10 server env vars. | Misses `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL`, `LLM_PRIMARY`, `LLM_FALLBACK`, and the five `DOCS_RAG_*` knobs. Full list in §5.1. |
+| `docs/engineering/05-environment-and-secrets.md` | Lists 9 server env vars (a 10th, `REACT_APP_API_URL`, sits in a separate client table). | Misses `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_CHAT_MODEL`, `LLM_PRIMARY`, `LLM_FALLBACK`, and the five `DOCS_RAG_*` knobs. Full list in §5.1. |
 | `docs/engineering/05-environment-and-secrets.md` | `JWT_REFRESH_EXPIRE` — "Required: Yes". | **Not referenced anywhere in the server source.** There is no refresh flow. |
 | `docs/engineering/05-environment-and-secrets.md`, `09` | Atlas is the "Ireland cluster". | The connection string in `server/.env.example` points at a cluster hosted as `dev.gdddmth.mongodb.net`. **UNVERIFIED which region it is actually in** — check the Atlas dashboard. This matters: `DEPLOYMENT.md` notes that a Render/Atlas region mismatch adds ~25 s to every cold boot because the Docs RAG index ships ~5 MB of embeddings at startup. |
-| `HOW_TO_RUN.md` (repo root) | Frontend on port 3000; seed with `node utils/seedUsers.js`; fixed passwords like `Admin@123`; absolute paths under `/Users/viditkbhatnagar/`; a `consultant` user role. | All stale. Ports are 3001/5001, the seed is `npm run seed`, passwords are randomly generated per run, and `consultant` is not a valid `User` role. **Treat this file as historical.** |
-| `DEPLOYMENT.md`, `DEPLOYMENT_GUIDE.md` | "Node.js (v14 or higher)"; Heroku/Ubuntu deployment sections. | Node 14 will not run this code. The Heroku and bare-Ubuntu sections describe deployments that do not exist — production is a single Render web service. The **Docs RAG cutover** section (from line 407) is current and useful. |
+| `HOW_TO_RUN.md` (repo root) | Frontend on port 3000; seed with `node utils/seedUsers.js`; fixed sample passwords; absolute paths under `/Users/viditkbhatnagar/`; a `consultant` user role. | All stale. Ports are 3001/5001, the seed is `npm run seed`, passwords are randomly generated per run, and `consultant` is not a valid `User` role. **Treat this file as historical.** |
+| `DEPLOYMENT.md`, `DEPLOYMENT_GUIDE.md` | "Node.js (v14 or higher)"; Heroku/Ubuntu deployment sections. | Node 14 will not run this code. The "Option 1: Heroku" and "Option 2: DigitalOcean / VPS" (apt-get/nodesource) sections describe deployments that do not exist — production is a single Render web service. The **Docs RAG cutover** section (from line 407) is current and useful. |
 | `CLAUDE.md` | `backfillCommitmentDate.js` sets `commitmentDate = weekStartDate`. | The script actually uses `createdAt` — see its header comment at `server/scripts/backfillCommitmentDate.js:1-10`. |
 
 ---
@@ -919,7 +920,7 @@ Not part of setup, but you will need them. All live in `server/scripts/`; **run 
 | `runDbSnapshot.js` | 🟢 Read-only | Manual S3 snapshot; same routine as the 00:30 Asia/Dubai cron. |
 | `ingestProgramDocs.js` | 🟡 `--force` deletes chunks | Docs RAG ingest. Supports `--dry-run`. |
 | `importInstituteFromExcel.js`, `importStudents.js`, `clearAndImportStudents.js` | 🔴 `clearAnd…` wipes | Excel/CSV imports. |
-| ~35 others (`fix*`, `audit*`, `verify*`, `profile*`, `backfill*`) | Varies | Point-in-time data repairs. Read the header comment before running any of them; several were written for a single incident and are not generally safe. |
+| ~37 others (`fix*`, `audit*`, `verify*`, `profile*`, `backfill*`) | Varies | Point-in-time data repairs. Read the header comment before running any of them; several were written for a single incident and are not generally safe. |
 
 ---
 
